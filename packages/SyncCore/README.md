@@ -1,0 +1,35 @@
+# SyncCore
+
+此 Swift 6 package 提供 iOS sender 與 macOS receiver 共用的純區域網路同步元件，deployment floors 為 iOS 17 與 macOS 14，沒有第三方 runtime dependency。
+
+## Products
+
+| Product | Responsibility |
+|---|---|
+| `SyncCore` | wire contracts、frame codec、identity、SHA-256、pairing、Keychain、Bonjour、TLS 1.2 PSK、sync client |
+| `MacReceiverKit` | SwiftData manifest、source/album binding、crash-safe destination writer、sync server session |
+
+依賴方向固定為：
+
+```text
+MacReceiverKit → SyncCore
+```
+
+兩個 products 都不得依賴 App targets。`MacReceiverKit` 只由 macOS target 使用。
+
+## Protocol Limits
+
+- Control payload：64 KiB。
+- Raw chunk：1 MiB。
+- Durable receive checkpoint：16 MiB。
+- Integrity：SHA-256。
+- Normal transport：TLS 1.2 `TLS_PSK_WITH_AES_128_GCM_SHA256`。
+- Discovery：`_iphonesync._tcp`；temporary pairing：`_iphonesync-pair._tcp`。
+
+## Tests
+
+```bash
+swift test --package-path packages/SyncCore
+```
+
+Tests 使用 Swift Testing，涵蓋 framing、identity、crypto、Keychain、TLS loopback、wrong PSK/proof、pairing expiry、SwiftData manifest、checkpoint recovery、destination collision 與 client/server round trip。

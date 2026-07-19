@@ -1,5 +1,7 @@
 # Local Album Sync Implementation Plan
 
+`Status:` Completed and verified on `2026-07-19`. Post-plan additions include `SourceRecord`, per-app/package README files, Mac Sandbox entitlement verification, serial SwiftData test isolation, streamed PhotoKit asset enumeration and safe cancellation state handling.
+
 > `For agentic workers:` REQUIRED SUB-SKILL: use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 `Goal:` Build a native iOS sender and native macOS menu-bar receiver that pair with a six-digit code and incrementally copy one local-only Photos album to a Finder folder over the same LAN.
@@ -123,7 +125,7 @@ iphone_sync/
 - `FrameCodec.encode(_:) -> Data` emits a 40-byte big-endian header plus raw payload.
 - `FrameCodec.decodeHeader(_:) throws -> FrameHeader` validates magic, version and payload limits before allocation.
 
-- [ ] `Step 1: Write the failing frame tests`
+- [x] `Step 1: Write the failing frame tests`
 
 ```swift
 @Test func controlFrameRoundTrips() throws {
@@ -142,13 +144,13 @@ iphone_sync/
 }
 ```
 
-- [ ] `Step 2: Run the focused tests and verify RED`
+- [x] `Step 2: Run the focused tests and verify RED`
 
 Run: `swift test --package-path packages/SyncCore --filter FrameCodecTests`
 
 Expected: compilation fails because `FrameCodec`, `SyncFrame`, and `SyncControlMessage` do not exist.
 
-- [ ] `Step 3: Implement the contracts and fixed header codec`
+- [x] `Step 3: Implement the contracts and fixed header codec`
 
 Implement these exact limits and message cases:
 
@@ -186,17 +188,17 @@ public struct SyncSummary: Codable, Equatable, Sendable {
 
 `FrameKind` raw values are `session = 1`, `offer = 2`, `decision = 3`, `chunk = 4`, and `result = 5`. Chunk payloads remain raw bytes; other frame payloads are JSON encoded control messages.
 
-- [ ] `Step 4: Run package tests and verify GREEN`
+- [x] `Step 4: Run package tests and verify GREEN`
 
 Run: `swift test --package-path packages/SyncCore --filter FrameCodecTests`
 
 Expected: all `FrameCodecTests` pass.
 
-- [ ] `Step 5: Refine the security documentation`
+- [x] `Step 5: Refine the security documentation`
 
 Replace the original long-term trust wording with the implemented two-stage contract: ephemeral Curve25519/SAS pairing over the temporary pairing service, followed by TLS 1.2 PSK on normal sync connections. Preserve the rule that the six-digit value never crosses the network.
 
-- [ ] `Step 6: Generate the Xcode project and commit`
+- [x] `Step 6: Generate the Xcode project and commit`
 
 Run: `xcodegen generate`
 
@@ -229,7 +231,7 @@ Expected: commit contains the generated project, package manifest, passing frame
 - `PairingCrypto.derive(local:peerPublicKey:transcript:) throws -> DerivedPairingSecret`
 - `KeychainSecretStore.save(_:account:)`, `load(account:)`, and `delete(account:)`
 
-- [ ] `Step 1: Write deterministic identity, path and crypto tests`
+- [x] `Step 1: Write deterministic identity, path and crypto tests`
 
 ```swift
 @Test func resourceIdentityIsStableAndBindingScoped() {
@@ -258,25 +260,25 @@ Expected: commit contains the generated project, package manifest, passing frame
 
 `TestSupport.swift` defines `ResourceDescriptor.fixture(...)` and `PairingTranscript.fixture(mac:phone:)` using fixed IDs, dates and nonces so every test reference above is concrete and deterministic.
 
-- [ ] `Step 2: Run focused tests and verify RED`
+- [x] `Step 2: Run focused tests and verify RED`
 
 Run: `swift test --package-path packages/SyncCore --filter IdentityAndFilenameTests && swift test --package-path packages/SyncCore --filter PairingCryptoTests`
 
 Expected: compilation fails because the identity, filename and pairing APIs do not exist.
 
-- [ ] `Step 3: Implement minimal production code`
+- [x] `Step 3: Implement minimal production code`
 
 Use SHA-256 over canonical UTF-8 fields separated by zero bytes for `resourceID`. Use `Curve25519.KeyAgreement`, HKDF-SHA256 and a transcript containing protocol version, receiver ID, both public keys and both 32-byte nonces. Derive separate labels `iphonesync-sas-v1`, `iphonesync-psk-v1`, `iphonesync-client-proof-v1`, and `iphonesync-server-proof-v1`. Render the first 20 SAS bits modulo 1,000,000 as a zero-padded six-digit string.
 
 Keychain records use `kSecClassGenericPassword`, service `com.bizshuk.iphonesync`, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, and JSON-encoded `PairedPeer` values.
 
-- [ ] `Step 4: Run focused and full package tests`
+- [x] `Step 4: Run focused and full package tests`
 
 Run: `swift test --package-path packages/SyncCore`
 
 Expected: all tests pass and no secret is printed by tests or production logs.
 
-- [ ] `Step 5: Commit`
+- [x] `Step 5: Commit`
 
 Run: `git add packages/SyncCore && git commit -m "feat: add sync identity and pairing crypto"`
 
@@ -304,7 +306,7 @@ Run: `git add packages/SyncCore && git commit -m "feat: add sync identity and pa
 - `PendingPairing.confirm(code:) async throws -> PairedPeer`
 - `BonjourDiscovery` publishes `AsyncStream<[DiscoveredReceiver]>` for one service type.
 
-- [ ] `Step 1: Write a TLS-PSK loopback test`
+- [x] `Step 1: Write a TLS-PSK loopback test`
 
 ```swift
 @Test func tlsPSKLoopbackTransfersAFrame() async throws {
@@ -321,29 +323,29 @@ Run: `git add packages/SyncCore && git commit -m "feat: add sync identity and pa
 
 Add a `TestListener` actor to `TestSupport.swift`. It starts an `NWListener` on `.any`, exposes the selected port only after `.ready`, wraps the accepted connection in `FramedConnection`, and stores the first received frame for `receivedFrame()`.
 
-- [ ] `Step 2: Run the transport test and verify RED`
+- [x] `Step 2: Run the transport test and verify RED`
 
 Run: `swift test --package-path packages/SyncCore --filter tlsPSKLoopbackTransfersAFrame`
 
 Expected: compilation fails because PSK and framed network types do not exist.
 
-- [ ] `Step 3: Implement TLS 1.2 PSK parameters and exact-length receives`
+- [x] `Step 3: Implement TLS 1.2 PSK parameters and exact-length receives`
 
 Use `NWProtocolTLS.Options`, `sec_protocol_options_add_pre_shared_key`, min/max `.TLSv12`, `TLS_PSK_WITH_AES_128_GCM_SHA256`, TCP no-delay and connection state continuations. Client parameters set `requiredInterfaceType = .wifi` only when `requireWiFi` is true and always set `includePeerToPeer = false`.
 
 `FramedConnection.receive()` first reads exactly 40 bytes, validates the header, and then reads exactly declared payload bytes. EOF before completion is `FramedConnectionError.truncatedFrame`.
 
-- [ ] `Step 4: Implement the temporary pairing service`
+- [x] `Step 4: Implement the temporary pairing service`
 
 Pairing uses length-prefixed JSON messages `hello`, `confirm`, `accepted`, and `rejected`. `confirm` carries only an HMAC proof, never the numeric code. Mac pairing closes after 120 seconds, one active connection or a successful pair. iPhone closes its connection after five local code mismatches.
 
-- [ ] `Step 5: Run transport tests five times`
+- [x] `Step 5: Run transport tests five times`
 
 Run: `for run in 1 2 3 4 5; do swift test --package-path packages/SyncCore --filter tlsPSKLoopbackTransfersAFrame || exit 1; done`
 
 Expected: all five runs pass, proving the TLS-PSK handshake is not a one-off race.
 
-- [ ] `Step 6: Commit`
+- [x] `Step 6: Commit`
 
 Run: `git add packages/SyncCore && git commit -m "feat: add secure local transport"`
 
@@ -372,7 +374,7 @@ Run: `git add packages/SyncCore && git commit -m "feat: add secure local transpo
 - `SyncServerSession.run(connection:) async throws`
 - `SyncClient.openSession(albumID:albumName:sourceBindingID:)`, `sendResource(_:fileURL:)`, and `finish()`
 
-- [ ] `Step 1: Write manifest and destination RED tests`
+- [x] `Step 1: Write manifest and destination RED tests`
 
 ```swift
 @Test func restartTruncatesBytesBeyondDurableCheckpoint() async throws {
@@ -395,29 +397,29 @@ Run: `git add packages/SyncCore && git commit -m "feat: add secure local transpo
 
 `ReceiverHarness.swift` creates a unique `FileManager.temporaryDirectory` child, an in-memory SwiftData `ModelContainer`, `ManifestStore`, and `DestinationWriter`. `simulateCrash()` closes the handle without committing; `recover()` returns the reconciled manifest offset and actual partial-file size. `deinit` removes only that unique temporary directory.
 
-- [ ] `Step 2: Run focused tests and verify RED`
+- [x] `Step 2: Run focused tests and verify RED`
 
 Run: `swift test --package-path packages/SyncCore --filter MacReceiverKitTests`
 
 Expected: compilation fails because receiver types do not exist.
 
-- [ ] `Step 3: Implement SwiftData manifest and safe file lifecycle`
+- [x] `Step 3: Implement SwiftData manifest and safe file lifecycle`
 
 Use an injected `ModelContainer` so tests use `ModelConfiguration(isStoredInMemoryOnly: true)`. A transfer record contains source binding, resource ID, content hash, expected size, confirmed offset, status, final relative path and update time.
 
 Write only to `<final-name>.partial`. At each 16 MiB boundary call `FileHandle.synchronize()`, then persist the offset in one SwiftData transaction. Recovery truncates bytes past the manifest offset. Commit verifies size and SHA-256, synchronizes, closes, resolves path collisions by expanding the resource ID prefix, and uses `FileManager.moveItem` without replacing an existing file.
 
-- [ ] `Step 4: Implement client/server message flow`
+- [x] `Step 4: Implement client/server message flow`
 
 `session.request` receives or creates the source binding. For each `offer`, the server returns `skip`, `start(0)` or `resume(offset)`. Chunks must arrive at the exact expected offset. When expected size is reached, the server hashes, commits and returns `committed`. A finished session returns immutable counts for added, existing, not-local and failed.
 
-- [ ] `Step 5: Run all package tests`
+- [x] `Step 5: Run all package tests`
 
 Run: `swift test --package-path packages/SyncCore`
 
 Expected: all protocol, crypto, TLS, manifest, destination and round-trip tests pass.
 
-- [ ] `Step 6: Commit`
+- [x] `Step 6: Commit`
 
 Run: `git add packages/SyncCore && git commit -m "feat: add resumable receiver engine"`
 
@@ -442,7 +444,7 @@ Run: `git add packages/SyncCore && git commit -m "feat: add resumable receiver e
 - `MacAppModel.chooseDestination()`, `openPairingWindow()`, `forgetPhone()`, `resetSource()`, `startReceiverIfReady()`, and `stopReceiver()`
 - `ReceiverController` owns the pairing listener and normal TLS listener but delegates bytes and manifest operations to package types.
 
-- [ ] `Step 1: Add the macOS target before implementation and verify RED`
+- [x] `Step 1: Add the macOS target before implementation and verify RED`
 
 Generate then build:
 
@@ -453,25 +455,25 @@ xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncMac -destination 'pla
 
 Expected: build fails because the Mac source and plist files do not exist.
 
-- [ ] `Step 2: Implement sandbox configuration and bookmark persistence`
+- [x] `Step 2: Implement sandbox configuration and bookmark persistence`
 
 Entitlements contain App Sandbox, incoming/outgoing network and user-selected read-write file access. `Info.plist` contains `LSUIElement`, `NSLocalNetworkUsageDescription`, the application category and display name. Bookmark data is security-scoped and detects stale bookmarks.
 
-- [ ] `Step 3: Implement model and controller`
+- [x] `Step 3: Implement model and controller`
 
 The model presents states `needsDestination`, `needsPairing`, `ready`, `pairing(code,expiresAt)`, `receiving(progress)`, and `error(message)`. Pairing success writes `PairedPeer` to Keychain, closes the pairing listener and starts the TLS-PSK receiver. Forgetting a phone stops the listener and deletes only trust material; it does not delete files or manifests.
 
-- [ ] `Step 4: Implement menu and setup UI`
+- [x] `Step 4: Implement menu and setup UI`
 
 `MenuBarExtra` shows status, `Open Setup`, `Pair New iPhone`, `Choose Destination`, `Forget iPhone` and `Quit`. `SetupView` displays destination, paired phone, six-digit code, pairing expiry and last sync summary. `Launch at Login` uses `SMAppService.mainApp` and surfaces errors without forcing the setting.
 
-- [ ] `Step 5: Build macOS twice`
+- [x] `Step 5: Build macOS twice`
 
 Run: `xcodegen generate && xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncMac -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO clean build && xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncMac -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build`
 
 Expected: both builds succeed.
 
-- [ ] `Step 6: Commit`
+- [x] `Step 6: Commit`
 
 Run: `git add project.yml iPhoneSync.xcodeproj apps/macos && git commit -m "feat: add mac receiver app"`
 
@@ -501,31 +503,31 @@ Run: `git add project.yml iPhoneSync.xcodeproj apps/macos && git commit -m "feat
 - `IOSSyncCoordinator.pair(endpoint:code:)`, `sync(album:)`, and `cancel()`
 - `IOSAppModel` exposes setup, discovery, pairing, syncing and summary state to SwiftUI.
 
-- [ ] `Step 1: Add the iOS target before source and verify RED`
+- [x] `Step 1: Add the iOS target before source and verify RED`
 
 Run: `xcodegen generate && xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncIOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build`
 
 Expected: build fails because iOS source and plist files do not exist.
 
-- [ ] `Step 2: Implement PhotoKit authorization, album enumeration and staging`
+- [x] `Step 2: Implement PhotoKit authorization, album enumeration and staging`
 
 Request `.readWrite`; treat `.limited` as insufficient for full-album guarantees. Enumerate user albums by localized title, then assets oldest first. For every `PHAssetResource`, write exactly one temporary file with `PHAssetResourceRequestOptions.isNetworkAccessAllowed = false`. Map `PHPhotosError.networkAccessRequired` to `skippedNotLocal`; propagate no-space and permission failures. Clean the staging file in `defer` after committed, skipped or failed handling.
 
-- [ ] `Step 3: Implement pairing and sync coordinator`
+- [x] `Step 3: Implement pairing and sync coordinator`
 
 Browse `_iphonesync-pair._tcp` for setup and `_iphonesync._tcp` for normal sync. Match the stored receiver ID from Bonjour TXT data. Pairing compares the typed six-digit value locally. Sync opens a TLS-PSK session, receives the source binding, stages one resource, offers it, seeks to resume offset, sends 1 MiB chunks and updates progress. Cancellation stops adding resources, finishes the current send operation and closes the connection.
 
-- [ ] `Step 4: Implement SwiftUI flow`
+- [x] `Step 4: Implement SwiftUI flow`
 
 The main screen shows source album, paired Mac, connection state, last summary, `Sync Now`, current resource/byte progress and `Cancel`. Setup requests Photos before album selection and Local Network only after `Find Mac`. Pairing accepts exactly six decimal digits and shows expiry/failure states. Entering background requests coordinator cancellation and preserves Mac partial state.
 
-- [ ] `Step 5: Build iOS for simulator and generic device`
+- [x] `Step 5: Build iOS for simulator and generic device`
 
 Run: `xcodegen generate && xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncIOS -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO clean build && xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncIOS -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`
 
 Expected: both unsigned builds succeed.
 
-- [ ] `Step 6: Commit`
+- [x] `Step 6: Commit`
 
 Run: `git add project.yml iPhoneSync.xcodeproj apps/ios && git commit -m "feat: add iphone album sender"`
 
@@ -548,23 +550,23 @@ Run: `git add project.yml iPhoneSync.xcodeproj apps/ios && git commit -m "feat: 
 
 - `scripts/verify.sh` becomes the canonical non-destructive verification entry point.
 
-- [ ] `Step 1: Add RED edge-case tests`
+- [x] `Step 1: Add RED edge-case tests`
 
 Add concrete tests for malformed magic, unsupported version, control payload 65,537 bytes, chunk payload 1,048,577 bytes, truncated frame, out-of-order chunk, wrong PSK, wrong pairing proof, expired pairing, resume from 16 MiB, same-path same-hash adoption, same-path different-hash non-overwrite and second integrity failure.
 
-- [ ] `Step 2: Run tests and confirm at least one new RED assertion`
+- [x] `Step 2: Run tests and confirm at least one new RED assertion`
 
 Run: `swift test --package-path packages/SyncCore`
 
 Expected: at least one new test fails before the missing guard or behavior is implemented.
 
-- [ ] `Step 3: Implement only the missing guards and rerun GREEN`
+- [x] `Step 3: Implement only the missing guards and rerun GREEN`
 
 Run: `swift test --package-path packages/SyncCore`
 
 Expected: all package tests pass.
 
-- [ ] `Step 4: Create canonical verification script`
+- [x] `Step 4: Create canonical verification script`
 
 ```bash
 #!/usr/bin/env bash
@@ -578,27 +580,27 @@ xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncIOS -destination 'gen
 git diff --check
 ```
 
-- [ ] `Step 5: Synchronize canonical documentation`
+- [x] `Step 5: Synchronize canonical documentation`
 
 README documents setup, build and local-only behavior. CLAUDE replaces planned structure with actual structure and records TLS-PSK. README.todo moves completed MVP items to Archive and leaves only live-device acceptance items that cannot be proven without the user's iPhone and Photos library. The memory entry records verified commands, implementation deviations and operational limitations without claiming live-device success.
 
-- [ ] `Step 6: Run full verification`
+- [x] `Step 6: Run full verification`
 
 Run: `bash scripts/verify.sh`
 
 Expected: package tests and all three unsigned builds succeed; `git diff --check` reports no errors.
 
-- [ ] `Step 7: Run consistency and doc checks`
+- [x] `Step 7: Run consistency and doc checks`
 
 Run: `rg -n 'DeviceDiscoveryUI|AirDrop|Bluetooth|isNetworkAccessAllowed|includePeerToPeer|TLS 1.2 PSK|1 MiB|16 MiB' README.md CLAUDE.md docs plans packages apps`
 
 Expected: local-only, PSK, chunk and checkpoint contracts agree everywhere.
 
-- [ ] `Step 8: Commit final verified state`
+- [x] `Step 8: Commit final verified state`
 
 Run: `git add README.md CLAUDE.md README.todo docs/memory scripts packages apps project.yml iPhoneSync.xcodeproj && git commit -m "docs: finalize local album sync mvp"`
 
-- [ ] `Step 9: Verify repository state after commit`
+- [x] `Step 9: Verify repository state after commit`
 
 Run: `git status --short --branch && git log --oneline --decorate -8`
 

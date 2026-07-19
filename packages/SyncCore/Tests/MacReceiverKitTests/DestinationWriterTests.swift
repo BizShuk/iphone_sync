@@ -3,6 +3,8 @@ import MacReceiverKit
 import SyncCore
 import Testing
 
+extension MacReceiverKitTestSuite {
+
 @Test
 func restartTruncatesBytesBeyondDurableCheckpoint() async throws {
     let bytes = Data(repeating: 1, count: 20_000_000)
@@ -34,4 +36,33 @@ func existingDifferentFileIsNeverOverwritten() async throws {
     #expect(try Data(contentsOf: harness.existingURL) == existing)
     #expect(committed != harness.existingURL)
     #expect(try Data(contentsOf: committed) == bytes)
+}
+
+@Test
+func existingSameHashFileIsAdopted() async throws {
+    let bytes = Data("photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes, existingBytes: bytes)
+
+    #expect(
+        try await harness.writer.begin(harness.offer)
+            == .adopted(relativePath: harness.expectedRelativePath)
+    )
+    #expect(try Data(contentsOf: harness.existingURL) == bytes)
+    #expect(
+        try await harness.manifest.decision(for: harness.offer)
+            == .skip
+    )
+}
+
+@Test
+func destinationWriterRejectsOutOfOrderChunk() async throws {
+    let bytes = Data("photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes)
+    _ = try await harness.writer.begin(harness.offer)
+
+    await #expect(throws: DestinationWriterError.invalidOffset) {
+        try await harness.writer.append(bytes, offset: 1)
+    }
+}
+
 }

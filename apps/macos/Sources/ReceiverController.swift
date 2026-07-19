@@ -40,7 +40,10 @@ final class ReceiverController {
         self.onPaired = onPaired
         self.onRuntimeState = onRuntimeState
         self.onSummary = onSummary
-        self.modelContainer = try ModelContainer(for: TransferRecord.self)
+        self.modelContainer = try ModelContainer(
+            for: TransferRecord.self,
+            SourceRecord.self
+        )
     }
 
     func loadPairedPeer() throws -> PairedPeer? {

@@ -127,11 +127,10 @@ final class PhotoLibrarySource: @unchecked Sendable {
                         ascending: true
                     )]
                     let result = PHAsset.fetchAssets(in: collection, options: options)
-                    var assets: [PHAsset] = []
-                    result.enumerateObjects { asset, _, _ in assets.append(asset) }
 
-                    for asset in assets {
+                    for assetIndex in 0..<result.count {
                         try Task.checkCancellation()
+                        let asset = result.object(at: assetIndex)
                         var duplicateCounts: [String: Int] = [:]
                         for resource in PHAssetResource.assetResources(for: asset) {
                             try Task.checkCancellation()

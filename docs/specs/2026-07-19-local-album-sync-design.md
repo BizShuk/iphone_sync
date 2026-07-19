@@ -1,6 +1,6 @@
 # Local Album Sync Design
 
-Status: `Approved`
+Status: `Implemented MVP — live-device acceptance pending`
 
 Date: `2026-07-19`
 
@@ -37,18 +37,18 @@ Feature name: `local-album-sync`
 
 ```mermaid
 flowchart LR
-    A["iPhone Photos 相簿"] -->|"PhotoKit local-only"| B["iOS SyncCoordinator"]
+    A["iPhone Photos 相簿"] -->|"PhotoKit local-only"| B["IOSSyncCoordinator"]
     B -->|"Bonjour 發現"| C["NWConnection + TLS"]
     D["Mac menu bar app"] -->|"發佈 service"| E["NWListener + TLS"]
     C -->|"framed sync protocol"| E
-    E -->|"接收 chunks"| F["TransferReceiver"]
+    E -->|"接收 chunks"| F["SyncServerSession + DestinationWriter"]
     F -->|"partial + atomic rename"| G["Finder 資料夾"]
     F -->|"status + offset"| H["ManifestStore"]
     I["SyncCore package"] -.->|"shared contracts"| B
     I -.->|"shared contracts"| F
 ```
 
-### Planned Repository Placement
+### Implemented Repository Placement
 
 ```tree
 iphone_sync/
@@ -61,33 +61,37 @@ iphone_sync/
 
 - `apps/ios`：PhotoKit、album selection、Mac discovery、pairing 與 sender UI。
 - `apps/macos`：menu bar receiver、pairing、destination access、manifest 與 Finder writes。
-- `packages/SyncCore`：wire messages、resource identity、framing 與 hashing。
-- 兩個 apps 不互相 import，只向下依賴 `SyncCore`。
-- `SyncCore` 不依賴任一 App target。
+- `packages/SyncCore` 的 `SyncCore` product：wire messages、resource identity、framing、hashing、pairing、Bonjour 與 TLS transport。
+- 同一 package 的 `MacReceiverKit` product：SwiftData manifest、destination writer 與 server session。
+- 兩個 apps 不互相 import；iOS 只依賴 `SyncCore`，macOS 依賴 `SyncCore` 與 `MacReceiverKit`。
+- Package products 不依賴任一 App target；`MacReceiverKit` 只向下依賴 `SyncCore`。
 
 ### Component Boundaries
 
 ```tree
 iOS App
+├── IOSAppModel
 ├── AlbumSelectionStore
 ├── PhotoLibrarySource
-├── MacDiscovery
-├── PairingCoordinator
-└── SyncCoordinator
+├── IOSSyncCoordinator
+└── SwiftUI views
 
 macOS App
-├── ReceiverService
-├── PairingCoordinator
-├── DestinationStore
-├── TransferReceiver
-└── ManifestStore
+├── MacAppModel
+├── ReceiverController
+├── DestinationBookmarkStore
+└── SwiftUI menu/setup views
 
 SyncCore
-├── SyncMessage
-├── ResourceDescriptor
-├── ResourceIdentity
-├── SyncFramer
-└── IntegrityVerifier
+├── contracts、FrameCodec、identity、hashing
+├── PairingClient / PairingServer
+├── BonjourDiscovery、FramedConnection、TLS parameters
+└── SyncClient
+
+MacReceiverKit
+├── SourceRecord / TransferRecord / ManifestStore
+├── DestinationWriter
+└── SyncServerSession
 ```
 
 ### Data Ownership
@@ -114,6 +118,8 @@ SyncCore
 3. 以 `PHAssetResourceManager` 寫入單一 staging file。
 4. staging 成功後取得 size 並計算 SHA-256。
 5. 完成或失敗後清理該 staging file。
+
+相簿使用 `PHFetchResult` 依 index 逐筆取得 asset，不複製完整 asset inventory；每個 staged resource 完成處理與 cleanup 後才取得下一個，因此媒體 bytes 不會整批載入記憶體。
 
 若 resource 只存在 iCloud，PhotoKit 回傳需要 network access 的錯誤；App 將其計入 `skippedNotLocal` 並繼續，不嘗試下載。
 
@@ -157,7 +163,7 @@ Mac 可透過 Wi-Fi 或 Ethernet 加入同一 LAN。若 Bonjour 被 guest-networ
 iPhone `Info.plist` 必須宣告：
 
 - `NSLocalNetworkUsageDescription`。
-- `NSBonjourServices` including `_iphonesync._tcp`。
+- `NSBonjourServices` including `_iphonesync._tcp` 與 `_iphonesync-pair._tcp`。
 - `NSPhotoLibraryUsageDescription`。
 
 Local Network prompt 只在使用者主動按下 `Find Mac` 後觸發。
@@ -342,7 +348,7 @@ pending
 | Second integrity mismatch | stop session and report integrity failure |
 | Protocol incompatible | reject connection and request App update |
 
-Cancel 或 iOS background transition 會停止排入新 resource，讓目前 chunk 完成，並保留 Mac confirmed partial。再次回到前景後由使用者重新按 Sync。
+Cancel 或 iOS background transition 會停止排入新 resource，讓目前 resource 的傳送操作安全完成，並保留 Mac confirmed partial。UI 在原同步工作真正結束前不會重新開放 `Sync Now`；再次回到前景後由使用者重新按 Sync。
 
 ## 12. User Experience
 
@@ -373,7 +379,7 @@ Native macOS menu bar companion 顯示 `Ready`、`Pairing`、`Receiving` 或 `Er
 
 更換來源相簿必須經過 `Reset Source`；既有 Finder files 永遠保留。
 
-- `Forget paired iPhone` 只撤銷 cryptographic trust，保留 source binding 與 manifest；重新配對時必須由使用者明確選擇是否沿用。
+- `Forget paired iPhone` 只撤銷 cryptographic trust，保留 current source binding、manifest 與 Finder files；重新配對同一相簿時沿用 Mac 保存的 current binding。若要切換相簿，使用者必須先按 `Reset Source`。
 - `Reset Source` 建立新的 source binding，不刪除舊 manifest 或 Finder files。
 - 更換 destination folder 也建立新的 source binding；下次同步會對新 folder 執行完整的 local-only initial backup，舊 folder 完全不變。
 
@@ -390,19 +396,19 @@ Native macOS menu bar companion 顯示 `Ready`、`Pairing`、`Receiving` 或 `Er
 
 - resourceID determinism。
 - filename sanitization 與 path traversal rejection。
-- frame encode/decode 與 size limits。
-- session/resource state transitions。
+- frame encode/decode、malformed/truncated/version 與 size limits。
+- pairing derivation、proof validation、expiry、Keychain 與 wrong PSK。
 - manifest transaction 與 crash reconciliation。
-- SHA-256 verification。
+- SHA-256 verification、integrity single retry 與 second-failure termination。
 
 ### Integration
 
 - local `NWListener` / `NWConnection` transfer。
-- interruption at multiple offsets and resume。
-- duplicated、truncated、out-of-order 與 oversized frames。
-- TLS-PSK mismatch and replayed pairing confirmation。
+- 16 MiB durable checkpoint recovery and resume。
+- truncated、out-of-order 與 oversized frames。
+- TLS-PSK mismatch and invalid pairing confirmation proof。
 - protocol version mismatch。
-- destination collision and injected disk-full failure。
+- destination same-hash adoption and different-hash non-overwrite。
 
 ### Real Devices
 
@@ -436,3 +442,4 @@ Pairing、Photos permission 與 Local Network permission 必須在實機驗證�
 - [PHAssetResourceRequestOptions network access](https://developer.apple.com/documentation/photos/phassetresourcerequestoptions/isnetworkaccessallowed)
 - [Apple Network framework](https://developer.apple.com/documentation/network)
 - [Apple local network privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+- [Apple static TLS pre-shared key API](https://developer.apple.com/documentation/security/2976268-sec_protocol_options_add_pre_sha?changes=la_3)

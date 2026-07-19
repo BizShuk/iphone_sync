@@ -4,6 +4,10 @@ import MacReceiverKit
 import Network
 import SwiftData
 import SyncCore
+import Testing
+
+@Suite(.serialized)
+struct MacReceiverKitTestSuite {}
 
 final class ReceiverHarness {
     struct Recovery {
@@ -23,7 +27,7 @@ final class ReceiverHarness {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         container = try ModelContainer(
-            for: TransferRecord.self,
+            for: TransferRecord.self, SourceRecord.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         manifest = ManifestStore(container: container, sourceBindingID: "binding-1")

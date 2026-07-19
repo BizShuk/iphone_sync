@@ -22,6 +22,8 @@ final class IOSAppModel {
     var pairedPeer: PairedPeer?
     var receivers: [DiscoveredReceiver] = []
     var pairingCode = ""
+    var pairingError: String?
+    var pairingExpiresAt: Date?
     var pairingIsPending = false
     var progress: IOSSyncProgress?
     var lastSummary: SyncSummary?
@@ -116,6 +118,8 @@ final class IOSAppModel {
             do {
                 try await coordinator.beginPairing(receiver: receiver)
                 pairingCode = ""
+                pairingError = nil
+                pairingExpiresAt = Date().addingTimeInterval(120)
                 pairingIsPending = true
                 state = .pairing
             } catch {
@@ -131,11 +135,34 @@ final class IOSAppModel {
             do {
                 pairedPeer = try await coordinator.confirmPairing(code: pairingCode)
                 pairingIsPending = false
+                pairingError = nil
+                pairingExpiresAt = nil
                 state = selectedAlbum == nil ? .setup : .ready
+            } catch let error as PairingClientError {
+                pairingError = error.localizedDescription
+                if case let .codeMismatch(remainingAttempts) = error,
+                   remainingAttempts > 0 {
+                    state = .pairing
+                } else {
+                    pairingIsPending = false
+                    pairingExpiresAt = nil
+                    state = .error(error.localizedDescription)
+                }
             } catch {
+                pairingIsPending = false
+                pairingExpiresAt = nil
                 state = .error(error.localizedDescription)
             }
         }
+    }
+
+    func cancelPairing() {
+        pairingIsPending = false
+        pairingCode = ""
+        pairingError = nil
+        pairingExpiresAt = nil
+        state = selectedAlbum == nil || pairedPeer == nil ? .setup : .ready
+        Task { await coordinator.cancelPairing() }
     }
 
     func syncNow() {
@@ -157,7 +184,6 @@ final class IOSAppModel {
     func cancel() {
         Task {
             await coordinator.cancel()
-            state = .ready
         }
     }
 
@@ -174,8 +200,14 @@ final class IOSAppModel {
     }
 
     func enteredBackground() {
-        guard state == .syncing else { return }
-        cancel()
+        switch state {
+        case .syncing:
+            cancel()
+        case .pairing:
+            cancelPairing()
+        default:
+            break
+        }
     }
 
     private func loadAlbums() throws {

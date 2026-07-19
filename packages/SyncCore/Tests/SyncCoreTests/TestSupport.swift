@@ -145,4 +145,8 @@ actor PairingRecorder {
         if let peerValue { return peerValue }
         return await withCheckedContinuation { peerContinuation = $0 }
     }
+
+    func hasPeer() -> Bool {
+        peerValue != nil
+    }
 }

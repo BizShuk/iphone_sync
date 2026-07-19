@@ -101,6 +101,9 @@ public final class FramedConnection: @unchecked Sendable {
         switch state {
         case .ready:
             finishStart(with: .success(()))
+        case let .waiting(error):
+            finishStart(with: .failure(error))
+            connection.cancel()
         case let .failed(error):
             finishStart(with: .failure(error))
         case .cancelled:

@@ -2,14 +2,15 @@ import Foundation
 import SyncCore
 
 public enum SyncServerSessionError: Error, Equatable, Sendable {
+    case integrityFailureLimitExceeded
     case invalidChunk
     case protocolViolation
-    case sourceBindingMismatch
 }
 
 public actor SyncServerSession {
     private let manifest: ManifestStore
     private let writer: DestinationWriter
+    private var integrityFailures: [String: Int] = [:]
 
     public init(manifest: ManifestStore, writer: DestinationWriter) {
         self.manifest = manifest
@@ -22,16 +23,28 @@ public actor SyncServerSession {
 
         let openingFrame = try await connection.receive()
         guard openingFrame.kind == .session,
-              case let .session(.request(_, _, requestedBinding)) = try openingFrame.controlMessage()
+              case let .session(.request(albumID, albumName, requestedBinding)) = try openingFrame.controlMessage()
         else {
             throw SyncServerSessionError.protocolViolation
         }
-        if let requestedBinding, requestedBinding != manifest.sourceBindingID {
+        do {
+            _ = try await manifest.acceptSession(
+                albumID: albumID,
+                albumName: albumName,
+                requestedBindingID: requestedBinding
+            )
+        } catch ManifestStoreError.albumMismatch {
+            try await connection.send(try SyncFrame.control(
+                .session(.rejected(reason: "album-mismatch")),
+                requestID: openingFrame.requestID
+            ))
+            return SyncSummary.zero
+        } catch ManifestStoreError.sourceBindingMismatch {
             try await connection.send(try SyncFrame.control(
                 .session(.rejected(reason: "source-binding-mismatch")),
                 requestID: openingFrame.requestID
             ))
-            throw SyncServerSessionError.sourceBindingMismatch
+            return SyncSummary.zero
         }
         try await connection.send(try SyncFrame.control(
             .session(.accepted(sourceBindingID: manifest.sourceBindingID)),
@@ -71,6 +84,7 @@ public actor SyncServerSession {
         do {
             switch try await writer.begin(offer) {
             case .adopted:
+                integrityFailures.removeValue(forKey: offer.resourceID)
                 summary.existing += 1
                 try await connection.send(try SyncFrame.control(
                     .decision(.skip),
@@ -103,6 +117,7 @@ public actor SyncServerSession {
             )
             let snapshot = try await manifest.snapshot(resourceID: offer.resourceID)
             let committedRelativePath = snapshot?.finalRelativePath ?? relativePath
+            integrityFailures.removeValue(forKey: offer.resourceID)
             summary.added += 1
             try await connection.send(try SyncFrame.control(
                 .result(.committed(relativePath: committedRelativePath)),
@@ -110,12 +125,29 @@ public actor SyncServerSession {
             ))
         } catch {
             await writer.abort()
-            summary.failed += 1
-            let failure = failureResult(for: error)
+            let isIntegrityMismatch = (error as? DestinationWriterError) == .integrityMismatch
+            let retryableIntegrityFailure: Bool
+            if isIntegrityMismatch {
+                let failureCount = (integrityFailures[offer.resourceID] ?? 0) + 1
+                integrityFailures[offer.resourceID] = failureCount
+                retryableIntegrityFailure = failureCount == 1
+            } else {
+                retryableIntegrityFailure = false
+            }
+            if !isIntegrityMismatch || !retryableIntegrityFailure {
+                summary.failed += 1
+            }
+            let failure = failureResult(
+                for: error,
+                retryableIntegrityFailure: retryableIntegrityFailure
+            )
             try? await connection.send(try SyncFrame.control(
                 .result(failure),
                 requestID: requestID
             ))
+            if isIntegrityMismatch && !retryableIntegrityFailure {
+                throw SyncServerSessionError.integrityFailureLimitExceeded
+            }
             if error is SyncServerSessionError {
                 throw error
             }
@@ -146,13 +178,16 @@ public actor SyncServerSession {
         }
     }
 
-    private func failureResult(for error: any Error) -> TransferResult {
+    private func failureResult(
+        for error: any Error,
+        retryableIntegrityFailure: Bool
+    ) -> TransferResult {
         if let writerError = error as? DestinationWriterError,
            writerError == .integrityMismatch {
             return .failed(
                 code: .integrity,
                 message: "Received bytes failed integrity verification.",
-                retryable: true
+                retryable: retryableIntegrityFailure
             )
         }
         if error is SyncServerSessionError || error is FrameCodecError {

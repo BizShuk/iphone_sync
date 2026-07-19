@@ -1,12 +1,27 @@
 import Foundation
 import Network
 
-public enum PairingClientError: Error, Equatable, Sendable {
+public enum PairingClientError: Error, Equatable, LocalizedError, Sendable {
     case codeMismatch(remainingAttempts: Int)
     case invalidServerProof
     case protocolViolation
     case rejected(String)
     case tooManyAttempts
+
+    public var errorDescription: String? {
+        switch self {
+        case let .codeMismatch(remainingAttempts):
+            "The code does not match. \(remainingAttempts) attempts remain."
+        case .invalidServerProof:
+            "The Mac returned an invalid pairing proof."
+        case .protocolViolation:
+            "The pairing exchange was invalid."
+        case let .rejected(reason):
+            "The Mac rejected pairing: \(reason)."
+        case .tooManyAttempts:
+            "Too many incorrect pairing attempts. Open a new pairing window."
+        }
+    }
 }
 
 public struct PairingClient: Sendable {
@@ -119,5 +134,11 @@ public actor PendingPairing {
             channel.cancel()
             throw error
         }
+    }
+
+    public func cancel() {
+        guard !completed else { return }
+        completed = true
+        channel.cancel()
     }
 }

@@ -5,6 +5,7 @@ import SyncCore
 public enum ManifestStoreError: Error, Equatable, Sendable {
     case invalidExpectedSize
     case invalidOffset
+    case albumMismatch
     case recordNotFound
     case sourceBindingMismatch
 }
@@ -17,6 +18,35 @@ public actor ManifestStore {
         self.sourceBindingID = sourceBindingID
         self.context = ModelContext(container)
         self.context.autosaveEnabled = false
+    }
+
+    public func acceptSession(
+        albumID: String,
+        albumName: String,
+        requestedBindingID: String?
+    ) throws -> String {
+        if let source = try sourceRecord() {
+            guard source.albumID == albumID else {
+                throw ManifestStoreError.albumMismatch
+            }
+            if let requestedBindingID,
+               requestedBindingID != sourceBindingID {
+                throw ManifestStoreError.sourceBindingMismatch
+            }
+            source.albumName = albumName
+            source.updatedAt = Date()
+            try context.save()
+            return sourceBindingID
+        }
+
+        let source = SourceRecord(
+            sourceBindingID: sourceBindingID,
+            albumID: albumID,
+            albumName: albumName
+        )
+        context.insert(source)
+        try context.save()
+        return sourceBindingID
     }
 
     public func decision(for offer: ResourceOffer) throws -> TransferDecision {
@@ -116,6 +146,15 @@ public actor ManifestStore {
         let identifier = resourceID
         var descriptor = FetchDescriptor<TransferRecord>(
             predicate: #Predicate { $0.resourceID == identifier }
+        )
+        descriptor.fetchLimit = 1
+        return try context.fetch(descriptor).first
+    }
+
+    private func sourceRecord() throws -> SourceRecord? {
+        let bindingID = sourceBindingID
+        var descriptor = FetchDescriptor<SourceRecord>(
+            predicate: #Predicate { $0.sourceBindingID == bindingID }
         )
         descriptor.fetchLimit = 1
         return try context.fetch(descriptor).first

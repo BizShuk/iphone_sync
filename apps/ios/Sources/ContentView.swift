@@ -1,9 +1,11 @@
 import Photos
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @Bindable var model: IOSAppModel
     @State private var showsAlbumPicker = false
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         NavigationStack {
@@ -75,6 +77,12 @@ struct ContentView: View {
                 if case let .error(message) = model.state {
                     Section("Error") {
                         Text(message).foregroundStyle(.red)
+                        Button("Open Settings") {
+                            guard let url = URL(
+                                string: UIApplication.openSettingsURLString
+                            ) else { return }
+                            openURL(url)
+                        }
                     }
                 }
             }
@@ -84,7 +92,11 @@ struct ContentView: View {
             }
             .sheet(isPresented: Binding(
                 get: { model.pairingIsPending },
-                set: { model.pairingIsPending = $0 }
+                set: { isPresented in
+                    if !isPresented, model.pairingIsPending {
+                        model.cancelPairing()
+                    }
+                }
             )) {
                 PairingView(model: model)
             }

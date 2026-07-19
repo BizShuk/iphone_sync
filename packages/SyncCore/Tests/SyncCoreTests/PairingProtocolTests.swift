@@ -54,3 +54,64 @@ func pairingLoopbackRejectsLocalMismatchThenCreatesSameTrust() async throws {
     #expect(mac.psk == phone.psk)
     #expect(mac.pskIdentity == phone.pskIdentity)
 }
+
+@Test
+func wrongPairingProofIsRejected() async throws {
+    let recorder = PairingRecorder()
+    let server = PairingServer(
+        receiverID: "mac-1",
+        serviceType: nil,
+        port: .any,
+        requireWiFi: false
+    )
+    try await server.open(
+        window: 5,
+        displayName: "Studio Mac",
+        onCode: { _, _ in },
+        onPaired: { peer in Task { await recorder.record(peer: peer) } }
+    )
+    defer { Task { await server.close() } }
+    let port = try #require(await server.localPort)
+    let channel = PairingChannel(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: .tcp
+    ))
+    defer { channel.cancel() }
+    try await channel.start()
+    let material = PairingCrypto.makeMaterial()
+    try await channel.send(.hello(PairingHello(
+        deviceID: "phone-1",
+        displayName: "My iPhone",
+        publicKey: material.publicKey,
+        nonce: material.nonce
+    )))
+    guard case .hello = try await channel.receive() else {
+        Issue.record("server did not return pairing hello")
+        return
+    }
+    try await channel.send(.confirm(proof: Data(repeating: 0, count: 32)))
+
+    #expect(try await channel.receive() == .rejected(reason: "invalid-proof"))
+    try await Task.sleep(for: .milliseconds(20))
+    #expect(await !recorder.hasPeer())
+}
+
+@Test
+func expiredPairingWindowClosesListener() async throws {
+    let server = PairingServer(
+        receiverID: "mac-1",
+        serviceType: nil,
+        port: .any,
+        requireWiFi: false
+    )
+    try await server.open(
+        window: 0.01,
+        displayName: "Studio Mac",
+        onCode: { _, _ in },
+        onPaired: { _ in }
+    )
+    try await Task.sleep(for: .milliseconds(50))
+
+    #expect(await server.localPort == nil)
+}

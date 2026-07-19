@@ -1,11 +1,19 @@
 # TODO
 
-## Local Album Sync
+## 實機驗收 (Live-device Acceptance)
 
-- [ ] 建立 Xcode workspace、iOS App、native macOS App 與 `SyncCore` Swift package
-- [ ] 實作 Bonjour discovery、TLS transport 與六位數安全配對
-- [ ] 實作 PhotoKit local-only resource staging
-- [ ] 實作 framed transfer、SwiftData manifest、續傳與 atomic commit
-- [ ] 完成權限、錯誤恢復、實機測試與 MVP 驗收
+- [ ] 設定 Apple Development signing，在實體 iPhone 與 Mac 安裝並完成首次啟動
+- [ ] 驗證 Photos Full Access、Local Network prompt、相簿選擇與六位數配對流程
+- [ ] 驗證 iPhone Wi-Fi → Mac Wi-Fi 及 iPhone Wi-Fi → Mac Ethernet 的完整同步
+- [ ] 驗證 iCloud-only resource 跳過、RAW+JPEG、Live Photo、adjustment data 與大型影片
+- [ ] 驗證中斷續傳、iPhone 進入背景、Mac sleep、VPN、router isolation 與磁碟空間不足
+- [ ] 決定簽署、公證 (notarization) 與安裝/發佈方式
 
 ## Archive
+
+- [x] 建立 Xcode project、iOS App、native macOS App 與 `SyncCore`/`MacReceiverKit` Swift package
+- [x] 實作 Bonjour discovery、TLS 1.2 PSK transport 與六位數安全配對
+- [x] 實作 PhotoKit local-only 原始 resource staging
+- [x] 實作 framed transfer、SwiftData manifest、16 MiB 續傳與 atomic commit
+- [x] 加入 malformed frame、錯誤 PSK/proof、配對逾時、碰撞、不覆寫與 integrity retry edge tests
+- [x] 建立 `scripts/verify.sh` 作為 canonical automated verification

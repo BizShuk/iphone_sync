@@ -27,6 +27,7 @@ enum IOSSyncCoordinatorError: Error, LocalizedError {
 
 actor IOSSyncCoordinator {
     private static let pairedPeerAccount = "paired-peer"
+    private static let receiverRetryDelays: [UInt64] = [0, 1, 2, 4]
 
     private let photoSource: PhotoLibrarySource
     private let keychain = KeychainSecretStore()
@@ -86,6 +87,13 @@ actor IOSSyncCoordinator {
         return peer
     }
 
+    func cancelPairing() async {
+        if let pendingPairing {
+            await pendingPairing.cancel()
+        }
+        pendingPairing = nil
+    }
+
     func pair(endpoint: NWEndpoint, code: String) async throws -> PairedPeer {
         if pendingPairing == nil {
             let client = PairingClient(deviceID: deviceID, requireWiFi: true)
@@ -108,7 +116,7 @@ actor IOSSyncCoordinator {
         cancelRequested = false
         let receiver: DiscoveredReceiver
         do {
-            receiver = try await discoverReceiver(id: peer.id)
+            receiver = try await discoverReceiverWithRetry(id: peer.id)
         } catch {
             if cancelRequested { throw CancellationError() }
             throw error
@@ -240,5 +248,25 @@ actor IOSSyncCoordinator {
             group.cancelAll()
             return receiver
         }
+    }
+
+    private func discoverReceiverWithRetry(id: String) async throws -> DiscoveredReceiver {
+        var lastError: any Error = IOSSyncCoordinatorError.macNotFound
+        for delay in Self.receiverRetryDelays {
+            if cancelRequested { throw CancellationError() }
+            if delay > 0 {
+                try await Task.sleep(for: .seconds(Int64(delay)))
+            }
+            if cancelRequested { throw CancellationError() }
+            do {
+                return try await discoverReceiver(id: id)
+            } catch {
+                if cancelRequested || error is CancellationError {
+                    throw CancellationError()
+                }
+                lastError = error
+            }
+        }
+        throw lastError
     }
 }
