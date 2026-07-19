@@ -20,9 +20,7 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.utilities</string>
-	<key>LSUIElement</key>
+	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBonjourServices</key>
 	<array>
@@ -30,8 +28,21 @@
 		<string>_iphonesync-pair._tcp</string>
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Find and receive original photo resources from your paired iPhone on this local network.</string>
-	<key>NSPrincipalClass</key>
-	<string>NSApplication</string>
+	<string>Find your Mac and transfer original photo resources on this local network.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Select one album and back up its original resources to your paired Mac.</string>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+		<string>wifi</string>
+	</array>
+	<key>UIRequiresFullScreen</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
 </dict>
 </plist>

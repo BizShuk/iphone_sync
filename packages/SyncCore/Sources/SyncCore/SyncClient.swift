@@ -52,7 +52,8 @@ public actor SyncClient {
 
     public func sendResource(
         _ offer: ResourceOffer,
-        fileURL: URL
+        fileURL: URL,
+        progress: (@Sendable (_ sentBytes: Int64, _ totalBytes: Int64) -> Void)? = nil
     ) async throws -> ClientResourceResult {
         guard sessionIsOpen, !finished else { throw SyncClientError.noOpenSession }
         let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
@@ -89,6 +90,7 @@ public actor SyncClient {
         defer { try? handle.close() }
         try handle.seek(toOffset: UInt64(startOffset))
         var offset = startOffset
+        progress?(offset, offer.descriptor.expectedSize)
         while offset < offer.descriptor.expectedSize {
             let remaining = offer.descriptor.expectedSize - offset
             let count = min(SyncConstants.chunkSize, Int(remaining))
@@ -102,6 +104,7 @@ public actor SyncClient {
                 payload: data
             ))
             offset += Int64(data.count)
+            progress?(offset, offer.descriptor.expectedSize)
         }
 
         let result = try await receiveControl(requestID: requestID, kind: .result)

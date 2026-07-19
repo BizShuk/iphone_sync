@@ -17,6 +17,44 @@ packages:
     path: packages/SyncCore
 
 targets:
+  iPhoneSyncIOS:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: apps/ios/Sources
+    info:
+      path: apps/ios/Info.plist
+      properties:
+        CFBundleDisplayName: iPhone Sync
+        LSRequiresIPhoneOS: true
+        NSBonjourServices:
+          - _iphonesync._tcp
+          - _iphonesync-pair._tcp
+        NSLocalNetworkUsageDescription: Find your Mac and transfer original photo resources on this local network.
+        NSPhotoLibraryUsageDescription: Select one album and back up its original resources to your paired Mac.
+        UILaunchScreen: {}
+        UIRequiredDeviceCapabilities:
+          - arm64
+          - wifi
+        UIRequiresFullScreen: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    entitlements:
+      path: apps/ios/iPhoneSync.entitlements
+    dependencies:
+      - package: SyncCore
+        product: SyncCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bizshuk.iphonesync.ios
+        PRODUCT_NAME: iPhone Sync
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: apps/ios/iPhoneSync.entitlements
+        MARKETING_VERSION: 1.0
+        CURRENT_PROJECT_VERSION: 1
+        TARGETED_DEVICE_FAMILY: 1
+
   iPhoneSyncMac:
     type: application
     platform: macOS
@@ -25,6 +63,15 @@ targets:
       - path: apps/macos/Sources
     info:
       path: apps/macos/Info.plist
+      properties:
+        CFBundleDisplayName: iPhone Sync
+        LSApplicationCategoryType: public.app-category.utilities
+        LSUIElement: true
+        NSBonjourServices:
+          - _iphonesync._tcp
+          - _iphonesync-pair._tcp
+        NSLocalNetworkUsageDescription: Find and receive original photo resources from your paired iPhone on this local network.
+        NSPrincipalClass: NSApplication
     entitlements:
       path: apps/macos/iPhoneSyncMac.entitlements
     dependencies:
