@@ -1,0 +1,11 @@
+# TODO
+
+## Local Album Sync
+
+- [ ] 建立 Xcode workspace、iOS App、native macOS App 與 `SyncCore` Swift package
+- [ ] 實作 Bonjour discovery、TLS transport 與六位數安全配對
+- [ ] 實作 PhotoKit local-only resource staging
+- [ ] 實作 framed transfer、SwiftData manifest、續傳與 atomic commit
+- [ ] 完成權限、錯誤恢復、實機測試與 MVP 驗收
+
+## Archive
