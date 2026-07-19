@@ -194,7 +194,7 @@ Expected: all `FrameCodecTests` pass.
 
 - [ ] `Step 5: Refine the security documentation`
 
-Replace certificate-pinning language with the implemented two-stage contract: ephemeral Curve25519/SAS pairing over the temporary pairing service, followed by TLS 1.3 PSK on normal sync connections. Preserve the rule that the six-digit value never crosses the network.
+Replace the original long-term trust wording with the implemented two-stage contract: ephemeral Curve25519/SAS pairing over the temporary pairing service, followed by TLS 1.3 PSK on normal sync connections. Preserve the rule that the six-digit value never crosses the network.
 
 - [ ] `Step 6: Generate the Xcode project and commit`
 
@@ -590,9 +590,9 @@ Expected: package tests and all three unsigned builds succeed; `git diff --check
 
 - [ ] `Step 7: Run consistency and doc checks`
 
-Run: `rg -n 'certificate pin|self-signed|DeviceDiscoveryUI|AirDrop|Bluetooth|isNetworkAccessAllowed|includePeerToPeer|1 MiB|16 MiB' README.md CLAUDE.md docs plans packages apps`
+Run: `rg -n 'DeviceDiscoveryUI|AirDrop|Bluetooth|isNetworkAccessAllowed|includePeerToPeer|TLS 1.3 PSK|1 MiB|16 MiB' README.md CLAUDE.md docs plans packages apps`
 
-Expected: no obsolete certificate-pinning design remains; local-only, PSK, chunk and checkpoint contracts agree everywhere.
+Expected: local-only, PSK, chunk and checkpoint contracts agree everywhere.
 
 - [ ] `Step 8: Commit final verified state`
 

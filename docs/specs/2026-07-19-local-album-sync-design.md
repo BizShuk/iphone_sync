@@ -92,8 +92,8 @@ SyncCore
 
 ### Data Ownership
 
-- iPhone 保存來源相簿 local identifier 與 pinned Mac identity。
-- Mac 保存 destination bookmark、pinned iPhone identity、source binding 與 transfer manifest。
+- iPhone 保存來源相簿 local identifier 與 paired Mac PSK identity。
+- Mac 保存 destination bookmark、paired iPhone PSK identity、source binding 與 transfer manifest。
 - Mac manifest 是 completed resource 與 confirmed resume offset 的 authoritative source。
 - Finder 只保存完成媒體與 app-owned `.partial` 暫存；manifest 留在 Mac App container。
 
@@ -123,7 +123,7 @@ SyncCore
 
 | Identity | Purpose | Owner |
 |---|---|---|
-| `deviceIdentity` | cryptographic device authentication | iPhone / Mac Keychain |
+| `deviceIdentity` | TLS-PSK identity and paired-peer authentication | iPhone / Mac Keychain |
 | `sourceBindingID` | 一個 destination 對應的一個 album backup source | Mac manifest |
 | `resourceID` | logical PhotoKit resource identity | derived in sync session |
 | `contentHash` | exact staged bytes integrity | iPhone producer / Mac verifier |
@@ -168,24 +168,24 @@ Local Network prompt 只在使用者主動按下 `Find Mac` 後觸發。
 
 1. 使用者在 Mac 開啟兩分鐘 pairing window。
 2. Mac 同時只接受一個 pairing connection。
-3. 雙方透過 initial TLS channel 交換 ephemeral Curve25519 public keys 與 session nonce。
-4. 雙方從 shared secret 與完整 handshake transcript 導出相同的 six-digit short authentication string。Transcript 固定包含 protocol version、receiver instance ID、雙方 ephemeral public keys、雙方 nonces 與 Mac TLS public-key fingerprint。
+3. 雙方透過 temporary plain TCP pairing channel 交換 ephemeral Curve25519 public keys 與 session nonce。該 channel 不傳媒體、PIN、private key 或已配對 secret。
+4. 雙方從 shared secret 與完整 handshake transcript 導出相同的 six-digit short authentication string。Transcript 固定包含 protocol version、receiver instance ID、雙方 ephemeral public keys 與雙方 nonces。
 5. Mac 顯示代碼；使用者在 iPhone 輸入。
 6. iPhone 在本機比較，代碼不經網路傳送。
-7. 成功後 iPhone 送出由 shared secret 驗證的 pairing confirmation。
-8. 雙方交換 long-term signing identities，並存入 Keychain。
-9. Mac TLS identity 與 iPhone signing public key 互相 pin。
+7. 成功後 iPhone 送出由 shared secret 驗證的 pairing confirmation；Mac 回傳獨立的 server confirmation。
+8. 雙方以 HKDF-SHA256 導出 long-term 256-bit PSK 與 opaque PSK identity，並存入 Keychain。
+9. Temporary pairing service 關閉；Mac 重新啟動只接受 paired PSK 的 TLS 1.3 listener。
 
-六位數不得作為 encryption key。它只驗證 ephemeral key agreement 未遭中間人替換。
+六位數不得作為 encryption key。它只驗證 ephemeral key agreement 未遭中間人替換；PSK 來自完整 ECDH shared secret，不是從六位數反推。
 
-iPhone 在本機累積五次代碼 mismatch 後關閉目前 connection；Mac pairing window 仍受兩分鐘期限限制，但不接受第二個 concurrent connection。identity mismatch、certificate change 或 key loss 絕不自動降級；使用者必須明確 revoke 並重新配對。
+iPhone 在本機累積五次代碼 mismatch 後關閉目前 connection；Mac pairing window 仍受兩分鐘期限限制，但不接受第二個 concurrent connection。PSK identity mismatch 或 key loss 絕不自動降級；使用者必須明確 revoke 並重新配對。
 
 ### Subsequent Connections
 
-- iPhone 驗證 pinned Mac TLS identity。
-- Mac 對 iPhone 發出 nonce challenge。
-- iPhone 使用 pinned long-term private key 簽署 challenge。
-- Mac 驗證後才接受 `session`。
+- iPhone 與 Mac 將 paired 256-bit key 和 opaque identity 加入 `NWProtocolTLS.Options`。
+- TLS minimum version 固定為 TLS 1.3。
+- PSK 不符時 TLS handshake 直接失敗，App 不建立未加密 fallback。
+- TLS handshake 完成後才接受 `session`。
 
 Bonjour TXT record 只包含 protocol version、Mac display name、receiver instance ID 與 pairing availability；不得包含 PIN、公鑰、相簿或 destination 資訊。
 
@@ -353,7 +353,7 @@ Cancel 或 iOS background transition 會停止排入新 resource，讓目前 chu
 主畫面顯示：
 
 - 來源相簿。
-- pinned Mac 與 connection state。
+- paired Mac 與 connection state。
 - 上次同步摘要。
 - `Sync Now`。
 - current resource 與 byte progress。
@@ -400,7 +400,7 @@ Native macOS menu bar companion 顯示 `Ready`、`Pairing`、`Receiving` 或 `Er
 - local `NWListener` / `NWConnection` transfer。
 - interruption at multiple offsets and resume。
 - duplicated、truncated、out-of-order 與 oversized frames。
-- TLS identity mismatch and replayed challenge。
+- TLS-PSK mismatch and replayed pairing confirmation。
 - protocol version mismatch。
 - destination collision and injected disk-full failure。
 
@@ -419,7 +419,7 @@ Pairing、Photos permission 與 Local Network permission 必須在實機驗證�
 ## 15. Acceptance Criteria
 
 - 首次配對要求六位數，後續正常同步不再要求。
-- 只有 pinned Mac 能接收該 iPhone 的同步。
+- 只有持有 paired PSK 的 Mac 能接收該 iPhone 的同步。
 - 未變更相簿連續同步兩次時，第二次傳送 0 個 resources。
 - 中斷後從最近 durable checkpoint 恢復，而非從 0 開始。
 - iCloud-only resource 不觸發下載並計入 `skippedNotLocal`。
