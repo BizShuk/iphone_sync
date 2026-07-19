@@ -4,7 +4,7 @@
 
 `Goal:` Build a native iOS sender and native macOS menu-bar receiver that pair with a six-digit code and incrementally copy one local-only Photos album to a Finder folder over the same LAN.
 
-`Architecture:` XcodeGen owns the Xcode project description. Both apps depend downward on local Swift package products: `SyncCore` owns contracts, framing, identity, hashing, pairing, Keychain, Bonjour and TLS-PSK transport; `MacReceiverKit` owns SwiftData manifest and crash-safe destination writes. Initial pairing uses unauthenticated TCP only to exchange ephemeral Curve25519 public material; the six-digit short authentication string authenticates that exchange, and the derived 256-bit secret becomes the TLS 1.3 PSK for every sync connection.
+`Architecture:` XcodeGen owns the Xcode project description. Both apps depend downward on local Swift package products: `SyncCore` owns contracts, framing, identity, hashing, pairing, Keychain, Bonjour and TLS-PSK transport; `MacReceiverKit` owns SwiftData manifest and crash-safe destination writes. Initial pairing uses unauthenticated TCP only to exchange ephemeral Curve25519 public material; the six-digit short authentication string authenticates that exchange, and the derived 256-bit secret becomes the TLS 1.2 PSK for every sync connection.
 
 `Tech Stack:` Swift 6, SwiftUI, PhotoKit, Network.framework, CryptoKit, Security/Keychain, SwiftData, XcodeGen, XCTest.
 
@@ -19,7 +19,7 @@
 - Normal discovery uses `_iphonesync._tcp`; pairing uses `_iphonesync-pair._tcp` only during a two-minute pairing window.
 - iPhone normal sync requires Wi-Fi and sets `includePeerToPeer = false`; there is no cellular, AirDrop, Bluetooth or Internet fallback.
 - The six-digit code is never transmitted and is never used directly as an encryption key.
-- Pairing derives a 256-bit PSK; normal sync uses TLS 1.3 with that PSK and identity.
+- Pairing derives a 256-bit PSK; normal sync uses TLS 1.2 with that PSK and identity because Apple Network.framework's public static-PSK path does not complete a forced TLS 1.3 handshake on the supported runtime.
 - Control frames are at most 64 KiB; chunk frames are at most 1 MiB.
 - Durable receive checkpoints occur every 16 MiB.
 - Final destination publication is an atomic commit after size and SHA-256 verification.
@@ -194,7 +194,7 @@ Expected: all `FrameCodecTests` pass.
 
 - [ ] `Step 5: Refine the security documentation`
 
-Replace the original long-term trust wording with the implemented two-stage contract: ephemeral Curve25519/SAS pairing over the temporary pairing service, followed by TLS 1.3 PSK on normal sync connections. Preserve the rule that the six-digit value never crosses the network.
+Replace the original long-term trust wording with the implemented two-stage contract: ephemeral Curve25519/SAS pairing over the temporary pairing service, followed by TLS 1.2 PSK on normal sync connections. Preserve the rule that the six-digit value never crosses the network.
 
 - [ ] `Step 6: Generate the Xcode project and commit`
 
@@ -323,13 +323,13 @@ Add a `TestListener` actor to `TestSupport.swift`. It starts an `NWListener` on 
 
 - [ ] `Step 2: Run the transport test and verify RED`
 
-Run: `swift test --package-path packages/SyncCore --filter PSKTransportTests`
+Run: `swift test --package-path packages/SyncCore --filter tlsPSKLoopbackTransfersAFrame`
 
 Expected: compilation fails because PSK and framed network types do not exist.
 
-- [ ] `Step 3: Implement TLS 1.3 PSK parameters and exact-length receives`
+- [ ] `Step 3: Implement TLS 1.2 PSK parameters and exact-length receives`
 
-Use `NWProtocolTLS.Options`, `sec_protocol_options_add_pre_shared_key`, `sec_protocol_options_set_min_tls_protocol_version(..., .TLSv13)`, TCP no-delay and connection state continuations. Client parameters set `requiredInterfaceType = .wifi` only when `requireWiFi` is true and always set `includePeerToPeer = false`.
+Use `NWProtocolTLS.Options`, `sec_protocol_options_add_pre_shared_key`, min/max `.TLSv12`, `TLS_PSK_WITH_AES_128_GCM_SHA256`, TCP no-delay and connection state continuations. Client parameters set `requiredInterfaceType = .wifi` only when `requireWiFi` is true and always set `includePeerToPeer = false`.
 
 `FramedConnection.receive()` first reads exactly 40 bytes, validates the header, and then reads exactly declared payload bytes. EOF before completion is `FramedConnectionError.truncatedFrame`.
 
@@ -339,7 +339,7 @@ Pairing uses length-prefixed JSON messages `hello`, `confirm`, `accepted`, and `
 
 - [ ] `Step 5: Run transport tests five times`
 
-Run: `for run in 1 2 3 4 5; do swift test --package-path packages/SyncCore --filter PSKTransportTests || exit 1; done`
+Run: `for run in 1 2 3 4 5; do swift test --package-path packages/SyncCore --filter tlsPSKLoopbackTransfersAFrame || exit 1; done`
 
 Expected: all five runs pass, proving the TLS-PSK handshake is not a one-off race.
 
@@ -590,7 +590,7 @@ Expected: package tests and all three unsigned builds succeed; `git diff --check
 
 - [ ] `Step 7: Run consistency and doc checks`
 
-Run: `rg -n 'DeviceDiscoveryUI|AirDrop|Bluetooth|isNetworkAccessAllowed|includePeerToPeer|TLS 1.3 PSK|1 MiB|16 MiB' README.md CLAUDE.md docs plans packages apps`
+Run: `rg -n 'DeviceDiscoveryUI|AirDrop|Bluetooth|isNetworkAccessAllowed|includePeerToPeer|TLS 1.2 PSK|1 MiB|16 MiB' README.md CLAUDE.md docs plans packages apps`
 
 Expected: local-only, PSK, chunk and checkpoint contracts agree everywhere.
 

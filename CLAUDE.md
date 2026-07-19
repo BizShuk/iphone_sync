@@ -13,7 +13,7 @@
 - PhotoKit resource request 固定使用 `isNetworkAccessAllowed = false`。
 - Mac manifest 是完成狀態與續傳 offset 的 authoritative source。
 - cryptographic `deviceIdentity`、backup `sourceBindingID`、logical `resourceID` 與 byte-level `contentHash` 不得混用。
-- 六位數代碼只做 short authentication string 驗證，絕不能直接作為 encryption key 或在網路上傳送；驗證成功後導出的 256-bit secret 才能作為 TLS 1.3 PSK。
+- 六位數代碼只做 short authentication string 驗證，絕不能直接作為 encryption key 或在網路上傳送；驗證成功後導出的 256-bit secret 才能作為 TLS 1.2 PSK。
 
 ## Planned Architecture
 
@@ -42,7 +42,7 @@ iphone_sync/
 |---|---|
 | Platforms | iOS 17+、macOS 14+、Swift 6 |
 | Discovery | Bonjour `_iphonesync._tcp` |
-| Transport | Network.framework TCP + TLS 1.3 PSK |
+| Transport | Network.framework TCP + TLS 1.2 PSK (`TLS_PSK_WITH_AES_128_GCM_SHA256`) |
 | Pairing | Temporary TCP + ephemeral Curve25519 + six-digit SAS |
 | Source | PhotoKit `PHAssetResourceManager` with network access disabled |
 | Framing | Fixed binary header、JSON control payload、raw chunk payload |

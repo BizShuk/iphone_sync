@@ -174,7 +174,7 @@ Local Network prompt 只在使用者主動按下 `Find Mac` 後觸發。
 6. iPhone 在本機比較，代碼不經網路傳送。
 7. 成功後 iPhone 送出由 shared secret 驗證的 pairing confirmation；Mac 回傳獨立的 server confirmation。
 8. 雙方以 HKDF-SHA256 導出 long-term 256-bit PSK 與 opaque PSK identity，並存入 Keychain。
-9. Temporary pairing service 關閉；Mac 重新啟動只接受 paired PSK 的 TLS 1.3 listener。
+9. Temporary pairing service 關閉；Mac 重新啟動只接受 paired PSK 的 TLS 1.2 listener。
 
 六位數不得作為 encryption key。它只驗證 ephemeral key agreement 未遭中間人替換；PSK 來自完整 ECDH shared secret，不是從六位數反推。
 
@@ -183,7 +183,7 @@ iPhone 在本機累積五次代碼 mismatch 後關閉目前 connection；Mac pai
 ### Subsequent Connections
 
 - iPhone 與 Mac 將 paired 256-bit key 和 opaque identity 加入 `NWProtocolTLS.Options`。
-- TLS minimum version 固定為 TLS 1.3。
+- TLS minimum 與 maximum version 固定為 TLS 1.2，cipher suite 固定為 `TLS_PSK_WITH_AES_128_GCM_SHA256`。Apple 公開 static PSK API 在目前 SDK/runtime 強制 TLS 1.3 會 handshake failure，因此不宣稱或降級自不存在的 TLS 1.3 PSK session。
 - PSK 不符時 TLS handshake 直接失敗，App 不建立未加密 fallback。
 - TLS handshake 完成後才接受 `session`。
 
