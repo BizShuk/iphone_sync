@@ -154,7 +154,7 @@ actor SyncTestListener {
             do {
                 let writer = DestinationWriter(destinationRoot: root, manifest: manifest)
                 let session = SyncServerSession(manifest: manifest, writer: writer)
-                try await session.run(connection: FramedConnection(connection))
+                _ = try await session.run(connection: FramedConnection(connection))
             } catch {
                 await self?.record(error)
             }

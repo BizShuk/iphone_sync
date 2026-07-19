@@ -1,0 +1,366 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		08161D9947C25166CBF36E8C /* DestinationBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */; };
+		25F605BD28B200F1A931C970 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9D0BFB486918D0032F13FA /* SetupView.swift */; };
+		38745007609AEDF246BC83FB /* SyncCore in Frameworks */ = {isa = PBXBuildFile; productRef = 970CD9C2774E45204C8E7339 /* SyncCore */; };
+		5E3641F4297CCD3CBF2C9101 /* iPhoneSyncMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAE9F6A757DFC89BB7C3BBB8 /* iPhoneSyncMacApp.swift */; };
+		89EB372A74E0E2E5F3450093 /* MenuContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3B200290631680A755B7A65 /* MenuContentView.swift */; };
+		9402BF3D0336124B12229D5F /* ReceiverController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A2E759012EE230E42C709D /* ReceiverController.swift */; };
+		9B1A6DBEBD34C3F28D5897E2 /* MacReceiverKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0AAA22218B401A50B17E95 /* MacReceiverKit */; };
+		B887F340F534794EFA293C79 /* MacAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 723C77020AAFB4E5160889CB /* MacAppModel.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		05A2E759012EE230E42C709D /* ReceiverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverController.swift; sourceTree = "<group>"; };
+		0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iPhoneSyncMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2C9D0BFB486918D0032F13FA /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
+		4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationBookmarkStore.swift; sourceTree = "<group>"; };
+		723C77020AAFB4E5160889CB /* MacAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppModel.swift; sourceTree = "<group>"; };
+		B33A27ED9057A6F22B2262FB /* SyncCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SyncCore; path = packages/SyncCore; sourceTree = SOURCE_ROOT; };
+		D3B200290631680A755B7A65 /* MenuContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuContentView.swift; sourceTree = "<group>"; };
+		EAE9F6A757DFC89BB7C3BBB8 /* iPhoneSyncMacApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPhoneSyncMacApp.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B186A00F8514D0F7E772CCAB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				38745007609AEDF246BC83FB /* SyncCore in Frameworks */,
+				9B1A6DBEBD34C3F28D5897E2 /* MacReceiverKit in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0A87E5F0E12A5BA4A31A2FF5 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */,
+				EAE9F6A757DFC89BB7C3BBB8 /* iPhoneSyncMacApp.swift */,
+				723C77020AAFB4E5160889CB /* MacAppModel.swift */,
+				D3B200290631680A755B7A65 /* MenuContentView.swift */,
+				05A2E759012EE230E42C709D /* ReceiverController.swift */,
+				2C9D0BFB486918D0032F13FA /* SetupView.swift */,
+			);
+			name = Sources;
+			path = apps/macos/Sources;
+			sourceTree = "<group>";
+		};
+		2A3CFCF5B4EEC4BC1195B067 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		414283E75F19A2E45017C5DD /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				B33A27ED9057A6F22B2262FB /* SyncCore */,
+			);
+			path = Packages;
+			sourceTree = "<group>";
+		};
+		EF4025959BE4BFE3612B8773 = {
+			isa = PBXGroup;
+			children = (
+				414283E75F19A2E45017C5DD /* Packages */,
+				0A87E5F0E12A5BA4A31A2FF5 /* Sources */,
+				2A3CFCF5B4EEC4BC1195B067 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		3CF38D151CB973F834C0D7FE /* iPhoneSyncMac */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 52F8FF69B99DAAB3F0B47808 /* Build configuration list for PBXNativeTarget "iPhoneSyncMac" */;
+			buildPhases = (
+				0E4D6A8D864BFE267E3E231C /* Sources */,
+				B186A00F8514D0F7E772CCAB /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = iPhoneSyncMac;
+			packageProductDependencies = (
+				970CD9C2774E45204C8E7339 /* SyncCore */,
+				9F0AAA22218B401A50B17E95 /* MacReceiverKit */,
+			);
+			productName = iPhoneSyncMac;
+			productReference = 0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		6827E70BFDC84E74295229D2 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					3CF38D151CB973F834C0D7FE = {
+						DevelopmentTeam = "";
+					};
+				};
+			};
+			buildConfigurationList = C9CE94B7F259742B7F5E3CC9 /* Build configuration list for PBXProject "iPhoneSync" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = EF4025959BE4BFE3612B8773;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				59C33D1B90D5B3963E9BB313 /* XCLocalSwiftPackageReference "packages/SyncCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 2A3CFCF5B4EEC4BC1195B067 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				3CF38D151CB973F834C0D7FE /* iPhoneSyncMac */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0E4D6A8D864BFE267E3E231C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				08161D9947C25166CBF36E8C /* DestinationBookmarkStore.swift in Sources */,
+				B887F340F534794EFA293C79 /* MacAppModel.swift in Sources */,
+				89EB372A74E0E2E5F3450093 /* MenuContentView.swift in Sources */,
+				9402BF3D0336124B12229D5F /* ReceiverController.swift in Sources */,
+				25F605BD28B200F1A931C970 /* SetupView.swift in Sources */,
+				5E3641F4297CCD3CBF2C9101 /* iPhoneSyncMacApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		ACC98035B2D50218D7479E25 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B705DFA2AC744B618576ADFB /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = apps/macos/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bizshuk.iphonesync.mac;
+				PRODUCT_NAME = "iPhone Sync";
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		BD76BD2A010F04809365E206 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = apps/macos/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.bizshuk.iphonesync.mac;
+				PRODUCT_NAME = "iPhone Sync";
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		FB0E3B0FF4CFCD79EFB55494 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		52F8FF69B99DAAB3F0B47808 /* Build configuration list for PBXNativeTarget "iPhoneSyncMac" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B705DFA2AC744B618576ADFB /* Debug */,
+				BD76BD2A010F04809365E206 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C9CE94B7F259742B7F5E3CC9 /* Build configuration list for PBXProject "iPhoneSync" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FB0E3B0FF4CFCD79EFB55494 /* Debug */,
+				ACC98035B2D50218D7479E25 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		59C33D1B90D5B3963E9BB313 /* XCLocalSwiftPackageReference "packages/SyncCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = packages/SyncCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		970CD9C2774E45204C8E7339 /* SyncCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = SyncCore;
+		};
+		9F0AAA22218B401A50B17E95 /* MacReceiverKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = MacReceiverKit;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 6827E70BFDC84E74295229D2 /* Project object */;
+}

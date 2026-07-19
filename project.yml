@@ -1,0 +1,42 @@
+name: iPhoneSync
+
+options:
+  bundleIdPrefix: com.bizshuk
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+  xcodeVersion: "26.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: ""
+
+packages:
+  SyncCore:
+    path: packages/SyncCore
+
+targets:
+  iPhoneSyncMac:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: apps/macos/Sources
+    info:
+      path: apps/macos/Info.plist
+    entitlements:
+      path: apps/macos/iPhoneSyncMac.entitlements
+    dependencies:
+      - package: SyncCore
+        product: SyncCore
+      - package: SyncCore
+        product: MacReceiverKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bizshuk.iphonesync.mac
+        PRODUCT_NAME: iPhone Sync
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: apps/macos/iPhoneSyncMac.entitlements
+        MARKETING_VERSION: 1.0
+        CURRENT_PROJECT_VERSION: 1

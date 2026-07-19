@@ -16,7 +16,7 @@ public actor SyncServerSession {
         self.writer = writer
     }
 
-    public func run(connection: FramedConnection) async throws {
+    public func run(connection: FramedConnection) async throws -> SyncSummary {
         try await connection.start()
         defer { connection.cancel() }
 
@@ -48,7 +48,7 @@ public actor SyncServerSession {
                     .result(.sessionCompleted(summary)),
                     requestID: frame.requestID
                 ))
-                return
+                return summary
             case let .offer(offer):
                 try await handle(
                     offer: offer,
