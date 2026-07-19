@@ -3,6 +3,7 @@ import Foundation
 public enum SessionMessage: Codable, Equatable, Sendable {
     case request(albumID: String, albumName: String, sourceBindingID: String?)
     case accepted(sourceBindingID: String)
+    case rejected(reason: String)
     case finished
 }
 

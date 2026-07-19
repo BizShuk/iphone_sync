@@ -10,6 +10,7 @@ let package = Package(
     ],
     products: [
         .library(name: "SyncCore", targets: ["SyncCore"]),
+        .library(name: "MacReceiverKit", targets: ["MacReceiverKit"]),
     ],
     targets: [
         .target(
@@ -21,6 +22,14 @@ let package = Package(
         .testTarget(
             name: "SyncCoreTests",
             dependencies: ["SyncCore"]
+        ),
+        .target(
+            name: "MacReceiverKit",
+            dependencies: ["SyncCore"]
+        ),
+        .testTarget(
+            name: "MacReceiverKitTests",
+            dependencies: ["MacReceiverKit", "SyncCore"]
         ),
     ]
 )

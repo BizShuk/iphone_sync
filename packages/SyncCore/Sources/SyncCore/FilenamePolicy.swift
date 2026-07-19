@@ -11,10 +11,14 @@ public enum FilenamePolicy {
         originalFilename: String,
         resourceID: String,
         role: String?,
-        creationDate: Date?
+        creationDate: Date?,
+        resourceIDPrefixLength: Int = 8
     ) throws -> String {
         try validate(filename: originalFilename)
         try validate(resourceID: resourceID)
+        guard (8...resourceID.count).contains(resourceIDPrefixLength) else {
+            throw FilenamePolicyError.invalidResourceID
+        }
 
         let filename = originalFilename as NSString
         let stem = filename.deletingPathExtension
@@ -48,7 +52,7 @@ public enum FilenamePolicy {
             dateComponents = ("Unknown", "00")
         }
 
-        let suffix = "__\(resourceID.prefix(8))\(roleSuffix)"
+        let suffix = "__\(resourceID.prefix(resourceIDPrefixLength))\(roleSuffix)"
         let outputName = fileExtension.isEmpty
             ? "\(stem)\(suffix)"
             : "\(stem)\(suffix).\(fileExtension)"
