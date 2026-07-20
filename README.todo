@@ -1,5 +1,9 @@
 # TODO
 
+## 文件審閱 (Documentation Review)
+
+- [ ] 閱讀並 review [實作計畫](plans/2026-07-19-local-album-sync.md) 與 [系統設計](docs/specs/2026-07-19-local-album-sync-design.md)
+
 ## 實機驗收 (Live-device Acceptance)
 
 - [ ] 設定 Apple Development signing，在實體 iPhone 與 Mac 安裝並完成首次啟動
