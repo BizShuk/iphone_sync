@@ -8,6 +8,15 @@ command -v xcodegen >/dev/null
 command -v xcodebuild >/dev/null
 command -v plutil >/dev/null
 
+settings_test_dir="build/verification"
+settings_test_binary="$settings_test_dir/verify-mac-settings"
+mkdir -p "$settings_test_dir"
+xcrun swiftc \
+    apps/macos/Sources/MacSettingsStore.swift \
+    scripts/verify_mac_settings.swift \
+    -o "$settings_test_binary"
+"$settings_test_binary"
+
 swift test --package-path packages/SyncCore
 xcodegen generate
 
@@ -51,6 +60,24 @@ rg -F 'UIApplication.openSettingsURLString' apps/ios/Sources/ContentView.swift >
 rg -F 'pairingExpiresAt' apps/ios/Sources/PairingView.swift >/dev/null
 rg -F 'pairingError' apps/ios/Sources/PairingView.swift >/dev/null
 rg -F 'cancelPairing' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'var selectedAlbums: [PhotoAlbum]' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F '.navigationTitle("Choose Albums")' apps/ios/Sources/AlbumPickerView.swift >/dev/null
+rg -F 'func sync(albums: [PhotoAlbum])' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'public static let receivingFolderName = "iPhoneSync"' packages/SyncCore/Sources/MacReceiverKit/DestinationWriter.swift >/dev/null
+rg -F 'struct MacSettingsStore' apps/macos/Sources/MacSettingsStore.swift >/dev/null
+rg -F 'var launchAtLoginRequested: Bool' apps/macos/Sources/MacSettingsStore.swift >/dev/null
+rg -F 'Section("Error Log")' apps/macos/Sources/SetupView.swift >/dev/null
+rg -F 'errorLog.count > 100' apps/macos/Sources/MacAppModel.swift >/dev/null
+rg -F 'NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
+rg -F 'item.autosaveName = "com.shuk.iphonesync.statusItem"' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
+rg -F 'statusItem.isVisible = true' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
+rg -F 'item.observe(\.isVisible' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
+if rg -F 'MenuBarExtra(' apps/macos/Sources >/dev/null; then
+    exit 1
+fi
+if rg -F 'UserDefaults.standard' apps/macos/Sources/MacAppModel.swift >/dev/null; then
+    exit 1
+fi
 if rg -F 'var assets: [PHAsset]' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null; then
     exit 1
 fi

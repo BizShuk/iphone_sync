@@ -19,8 +19,8 @@ struct ContentView: View {
                         showsAlbumPicker = true
                     } label: {
                         LabeledContent(
-                            "Album",
-                            value: model.selectedAlbum?.title ?? "Not selected"
+                            "Albums",
+                            value: model.selectedAlbumsText
                         )
                     }
                     .disabled(!model.hasFullPhotoAccess)
@@ -50,6 +50,9 @@ struct ContentView: View {
                         .disabled(!model.canSync)
                     if model.state == .syncing {
                         if let progress = model.progress {
+                            Text(progress.albumName)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                             Text(progress.resourceName).lineLimit(1)
                             ProgressView(
                                 value: Double(progress.sentBytes),
@@ -88,7 +91,11 @@ struct ContentView: View {
             }
             .navigationTitle("iPhone Sync")
             .sheet(isPresented: $showsAlbumPicker) {
-                AlbumPickerView(albums: model.albums, select: model.selectAlbum)
+                AlbumPickerView(
+                    albums: model.albums,
+                    selectedAlbums: model.selectedAlbums,
+                    save: model.selectAlbums
+                )
             }
             .sheet(isPresented: Binding(
                 get: { model.pairingIsPending },

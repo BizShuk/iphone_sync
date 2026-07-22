@@ -9,4 +9,8 @@
 
 ## Entries
 
+- [2026-07-22 Persistent Mac Settings](2026-07-22-persistent-mac-settings.md)
+- [2026-07-22 iPhoneSync Receiving Container](2026-07-22-iphonesync-receiving-container.md)
+- [2026-07-22 Multi-album Sync and Error Log](2026-07-22-multi-album-sync-and-error-log.md)
+- [2026-07-22 Same-name Album Destination Folder](2026-07-22-same-name-album-destination-folder.md)
 - [2026-07-19 Local Album Sync MVP](2026-07-19-local-album-sync-mvp.md)

@@ -15,11 +15,10 @@ enum DestinationBookmarkError: Error, LocalizedError {
 }
 
 struct DestinationBookmarkStore {
-    private let defaults: UserDefaults
-    private let key = "destinationBookmark"
+    private let settings: MacSettingsStore
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    init(settings: MacSettingsStore = MacSettingsStore()) {
+        self.settings = settings
     }
 
     func save(_ url: URL) throws {
@@ -28,11 +27,11 @@ struct DestinationBookmarkStore {
             includingResourceValuesForKeys: nil,
             relativeTo: nil
         )
-        defaults.set(data, forKey: key)
+        settings.destinationBookmark = data
     }
 
     func resolve() throws -> URL {
-        guard let data = defaults.data(forKey: key) else {
+        guard let data = settings.destinationBookmark else {
             throw DestinationBookmarkError.missing
         }
         var isStale = false
@@ -47,6 +46,6 @@ struct DestinationBookmarkStore {
     }
 
     func clear() {
-        defaults.removeObject(forKey: key)
+        settings.destinationBookmark = nil
     }
 }

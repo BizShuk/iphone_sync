@@ -1,6 +1,6 @@
 # Mac Receiver
 
-`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。它保存使用者選擇的 Finder destination、顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 接收已配對 iPhone 的增量備份。
+`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。它保存使用者選擇的 Finder destination、顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 將已配對 iPhone 的多相簿增量備份寫入 `iPhoneSync/<album-name>/`。
 
 ## Flow
 
@@ -8,15 +8,26 @@
 Choose Destination
 └── Pair iPhone
     └── TLS receiver ready
-        └── partial write → checkpoint → SHA-256 → atomic commit
+        └── iPhoneSync → album folder → partial write → checkpoint → SHA-256 → atomic commit
 ```
 
 ## Boundaries
 
+- Menu bar icon 由標準方形 AppKit `NSStatusItem` 持有，使用專屬 `com.shuk.iphonesync.statusItem` autosave name、保持 `isVisible = true`，並監看意外的隱藏狀態以立即恢復；原生 `NSMenu` 提供狀態、設定、配對、destination、忘記裝置與結束操作。
+- Menu 與 Setup 顯示已配對 iPhone 的 `displayName` 與 app-specific `deviceID`；Setup 中的完整 ID 可複製。iOS public API 不提供硬體序號，因此 UI 不會把 `deviceID` 誤標為 serial number，也不會暴露 PSK identity。
+- macOS 在 menu bar 空間不足時仍可能暫時遮蔽 status item；Setup 會提示使用者騰出一個位置，再按住 `Command` 將 iPhone Sync 拖近右側，後續位置由 autosave name 保存。
+- Setup 使用 AppKit `NSWindow` 持有 SwiftUI `SetupView`，關閉後可由 menu bar 再次開啟；`Error Log` 面板顯示本次執行最近 100 筆錯誤並提供清除操作。
 - App Sandbox 只授予 incoming/outgoing network、使用者選擇資料夾 read-write 與 app-scoped bookmark 權限。
-- `DestinationBookmarkStore` 保存 security-scoped bookmark；stale bookmark 會要求重新選擇。
+- `MacSettingsStore` 統一管理 receiver ID、source binding、destination bookmark bytes 與 launch-at-login intent，並沿用既有 preference keys。
+- `DestinationBookmarkStore` 專責 security-scoped bookmark encode/resolve；stale bookmark 會要求重新選擇。
+- Paired peer secrets 留在 Keychain，album/resource state 留在 SwiftData；兩者不寫入 preferences。
+- `Launch at Login` 首次預設啟用並由 `SMAppService.mainApp` 註冊；使用者關閉後 intent 仍會跨 App relaunch 與 Mac restart 保存。
+- Setup window frame 與 menu-bar item position 使用 AppKit autosave。
 - `ReceiverController` 一次只接受一個正常同步 connection。
-- `ManifestStore` 以 SwiftData 保存 source/album binding 與 resource checkpoint。
+- `ManifestStore` 以 SwiftData 保存一個 source binding 下的多個 album/folder mappings，以及 album-scoped resource checkpoint。
+- `AlbumFolderPolicy` 保留一般相簿名稱，並將 path separator、控制字元與隱藏 path injection 轉成安全的單一資料夾名稱。
+- `DestinationWriter` 固定先建立或重用 `iPhoneSync` receiving folder，再於其下準備 album folder；任一同名項目若是檔案或 symlink，session 會拒絕並寫入 Error Log。
+- 已存在的真實 album folder 會安全重用且內容不刪除；不同 album 若同名，依序使用 `名稱 (2)`、`名稱 (3)`，避免合併。
 - `DestinationWriter` 不覆寫或刪除 committed user files；完整 SHA-256 驗證後才發布 final file。
 - `Forget iPhone` 只刪除 Keychain trust；`Reset Source` 只建立新的 source binding，兩者都不刪除 Finder 檔案。
 
@@ -29,4 +40,4 @@ xcodegen generate
 xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncMac -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
 ```
 
-要實際保存 sandbox destination 權限與啟用 launch at login，必須在 Xcode 設定 development team 並以簽署 App 執行。
+要實際保存 sandbox destination 權限與啟用 launch at login，必須在 Xcode 設定 development team 並以簽署 App 執行。完整 Mac restart 驗收仍需在實機登入週期執行。

@@ -17,7 +17,7 @@ final class ReceiverController {
     private let receiverID: String
     private let keychain = KeychainSecretStore()
     private let modelContainer: ModelContainer
-    private let listenerQueue = DispatchQueue(label: "com.bizshuk.iphonesync.mac-listener")
+    private let listenerQueue = DispatchQueue(label: "com.shuk.iphonesync.mac-listener")
     private let onPairingCode: (String, Date) -> Void
     private let onPaired: (PairedPeer) -> Void
     private let onRuntimeState: (RuntimeState) -> Void
@@ -42,7 +42,8 @@ final class ReceiverController {
         self.onSummary = onSummary
         self.modelContainer = try ModelContainer(
             for: TransferRecord.self,
-            SourceRecord.self
+            SourceRecord.self,
+            AlbumRecord.self
         )
     }
 

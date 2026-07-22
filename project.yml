@@ -32,7 +32,7 @@ targets:
           - _iphonesync._tcp
           - _iphonesync-pair._tcp
         NSLocalNetworkUsageDescription: Find your Mac and transfer original photo resources on this local network.
-        NSPhotoLibraryUsageDescription: Select one album and back up its original resources to your paired Mac.
+        NSPhotoLibraryUsageDescription: Select one or more albums and back up their original resources to your paired Mac.
         UILaunchScreen: {}
         UIRequiredDeviceCapabilities:
           - arm64
@@ -87,7 +87,7 @@ targets:
         product: MacReceiverKit
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.bizshuk.iphonesync.mac
+        PRODUCT_BUNDLE_IDENTIFIER: com.shuk.iphonesync.mac
         PRODUCT_NAME: iPhone Sync
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: apps/macos/iPhoneSyncMac.entitlements

@@ -18,7 +18,7 @@ final class IOSAppModel {
     var state: State = .setup
     var authorizationStatus: PHAuthorizationStatus
     var albums: [PhotoAlbum] = []
-    var selectedAlbum: PhotoAlbum?
+    var selectedAlbums: [PhotoAlbum] = []
     var pairedPeer: PairedPeer?
     var receivers: [DiscoveredReceiver] = []
     var pairingCode = ""
@@ -58,9 +58,17 @@ final class IOSAppModel {
 
     var canSync: Bool {
         hasFullPhotoAccess
-            && selectedAlbum != nil
+            && !selectedAlbums.isEmpty
             && pairedPeer != nil
             && state != .syncing
+    }
+
+    var selectedAlbumsText: String {
+        switch selectedAlbums.count {
+        case 0: "Not selected"
+        case 1: selectedAlbums[0].title
+        default: "\(selectedAlbums.count) selected"
+        }
     }
 
     func bootstrap() async {
@@ -69,7 +77,7 @@ final class IOSAppModel {
             if hasFullPhotoAccess {
                 try loadAlbums()
             }
-            state = hasFullPhotoAccess && selectedAlbum != nil && pairedPeer != nil
+            state = hasFullPhotoAccess && !selectedAlbums.isEmpty && pairedPeer != nil
                 ? .ready
                 : .setup
         } catch {
@@ -86,17 +94,17 @@ final class IOSAppModel {
             }
             do {
                 try loadAlbums()
-                state = .setup
+                state = selectedAlbums.isEmpty || pairedPeer == nil ? .setup : .ready
             } catch {
                 state = .error(error.localizedDescription)
             }
         }
     }
 
-    func selectAlbum(_ album: PhotoAlbum) {
-        selectedAlbum = album
-        albumStore.save(album)
-        state = pairedPeer == nil ? .setup : .ready
+    func selectAlbums(_ albums: [PhotoAlbum]) {
+        selectedAlbums = albums
+        albumStore.save(albums)
+        state = albums.isEmpty || pairedPeer == nil ? .setup : .ready
     }
 
     func findMac() {
@@ -137,7 +145,7 @@ final class IOSAppModel {
                 pairingIsPending = false
                 pairingError = nil
                 pairingExpiresAt = nil
-                state = selectedAlbum == nil ? .setup : .ready
+                state = selectedAlbums.isEmpty ? .setup : .ready
             } catch let error as PairingClientError {
                 pairingError = error.localizedDescription
                 if case let .codeMismatch(remainingAttempts) = error,
@@ -161,16 +169,17 @@ final class IOSAppModel {
         pairingCode = ""
         pairingError = nil
         pairingExpiresAt = nil
-        state = selectedAlbum == nil || pairedPeer == nil ? .setup : .ready
+        state = selectedAlbums.isEmpty || pairedPeer == nil ? .setup : .ready
         Task { await coordinator.cancelPairing() }
     }
 
     func syncNow() {
-        guard let selectedAlbum else { return }
+        guard !selectedAlbums.isEmpty else { return }
+        let albums = selectedAlbums
         state = .syncing
         Task {
             do {
-                lastSummary = try await coordinator.sync(album: selectedAlbum)
+                lastSummary = try await coordinator.sync(albums: albums)
                 pairedPeer = try await coordinator.loadPairedPeer()
                 state = .ready
             } catch is CancellationError {
@@ -212,12 +221,12 @@ final class IOSAppModel {
 
     private func loadAlbums() throws {
         albums = try photoSource.albums()
-        if let saved = albumStore.load(),
-           let current = albums.first(where: { $0.id == saved.id }) {
-            selectedAlbum = current
-        } else {
-            selectedAlbum = nil
+        let savedIDs = Set(albumStore.load().map(\.id))
+        selectedAlbums = albums.filter { savedIDs.contains($0.id) }
+        if selectedAlbums.isEmpty {
             albumStore.clear()
+        } else {
+            albumStore.save(selectedAlbums)
         }
     }
 }

@@ -1,10 +1,21 @@
 import Foundation
 import Network
 
-public enum PairingServerError: Error, Equatable, Sendable {
+public enum PairingServerError: Error, Equatable, LocalizedError, Sendable {
     case alreadyOpen
     case listenerCancelled
     case listenerFailed(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .alreadyOpen:
+            "A pairing window is already open."
+        case .listenerCancelled:
+            "The pairing listener was cancelled."
+        case let .listenerFailed(message):
+            "The pairing listener failed: \(message)"
+        }
+    }
 }
 
 public actor PairingServer {

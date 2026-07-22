@@ -103,7 +103,11 @@ final class PhotoLibrarySource: @unchecked Sendable {
             ))
         }
         return albums.sorted {
-            $0.title.localizedStandardCompare($1.title) == .orderedAscending
+            let titleOrder = $0.title.localizedStandardCompare($1.title)
+            if titleOrder == .orderedSame {
+                return $0.id < $1.id
+            }
+            return titleOrder == .orderedAscending
         }
     }
 

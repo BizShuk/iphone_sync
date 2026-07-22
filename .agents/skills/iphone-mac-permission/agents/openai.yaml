@@ -1,0 +1,4 @@
+interface:
+  display_name: "iPhone and Mac Permissions"
+  short_description: "Audit iPhone Sync iOS and macOS permissions"
+  default_prompt: "Use $iphone-mac-permission to audit and synchronize every permission required by iPhone Sync."

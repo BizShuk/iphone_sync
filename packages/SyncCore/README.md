@@ -7,7 +7,7 @@
 | Product | Responsibility |
 |---|---|
 | `SyncCore` | wire contracts、frame codec、identity、SHA-256、pairing、Keychain、Bonjour、TLS 1.2 PSK、sync client |
-| `MacReceiverKit` | SwiftData manifest、source/album binding、crash-safe destination writer、sync server session |
+| `MacReceiverKit` | SwiftData manifest、multi-album/folder mapping、album-scoped checkpoint、fixed `iPhoneSync` receiving folder、safe album folder、crash-safe destination writer、sync server session |
 
 依賴方向固定為：
 
@@ -32,4 +32,4 @@ MacReceiverKit → SyncCore
 swift test --package-path packages/SyncCore
 ```
 
-Tests 使用 Swift Testing，涵蓋 framing、identity、crypto、Keychain、TLS loopback、wrong PSK/proof、pairing expiry、SwiftData manifest、checkpoint recovery、destination collision 與 client/server round trip。
+Tests 使用 Swift Testing，涵蓋 framing、identity、crypto、Keychain、TLS loopback、wrong PSK/proof、pairing expiry、SwiftData manifest、multi-album resource scope、`iPhoneSync` container、duplicate/existing album folders、legacy partial/record migration、checkpoint recovery、destination collision 與 client/server round trip。

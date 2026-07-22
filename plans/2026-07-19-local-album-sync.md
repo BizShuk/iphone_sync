@@ -1,10 +1,10 @@
 # Local Album Sync Implementation Plan
 
-`Status:` Completed and verified on `2026-07-19`. Post-plan additions include `SourceRecord`, per-app/package README files, Mac Sandbox entitlement verification, serial SwiftData test isolation, streamed PhotoKit asset enumeration and safe cancellation state handling.
+`Status:` Completed and verified on `2026-07-19`; post-plan additions verified on `2026-07-22`. Additions include `SourceRecord`/`AlbumRecord`, per-app/package README files, Mac Sandbox entitlement verification, serial SwiftData test isolation, streamed PhotoKit asset enumeration, safe cancellation state handling, multi-album selection, fixed `iPhoneSync` receiving container, per-album destination folders, typed persistent Mac settings and the Mac error-log panel.
 
 > `For agentic workers:` REQUIRED SUB-SKILL: use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-`Goal:` Build a native iOS sender and native macOS menu-bar receiver that pair with a six-digit code and incrementally copy one local-only Photos album to a Finder folder over the same LAN.
+`Goal:` Build a native iOS sender and native macOS menu-bar receiver that pair with a six-digit code and incrementally copy one or more local-only Photos albums to corresponding subfolders under `<selected-folder>/iPhoneSync/` over the same LAN.
 
 `Architecture:` XcodeGen owns the Xcode project description. Both apps depend downward on local Swift package products: `SyncCore` owns contracts, framing, identity, hashing, pairing, Keychain, Bonjour and TLS-PSK transport; `MacReceiverKit` owns SwiftData manifest and crash-safe destination writes. Initial pairing uses unauthenticated TCP only to exchange ephemeral Curve25519 public material; the six-digit short authentication string authenticates that exchange, and the derived 256-bit secret becomes the TLS 1.2 PSK for every sync connection.
 
@@ -14,7 +14,7 @@
 
 - Deployment floors are iOS 17 and macOS 14.
 - The iPhone app runs synchronization only while foregrounded and after `Sync Now`.
-- One source album, one iPhone and one Mac are active at a time.
+- One selected source-album set, one iPhone and one Mac are active at a time; the set may contain multiple albums.
 - The Mac never deletes or overwrites committed user files.
 - PhotoKit requests always set `isNetworkAccessAllowed = false`.
 - Full Access to Photos is required because Limited Access cannot guarantee complete album enumeration.
@@ -25,6 +25,7 @@
 - Control frames are at most 64 KiB; chunk frames are at most 1 MiB.
 - Durable receive checkpoints occur every 16 MiB.
 - Final destination publication is an atomic commit after size and SHA-256 verification.
+- The Mac creates or reuses a fixed `iPhoneSync` folder below the user-selected destination, then one safe folder per album; duplicate album names receive stable ordinal suffixes.
 - Album enumeration must handle 10,000 assets without loading media bytes or a complete wire inventory into memory.
 - No third-party runtime dependency is allowed.
 - The generated `.xcodeproj` is committed so building does not require XcodeGen after checkout.
@@ -83,6 +84,7 @@ iphone_sync/
 │       │   │   ├── PairingServer.swift
 │       │   │   └── SyncClient.swift
 │       │   └── MacReceiverKit/
+│       │       ├── AlbumFolderPolicy.swift
 │       │       ├── TransferRecord.swift
 │       │       ├── ManifestStore.swift
 │       │       ├── DestinationWriter.swift
@@ -356,6 +358,7 @@ Run: `git add packages/SyncCore && git commit -m "feat: add secure local transpo
 `Files:`
 
 - Create `packages/SyncCore/Sources/MacReceiverKit/TransferRecord.swift`
+- Create `packages/SyncCore/Sources/MacReceiverKit/AlbumRecord.swift`
 - Create `packages/SyncCore/Sources/MacReceiverKit/ManifestStore.swift`
 - Create `packages/SyncCore/Sources/MacReceiverKit/DestinationWriter.swift`
 - Create `packages/SyncCore/Sources/MacReceiverKit/SyncServerSession.swift`
@@ -368,8 +371,10 @@ Run: `git add packages/SyncCore && git commit -m "feat: add secure local transpo
 `Interfaces:`
 
 - `ManifestStore.decision(for:) async throws -> TransferDecision`
+- `ManifestStore.acceptSession(albumID:albumName:requestedBindingID:) async throws -> AcceptedAlbum`
 - `ManifestStore.recordCheckpoint(resourceID:offset:) async throws`
 - `ManifestStore.commit(resourceID:relativePath:) async throws`
+- `DestinationWriter.prepareAlbumDirectory(named:) throws -> String`
 - `DestinationWriter.begin(_:)`, `append(_:offset:)`, `checkpoint()`, `commit(expectedHash:)`, and `abort()`
 - `SyncServerSession.run(connection:) async throws`
 - `SyncClient.openSession(albumID:albumName:sourceBindingID:)`, `sendResource(_:fileURL:)`, and `finish()`
@@ -405,13 +410,13 @@ Expected: compilation fails because receiver types do not exist.
 
 - [x] `Step 3: Implement SwiftData manifest and safe file lifecycle`
 
-Use an injected `ModelContainer` so tests use `ModelConfiguration(isStoredInMemoryOnly: true)`. A transfer record contains source binding, resource ID, content hash, expected size, confirmed offset, status, final relative path and update time.
+Use an injected `ModelContainer` so tests use `ModelConfiguration(isStoredInMemoryOnly: true)`. A transfer record contains source binding, album ID, album-scoped manifest key, logical resource ID, content hash, expected size, confirmed offset, status, final relative path and update time. `AlbumRecord` owns the stable album-to-folder mapping and migrates legacy single-album records without changing logical resource filenames.
 
-Write only to `<final-name>.partial`. At each 16 MiB boundary call `FileHandle.synchronize()`, then persist the offset in one SwiftData transaction. Recovery truncates bytes past the manifest offset. Commit verifies size and SHA-256, synchronizes, closes, resolves path collisions by expanding the resource ID prefix, and uses `FileManager.moveItem` without replacing an existing file.
+After source binding succeeds, create `<selected-folder>/iPhoneSync/<safe-album-name>/` and write only to `iPhoneSync/<safe-album-name>/<year>/<month>/<final-name>.partial`. Safely reuse real directories, reject file/symlink conflicts, and migrate a previous per-album partial into the new container without moving committed files. At each 16 MiB boundary call `FileHandle.synchronize()`, then persist the offset in one SwiftData transaction. Recovery truncates bytes past the manifest offset. Commit verifies size and SHA-256, synchronizes, closes, resolves path collisions by expanding the resource ID prefix, and uses `FileManager.moveItem` without replacing an existing file.
 
 - [x] `Step 4: Implement client/server message flow`
 
-`session.request` receives or creates the source binding. For each `offer`, the server returns `skip`, `start(0)` or `resume(offset)`. Chunks must arrive at the exact expected offset. When expected size is reached, the server hashes, commits and returns `committed`. A finished session returns immutable counts for added, existing, not-local and failed.
+`session.request` receives or creates the source/album binding, then prepares or reuses its stable album folder before accepting the session. The same source binding accepts multiple album IDs, while the same logical resource in different albums has independent manifest state. For each `offer`, the server returns `skip`, `start(0)` or `resume(offset)`. Chunks must arrive at the exact expected offset. When expected size is reached, the server hashes, commits and returns `committed`. A finished session returns immutable counts for added, existing, not-local and failed.
 
 - [x] `Step 5: Run all package tests`
 
@@ -434,6 +439,7 @@ Run: `git add packages/SyncCore && git commit -m "feat: add resumable receiver e
 - Create `apps/macos/Sources/iPhoneSyncMacApp.swift`
 - Create `apps/macos/Sources/MacAppModel.swift`
 - Create `apps/macos/Sources/ReceiverController.swift`
+- Create `apps/macos/Sources/MacSettingsStore.swift`
 - Create `apps/macos/Sources/DestinationBookmarkStore.swift`
 - Create `apps/macos/Sources/MenuContentView.swift`
 - Create `apps/macos/Sources/SetupView.swift`
@@ -441,7 +447,7 @@ Run: `git add packages/SyncCore && git commit -m "feat: add resumable receiver e
 
 `Interfaces:`
 
-- `MacAppModel.chooseDestination()`, `openPairingWindow()`, `forgetPhone()`, `resetSource()`, `startReceiverIfReady()`, and `stopReceiver()`
+- `MacAppModel.chooseDestination()`, `openPairingWindow()`, `forgetPhone()`, `resetSource()`, `startReceiverIfReady()`, `recordError(_:context:)`, `clearErrorLog()`, and `stopReceiver()`
 - `ReceiverController` owns the pairing listener and normal TLS listener but delegates bytes and manifest operations to package types.
 
 - [x] `Step 1: Add the macOS target before implementation and verify RED`
@@ -457,15 +463,15 @@ Expected: build fails because the Mac source and plist files do not exist.
 
 - [x] `Step 2: Implement sandbox configuration and bookmark persistence`
 
-Entitlements contain App Sandbox, incoming/outgoing network and user-selected read-write file access. `Info.plist` contains `LSUIElement`, `NSLocalNetworkUsageDescription`, the application category and display name. Bookmark data is security-scoped and detects stale bookmarks.
+Entitlements contain App Sandbox, incoming/outgoing network and user-selected read-write file access. `Info.plist` contains `LSUIElement`, `NSLocalNetworkUsageDescription`, the application category and display name. Bookmark data is security-scoped and detects stale bookmarks. `MacSettingsStore` owns typed durable preferences while Keychain and SwiftData retain their existing security/domain boundaries.
 
 - [x] `Step 3: Implement model and controller`
 
-The model presents states `needsDestination`, `needsPairing`, `ready`, `pairing(code,expiresAt)`, `receiving(progress)`, and `error(message)`. Pairing success writes `PairedPeer` to Keychain, closes the pairing listener and starts the TLS-PSK receiver. Forgetting a phone stops the listener and deletes only trust material; it does not delete files or manifests.
+The model presents states `needsDestination`, `needsPairing`, `ready`, `pairing(code,expiresAt)`, `receiving(progress)`, and `error(message)`. Pairing success writes `PairedPeer` to Keychain, closes the pairing listener and starts the TLS-PSK receiver. Bootstrap restores typed preferences, destination capability, Keychain trust and SwiftData state before restarting the receiver. Forgetting a phone stops the listener and deletes only trust material; it does not delete files or manifests.
 
 - [x] `Step 4: Implement menu and setup UI`
 
-`MenuBarExtra` shows status, `Open Setup`, `Pair New iPhone`, `Choose Destination`, `Forget iPhone` and `Quit`. `SetupView` displays destination, paired phone, six-digit code, pairing expiry and last sync summary. `Launch at Login` uses `SMAppService.mainApp` and surfaces errors without forcing the setting.
+A standard square AppKit `NSStatusItem` is retained for the app lifetime, uses the unique `com.shuk.iphonesync.statusItem` autosave name, explicitly remains visible, observes unexpected visibility changes so it can restore itself, and shows status, the paired iPhone display name and app-specific device ID, `Open Setup`, `Pair New iPhone`, `Choose Destination`, `Forget iPhone` and `Quit` through a native `NSMenu`. An AppKit `NSWindow` hosts `SetupView`, which displays destination, the paired iPhone name and copyable device ID, six-digit code, pairing expiry, last sync summary, a clearable bounded panel for the latest 100 runtime errors, and guidance for repositioning a status item that macOS obscures when menu-bar space is exhausted. The UI explains that iOS does not expose a hardware serial number and never substitutes PSK identity. Setup window geometry uses AppKit autosave. `Launch at Login` uses `SMAppService.mainApp`; requested intent defaults on, persists, and remains user-controllable.
 
 - [x] `Step 5: Build macOS twice`
 
@@ -500,7 +506,7 @@ Run: `git add project.yml iPhoneSync.xcodeproj apps/macos && git commit -m "feat
 - `PhotoLibrarySource.requestFullAccess() async -> PHAuthorizationStatus`
 - `PhotoLibrarySource.albums() -> [PhotoAlbum]`
 - `PhotoLibrarySource.resources(albumID:) -> AsyncThrowingStream<StagedPhotoResource, Error>`
-- `IOSSyncCoordinator.pair(endpoint:code:)`, `sync(album:)`, and `cancel()`
+- `IOSSyncCoordinator.pair(endpoint:code:)`, `sync(albums:)`, and `cancel()`
 - `IOSAppModel` exposes setup, discovery, pairing, syncing and summary state to SwiftUI.
 
 - [x] `Step 1: Add the iOS target before source and verify RED`
@@ -515,11 +521,11 @@ Request `.readWrite`; treat `.limited` as insufficient for full-album guarantees
 
 - [x] `Step 3: Implement pairing and sync coordinator`
 
-Browse `_iphonesync-pair._tcp` for setup and `_iphonesync._tcp` for normal sync. Match the stored receiver ID from Bonjour TXT data. Pairing compares the typed six-digit value locally. Sync opens a TLS-PSK session, receives the source binding, stages one resource, offers it, seeks to resume offset, sends 1 MiB chunks and updates progress. Cancellation stops adding resources, finishes the current send operation and closes the connection.
+Browse `_iphonesync-pair._tcp` for setup and `_iphonesync._tcp` for normal sync. Match the stored receiver ID from Bonjour TXT data. Pairing compares the typed six-digit value locally. Sync opens one TLS-PSK session per selected album, receives the shared source binding, stages one resource, offers it, seeks to resume offset, sends 1 MiB chunks and updates album/resource progress. Album summaries are combined on iPhone. Cancellation stops adding resources, finishes the current send operation and closes the connection.
 
 - [x] `Step 4: Implement SwiftUI flow`
 
-The main screen shows source album, paired Mac, connection state, last summary, `Sync Now`, current resource/byte progress and `Cancel`. Setup requests Photos before album selection and Local Network only after `Find Mac`. Pairing accepts exactly six decimal digits and shows expiry/failure states. Entering background requests coordinator cancellation and preserves Mac partial state.
+The main screen shows the selected album count or single album name, paired Mac, connection state, combined last summary, `Sync Now`, current album/resource/byte progress and `Cancel`. The picker supports toggling multiple albums and persists the set, including migration from the legacy single-album key. Setup requests Photos before album selection and Local Network only after `Find Mac`. Pairing accepts exactly six decimal digits and shows expiry/failure states. Entering background requests coordinator cancellation and preserves Mac partial state.
 
 - [x] `Step 5: Build iOS for simulator and generic device`
 

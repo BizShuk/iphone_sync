@@ -30,7 +30,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Find your Mac and transfer original photo resources on this local network.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Select one album and back up its original resources to your paired Mac.</string>
+	<string>Select one or more albums and back up their original resources to your paired Mac.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

@@ -6,8 +6,9 @@ public enum DestinationBeginResult: Equatable, Sendable {
     case adopted(relativePath: String)
 }
 
-public enum DestinationWriterError: Error, Equatable, Sendable {
+public enum DestinationWriterError: Error, Equatable, LocalizedError, Sendable {
     case activeTransferExists
+    case albumNotPrepared
     case noActiveTransfer
     case invalidOffset
     case expectedSizeExceeded
@@ -15,9 +16,40 @@ public enum DestinationWriterError: Error, Equatable, Sendable {
     case integrityMismatch
     case unsafeDestination
     case unableToCreatePartial
+
+    public var errorDescription: String? {
+        switch self {
+        case .activeTransferExists:
+            "Another resource transfer is already active."
+        case .albumNotPrepared:
+            "The album destination folder has not been prepared."
+        case .noActiveTransfer:
+            "There is no active resource transfer."
+        case .invalidOffset:
+            "The resource offset does not match the durable checkpoint."
+        case .expectedSizeExceeded:
+            "The received resource exceeded its declared size."
+        case .incompleteTransfer:
+            "The resource ended before its declared size was received."
+        case .integrityMismatch:
+            "The received resource failed SHA-256 verification."
+        case .unsafeDestination:
+            "The album destination conflicts with a file, symlink, or unsafe path."
+        case .unableToCreatePartial:
+            "The receiver could not create the partial resource file."
+        }
+    }
 }
 
 public actor DestinationWriter {
+    public static let receivingFolderName = "iPhoneSync"
+
+    private struct PathResolution {
+        let relativePath: String
+        let resourceRelativePath: String
+        let adopted: Bool
+    }
+
     private struct ActiveTransfer {
         let offer: ResourceOffer
         var relativePath: String
@@ -29,6 +61,7 @@ public actor DestinationWriter {
 
     private let destinationRoot: URL
     private let manifest: ManifestStore
+    private var albumFolderName: String?
     private var active: ActiveTransfer?
 
     public init(destinationRoot: URL, manifest: ManifestStore) {
@@ -36,8 +69,29 @@ public actor DestinationWriter {
         self.manifest = manifest
     }
 
+    @discardableResult
+    public func prepareAlbumDirectory(named albumName: String) throws -> String {
+        guard active == nil else { throw DestinationWriterError.activeTransferExists }
+        let receivingRoot = destinationRoot.appendingPathComponent(
+            Self.receivingFolderName,
+            isDirectory: true
+        )
+        try prepareSafeDirectory(receivingRoot, expectedParent: destinationRoot)
+
+        let folderName = AlbumFolderPolicy.folderName(for: albumName)
+        let folderURL = receivingRoot.appendingPathComponent(folderName, isDirectory: true)
+        let standardizedParent = folderURL.deletingLastPathComponent().standardizedFileURL
+        guard standardizedParent == receivingRoot else {
+            throw DestinationWriterError.unsafeDestination
+        }
+        try prepareSafeDirectory(folderURL, expectedParent: receivingRoot)
+        albumFolderName = folderName
+        return folderName
+    }
+
     public func begin(_ offer: ResourceOffer) async throws -> DestinationBeginResult {
         guard active == nil else { throw DestinationWriterError.activeTransferExists }
+        guard albumFolderName != nil else { throw DestinationWriterError.albumNotPrepared }
         let decision = try await manifest.decision(for: offer)
         if case .skip = decision,
            let snapshot = try await manifest.snapshot(resourceID: offer.resourceID),
@@ -63,8 +117,27 @@ public actor DestinationWriter {
         let partialURL = finalURL.appendingPathExtension("partial")
         try rejectSymbolicLink(at: partialURL)
         if !FileManager.default.fileExists(atPath: partialURL.path) {
-            guard FileManager.default.createFile(atPath: partialURL.path, contents: nil) else {
-                throw DestinationWriterError.unableToCreatePartial
+            guard let albumFolderName else {
+                throw DestinationWriterError.albumNotPrepared
+            }
+            let previousAlbumPartialURL = destinationRoot
+                .appendingPathComponent(albumFolderName, isDirectory: true)
+                .appendingPathComponent(resolution.resourceRelativePath)
+                .appendingPathExtension("partial")
+            let legacyPartialURL = destinationRoot
+                .appendingPathComponent(resolution.resourceRelativePath)
+                .appendingPathExtension("partial")
+            try rejectSymbolicLink(at: previousAlbumPartialURL)
+            try rejectSymbolicLink(at: legacyPartialURL)
+            if FileManager.default.fileExists(atPath: previousAlbumPartialURL.path) {
+                try FileManager.default.moveItem(at: previousAlbumPartialURL, to: partialURL)
+            } else if try await manifest.activeAlbumUsesLegacyPaths(),
+               FileManager.default.fileExists(atPath: legacyPartialURL.path) {
+                try FileManager.default.moveItem(at: legacyPartialURL, to: partialURL)
+            } else {
+                guard FileManager.default.createFile(atPath: partialURL.path, contents: nil) else {
+                    throw DestinationWriterError.unableToCreatePartial
+                }
             }
         }
 
@@ -186,47 +259,97 @@ public actor DestinationWriter {
 
     private func resolveRelativePath(
         for offer: ResourceOffer
-    ) async throws -> (relativePath: String, adopted: Bool) {
+    ) async throws -> PathResolution {
         for prefixLength in [8, 16, 64] {
-            let relativePath = try FilenamePolicy.relativePath(
+            let resourceRelativePath = try FilenamePolicy.relativePath(
                 originalFilename: offer.descriptor.originalFilename,
                 resourceID: offer.resourceID,
                 role: offer.descriptor.role,
                 creationDate: offer.descriptor.creationDate,
                 resourceIDPrefixLength: prefixLength
             )
+            let relativePath = try albumRelativePath(for: resourceRelativePath)
             let url = destinationRoot.appendingPathComponent(relativePath)
             if !FileManager.default.fileExists(atPath: url.path) {
-                return (relativePath, false)
+                return PathResolution(
+                    relativePath: relativePath,
+                    resourceRelativePath: resourceRelativePath,
+                    adopted: false
+                )
             }
             if try fileMatches(url, offer: offer) {
-                return (relativePath, true)
+                return PathResolution(
+                    relativePath: relativePath,
+                    resourceRelativePath: resourceRelativePath,
+                    adopted: true
+                )
             }
         }
 
-        let fullPath = try FilenamePolicy.relativePath(
+        let fullResourcePath = try FilenamePolicy.relativePath(
             originalFilename: offer.descriptor.originalFilename,
             resourceID: offer.resourceID,
             role: offer.descriptor.role,
             creationDate: offer.descriptor.creationDate,
             resourceIDPrefixLength: 64
         )
-        let fullURL = URL(fileURLWithPath: fullPath)
+        let fullURL = URL(fileURLWithPath: fullResourcePath)
         let fileExtension = fullURL.pathExtension
         let base = fullURL.deletingPathExtension().path
         for ordinal in 2...10_000 {
-            let relativePath = fileExtension.isEmpty
+            let resourceRelativePath = fileExtension.isEmpty
                 ? "\(base)-\(ordinal)"
                 : "\(base)-\(ordinal).\(fileExtension)"
+            let relativePath = try albumRelativePath(for: resourceRelativePath)
             let url = destinationRoot.appendingPathComponent(relativePath)
             if !FileManager.default.fileExists(atPath: url.path) {
-                return (relativePath, false)
+                return PathResolution(
+                    relativePath: relativePath,
+                    resourceRelativePath: resourceRelativePath,
+                    adopted: false
+                )
             }
             if try fileMatches(url, offer: offer) {
-                return (relativePath, true)
+                return PathResolution(
+                    relativePath: relativePath,
+                    resourceRelativePath: resourceRelativePath,
+                    adopted: true
+                )
             }
         }
         throw DestinationWriterError.unsafeDestination
+    }
+
+    private func albumRelativePath(for resourceRelativePath: String) throws -> String {
+        guard let albumFolderName else {
+            throw DestinationWriterError.albumNotPrepared
+        }
+        return "\(Self.receivingFolderName)/\(albumFolderName)/\(resourceRelativePath)"
+    }
+
+    private func prepareSafeDirectory(_ url: URL, expectedParent: URL) throws {
+        guard url.deletingLastPathComponent().standardizedFileURL == expectedParent else {
+            throw DestinationWriterError.unsafeDestination
+        }
+
+        var isDirectory: ObjCBool = false
+        if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
+            try rejectSymbolicLink(at: url)
+            guard isDirectory.boolValue else {
+                throw DestinationWriterError.unsafeDestination
+            }
+        } else {
+            try FileManager.default.createDirectory(
+                at: url,
+                withIntermediateDirectories: false
+            )
+        }
+
+        let root = destinationRoot.resolvingSymlinksInPath().standardizedFileURL
+        let resolvedDirectory = url.resolvingSymlinksInPath().standardizedFileURL
+        guard isWithinDestinationRoot(resolvedDirectory, resolvedRoot: root) else {
+            throw DestinationWriterError.unsafeDestination
+        }
     }
 
     private func fileMatches(_ url: URL, offer: ResourceOffer) throws -> Bool {
@@ -254,10 +377,17 @@ public actor DestinationWriter {
                 try FileManager.default.createDirectory(at: current, withIntermediateDirectories: false)
             }
             let resolved = current.resolvingSymlinksInPath().standardizedFileURL
-            guard resolved.path == root.path || resolved.path.hasPrefix(root.path + "/") else {
+            guard isWithinDestinationRoot(resolved, resolvedRoot: root) else {
                 throw DestinationWriterError.unsafeDestination
             }
         }
+    }
+
+    private func isWithinDestinationRoot(_ url: URL, resolvedRoot root: URL) -> Bool {
+        if root.path == "/" {
+            return url.path.hasPrefix("/")
+        }
+        return url.path == root.path || url.path.hasPrefix(root.path + "/")
     }
 
     private func rejectSymbolicLink(at url: URL) throws {

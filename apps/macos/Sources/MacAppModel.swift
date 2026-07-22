@@ -1,12 +1,34 @@
 import AppKit
 import Foundation
 import Observation
+import OSLog
 import ServiceManagement
 import SyncCore
+
+struct MacErrorLogEntry: Equatable, Identifiable {
+    let id: UUID
+    let occurredAt: Date
+    let context: String
+    let message: String
+
+    init(
+        id: UUID = UUID(),
+        occurredAt: Date = Date(),
+        context: String,
+        message: String
+    ) {
+        self.id = id
+        self.occurredAt = occurredAt
+        self.context = context
+        self.message = message
+    }
+}
 
 @MainActor
 @Observable
 final class MacAppModel {
+    static let shared = MacAppModel()
+
     enum State: Equatable {
         case needsDestination
         case needsPairing
@@ -21,25 +43,29 @@ final class MacAppModel {
     var pairedPeer: PairedPeer?
     var lastSummary: SyncSummary?
     var launchAtLogin = false
+    var errorLog: [MacErrorLogEntry] = []
 
-    @ObservationIgnored private let defaults = UserDefaults.standard
-    @ObservationIgnored private let bookmarkStore = DestinationBookmarkStore()
+    @ObservationIgnored private let settings: MacSettingsStore
+    @ObservationIgnored private let bookmarkStore: DestinationBookmarkStore
+    @ObservationIgnored private let logger = Logger(
+        subsystem: "com.shuk.iphonesync.mac",
+        category: "runtime"
+    )
     @ObservationIgnored private var controller: ReceiverController?
     @ObservationIgnored private var bootstrapped = false
     @ObservationIgnored private var destinationAccessActive = false
 
+    private init(settings: MacSettingsStore = MacSettingsStore()) {
+        self.settings = settings
+        self.bookmarkStore = DestinationBookmarkStore(settings: settings)
+    }
+
     private var receiverID: String {
-        if let value = defaults.string(forKey: "receiverID") { return value }
-        let value = UUID().uuidString
-        defaults.set(value, forKey: "receiverID")
-        return value
+        settings.receiverID()
     }
 
     private var sourceBindingID: String {
-        if let value = defaults.string(forKey: "sourceBindingID") { return value }
-        let value = UUID().uuidString
-        defaults.set(value, forKey: "sourceBindingID")
-        return value
+        settings.sourceBindingID()
     }
 
     var statusText: String {
@@ -66,7 +92,7 @@ final class MacAppModel {
     func bootstrap() async {
         guard !bootstrapped else { return }
         bootstrapped = true
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        restoreLaunchAtLogin()
         do {
             controller = try ReceiverController(
                 receiverID: receiverID,
@@ -83,7 +109,8 @@ final class MacAppModel {
                     switch runtimeState {
                     case .ready: self.state = .ready
                     case .receiving: self.state = .receiving
-                    case let .error(message): self.state = .error(message)
+                    case let .error(message):
+                        self.recordError(message, context: "Receiver")
                     }
                 },
                 onSummary: { [weak self] summary in
@@ -100,12 +127,12 @@ final class MacAppModel {
             } catch {
                 bookmarkStore.clear()
                 destinationURL = nil
-                state = .error(error.localizedDescription)
+                recordError(error.localizedDescription, context: "Destination")
                 return
             }
             await startReceiverIfReady()
         } catch {
-            state = .error(error.localizedDescription)
+            recordError(error.localizedDescription, context: "Startup")
         }
     }
 
@@ -130,7 +157,7 @@ final class MacAppModel {
                 resetSourceIdentifier()
                 await startReceiverIfReady()
             } catch {
-                state = .error(error.localizedDescription)
+                recordError(error.localizedDescription, context: "Destination")
             }
         }
     }
@@ -148,7 +175,7 @@ final class MacAppModel {
             do {
                 try await controller?.openPairingWindow(displayName: computerName)
             } catch {
-                state = .error(error.localizedDescription)
+                recordError(error.localizedDescription, context: "Pairing")
             }
         }
     }
@@ -160,7 +187,7 @@ final class MacAppModel {
                 pairedPeer = nil
                 state = destinationURL == nil ? .needsDestination : .needsPairing
             } catch {
-                state = .error(error.localizedDescription)
+                recordError(error.localizedDescription, context: "Pairing")
             }
         }
     }
@@ -187,7 +214,7 @@ final class MacAppModel {
                 displayName: computerName
             )
         } catch {
-            state = .error(error.localizedDescription)
+            recordError(error.localizedDescription, context: "Receiver")
         }
     }
 
@@ -196,6 +223,7 @@ final class MacAppModel {
     }
 
     func setLaunchAtLogin(_ enabled: Bool) {
+        settings.launchAtLoginRequested = enabled
         do {
             if enabled {
                 try SMAppService.mainApp.register()
@@ -205,8 +233,22 @@ final class MacAppModel {
             launchAtLogin = SMAppService.mainApp.status == .enabled
         } catch {
             launchAtLogin = SMAppService.mainApp.status == .enabled
-            state = .error(error.localizedDescription)
+            recordError(error.localizedDescription, context: "Launch at Login")
         }
+    }
+
+    func clearErrorLog() {
+        errorLog.removeAll()
+    }
+
+    func recordError(_ message: String, context: String) {
+        let entry = MacErrorLogEntry(context: context, message: message)
+        errorLog.insert(entry, at: 0)
+        if errorLog.count > 100 {
+            errorLog.removeLast(errorLog.count - 100)
+        }
+        logger.error("\(context, privacy: .public): \(message, privacy: .private)")
+        state = .error(message)
     }
 
     private var computerName: String {
@@ -214,6 +256,36 @@ final class MacAppModel {
     }
 
     private func resetSourceIdentifier() {
-        defaults.set(UUID().uuidString, forKey: "sourceBindingID")
+        settings.resetSourceBindingID()
+    }
+
+    private func restoreLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        let requested = settings.launchAtLoginRequested
+        do {
+            if requested {
+                switch service.status {
+                case .enabled:
+                    break
+                case .requiresApproval:
+                    recordError(
+                        "Allow iPhone Sync in System Settings > General > Login Items.",
+                        context: "Launch at Login"
+                    )
+                case .notFound, .notRegistered:
+                    try service.register()
+                @unknown default:
+                    try service.register()
+                }
+            } else if service.status != .notRegistered {
+                try service.unregister()
+            }
+        } catch {
+            recordError(error.localizedDescription, context: "Launch at Login")
+        }
+        launchAtLogin = service.status == .enabled
+        logger.notice(
+            "Launch at Login restored; requested=\(requested, privacy: .public), status=\(String(describing: service.status), privacy: .public)"
+        )
     }
 }

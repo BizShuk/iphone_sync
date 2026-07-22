@@ -51,6 +51,7 @@ func roundTripSecondSyncSkipsCommittedResource() async throws {
         Issue.record("first transfer did not commit")
         return
     }
+    #expect(relativePath.hasPrefix("iPhoneSync/Camera Roll/"))
     #expect(firstSummary == SyncSummary(added: 1, existing: 0, notLocal: 0, failed: 0))
     #expect(try Data(contentsOf: harness.directory.appendingPathComponent(relativePath)) == bytes)
 
@@ -78,8 +79,11 @@ func roundTripSecondSyncSkipsCommittedResource() async throws {
 }
 
 @Test
-func sourceBindingRejectsDifferentAlbum() async throws {
-    let harness = try ReceiverHarness()
+func sameResourceInMultipleAlbumsCreatesCorrespondingFolders() async throws {
+    let bytes = Data("photo in two albums".utf8)
+    let harness = try ReceiverHarness(bytes: bytes)
+    let sourceURL = harness.directory.appendingPathComponent("multi-album-source.bin")
+    try bytes.write(to: sourceURL)
     let psk = Data(repeating: 0x42, count: 32)
     let identity = Data("phone-1".utf8)
     let listener = try SyncTestListener(
@@ -114,17 +118,86 @@ func sourceBindingRejectsDifferentAlbum() async throws {
         albumName: "Camera Roll",
         sourceBindingID: nil
     )
+    guard case let .committed(firstPath) = try await first.sendResource(
+        harness.offer,
+        fileURL: sourceURL
+    ) else {
+        Issue.record("first album transfer did not commit")
+        return
+    }
     _ = try await first.finish()
 
     let second = makeClient()
-    await #expect(throws: SyncClientError.sessionRejected("album-mismatch")) {
-        _ = try await second.openSession(
-            albumID: "album-2",
-            albumName: "Other Album",
-            sourceBindingID: binding
+    _ = try await second.openSession(
+        albumID: "album-2",
+        albumName: "Other Album",
+        sourceBindingID: binding
+    )
+    guard case let .committed(secondPath) = try await second.sendResource(
+        harness.offer,
+        fileURL: sourceURL
+    ) else {
+        Issue.record("second album transfer did not commit")
+        return
+    }
+    #expect(
+        try await second.finish()
+            == SyncSummary(added: 1, existing: 0, notLocal: 0, failed: 0)
+    )
+
+    #expect(firstPath.hasPrefix("iPhoneSync/Camera Roll/"))
+    #expect(secondPath.hasPrefix("iPhoneSync/Other Album/"))
+    #expect(firstPath != secondPath)
+    #expect(try Data(contentsOf: harness.directory.appendingPathComponent(firstPath)) == bytes)
+    #expect(try Data(contentsOf: harness.directory.appendingPathComponent(secondPath)) == bytes)
+    #expect(await listener.recordedFailures().isEmpty)
+}
+
+@Test
+func unavailableAlbumFolderRejectsSessionWithUsefulReceiverError() async throws {
+    let harness = try ReceiverHarness()
+    try Data("conflicting file".utf8).write(
+        to: harness.receivingRootURL
+    )
+    let psk = Data(repeating: 0x42, count: 32)
+    let identity = Data("phone-1".utf8)
+    let listener = try SyncTestListener(
+        parameters: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .server,
+            requireWiFi: false
+        ),
+        manifest: harness.manifest,
+        destinationRoot: harness.directory
+    )
+    let port = try await listener.start()
+    defer { Task { await listener.stop() } }
+    let client = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+    defer { Task { await client.cancel() } }
+
+    await #expect(throws: SyncClientError.sessionRejected("destination-unavailable")) {
+        _ = try await client.openSession(
+            albumID: "album-1",
+            albumName: "Camera Roll",
+            sourceBindingID: nil
         )
     }
-    await second.cancel()
+    try await Task.sleep(for: .milliseconds(20))
+
+    let failures = await listener.recordedFailures()
+    #expect(failures.count == 1)
+    #expect(failures[0].contains("album destination folder is unavailable"))
+    #expect(failures[0].contains("conflicts with a file, symlink, or unsafe path"))
 }
 
 @Test

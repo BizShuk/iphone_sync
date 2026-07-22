@@ -8,7 +8,7 @@ Feature name: `local-album-sync`
 
 ## 1. Goal and Scope
 
-使用者在 iPhone 前景手動按下 `Sync Now`，將一個指定 Photos 相簿中尚未備份、且已存在 iPhone 本機的原始 resources，透過同一區域網路增量傳送至一部已配對 Mac 的 Finder 資料夾。
+使用者在 iPhone 前景手動按下 `Sync Now`，將一個或多個指定 Photos 相簿中尚未備份、且已存在 iPhone 本機的原始 resources，透過同一區域網路增量傳送至一部已配對 Mac 的 Finder destination；receiver 固定先使用 `iPhoneSync` 容器，每個來源相簿再映射至自己的安全子資料夾。
 
 ### Approved Product Decisions
 
@@ -17,7 +17,7 @@ Feature name: `local-album-sync`
 | Trigger | iPhone 前景手動觸發 |
 | Direction | iPhone → Mac 單向增量備份 |
 | Deletion | iPhone 刪除不影響 Mac |
-| Destination | Finder 資料夾，不匯入 macOS Photos |
+| Destination | Finder selected folder 下的 `iPhoneSync` + per-album folders，不匯入 macOS Photos |
 | Pairing | Mac 顯示六位數，iPhone 輸入 |
 | Media | 完整原始 resources，包括 RAW、影片與 Live Photo components |
 | Cloud | 禁止 iCloud resource download |
@@ -27,7 +27,7 @@ Feature name: `local-album-sync`
 
 - 背景或自動同步。
 - 雙向同步及來源刪除傳播。
-- 多來源相簿、多部 Mac 或多部 iPhone。
+- 多部 Mac 或多部 iPhone。
 - Internet relay、AirDrop、Bluetooth 或 peer-to-peer fallback。
 - 匯入 macOS Photos。
 - 已完成原始 resource 的 edit-version tracking。
@@ -37,12 +37,12 @@ Feature name: `local-album-sync`
 
 ```mermaid
 flowchart LR
-    A["iPhone Photos 相簿"] -->|"PhotoKit local-only"| B["IOSSyncCoordinator"]
+    A["iPhone Photos 相簿（可多選）"] -->|"PhotoKit local-only"| B["IOSSyncCoordinator"]
     B -->|"Bonjour 發現"| C["NWConnection + TLS"]
     D["Mac menu bar app"] -->|"發佈 service"| E["NWListener + TLS"]
     C -->|"framed sync protocol"| E
     E -->|"接收 chunks"| F["SyncServerSession + DestinationWriter"]
-    F -->|"partial + atomic rename"| G["Finder 資料夾"]
+    F -->|"partial + atomic rename"| G["Finder / iPhoneSync / per-album folders"]
     F -->|"status + offset"| H["ManifestStore"]
     I["SyncCore package"] -.->|"shared contracts"| B
     I -.->|"shared contracts"| F
@@ -59,8 +59,8 @@ iphone_sync/
     └── SyncCore/
 ```
 
-- `apps/ios`：PhotoKit、album selection、Mac discovery、pairing 與 sender UI。
-- `apps/macos`：menu bar receiver、pairing、destination access、manifest 與 Finder writes。
+- `apps/ios`：PhotoKit、multi-album selection、Mac discovery、pairing 與 sender UI。
+- `apps/macos`：menu bar receiver、pairing、destination access、error-log panel、manifest 與 Finder writes。
 - `packages/SyncCore` 的 `SyncCore` product：wire messages、resource identity、framing、hashing、pairing、Bonjour 與 TLS transport。
 - 同一 package 的 `MacReceiverKit` product：SwiftData manifest、destination writer 與 server session。
 - 兩個 apps 不互相 import；iOS 只依賴 `SyncCore`，macOS 依賴 `SyncCore` 與 `MacReceiverKit`。
@@ -79,6 +79,7 @@ iOS App
 macOS App
 ├── MacAppModel
 ├── ReceiverController
+├── MacSettingsStore
 ├── DestinationBookmarkStore
 └── SwiftUI menu/setup views
 
@@ -89,17 +90,30 @@ SyncCore
 └── SyncClient
 
 MacReceiverKit
-├── SourceRecord / TransferRecord / ManifestStore
+├── SourceRecord / AlbumRecord / TransferRecord / ManifestStore
 ├── DestinationWriter
 └── SyncServerSession
 ```
 
 ### Data Ownership
 
-- iPhone 保存來源相簿 local identifier 與 paired Mac PSK identity。
-- Mac 保存 destination bookmark、paired iPhone PSK identity、source binding 與 transfer manifest。
+- iPhone 保存多個來源相簿 local identifiers 與 paired Mac PSK identity；舊版單相簿選擇會自動遷移。
+- Mac 以 typed `MacSettingsStore` 保存 receiver identity、source binding、destination bookmark bytes 與 launch-at-login intent；paired iPhone PSK identity 保存在 Keychain，album/folder mappings 與 transfer manifest 保存在 SwiftData。
 - Mac manifest 是 completed resource 與 confirmed resume offset 的 authoritative source。
 - Finder 只保存完成媒體與 app-owned `.partial` 暫存；manifest 留在 Mac App container。
+
+### Mac Persistence Map
+
+| Data | Store | Restart Behavior |
+|---|---|---|
+| receiver ID、source binding、launch intent | sandbox `UserDefaults` via `MacSettingsStore` | App relaunch 後原值恢復 |
+| destination capability | security-scoped bookmark | bootstrap resolve 並重新取得 access |
+| paired peer PSK identity | Keychain | first unlock 後可載入 |
+| manifest、album mappings、checkpoints | SwiftData `Application Support` | receiver resume 的 authoritative state |
+| launch registration | `SMAppService.mainApp` | 使用者登入時啟動 App |
+| Setup/status item geometry | AppKit autosave | 下次啟動恢復位置 |
+
+`launchAtLoginRequested` 首次預設為 `true`；使用者關閉後保存 `false`，bootstrap 不得重新開啟。Pairing code、active connection、last summary 與 bounded UI error panel 是 transient runtime state；error detail 只另送 unified logging，不寫入 preferences。
 
 ## 3. Local-only Media Extraction
 
@@ -130,11 +144,11 @@ MacReceiverKit
 | Identity | Purpose | Owner |
 |---|---|---|
 | `deviceIdentity` | TLS-PSK identity and paired-peer authentication | iPhone / Mac Keychain |
-| `sourceBindingID` | 一個 destination 對應的一個 album backup source | Mac manifest |
+| `sourceBindingID` | 一個 destination 對應的一部 iPhone backup source set | Mac manifest |
 | `resourceID` | logical PhotoKit resource identity | derived in sync session |
 | `contentHash` | exact staged bytes integrity | iPhone producer / Mac verifier |
 
-Mac 首次接受來源時產生 `sourceBindingID`。App 重新安裝或重新配對後，只有使用者明確選擇沿用既有來源時，Mac 才重用該 binding。
+Mac 為目前 destination 保存 `sourceBindingID`，同一 binding 可登錄多個 album IDs；不同 binding 一律拒絕。App 重新安裝或重新配對後，只有使用者明確選擇沿用既有來源時，Mac 才重用該 binding。
 
 ```text
 resourceID = SHA-256(
@@ -146,7 +160,7 @@ resourceID = SHA-256(
 )
 ```
 
-`contentHash` 不單獨決定 logical duplication；它用來驗證 bytes、拒絕錯誤續傳，以及在預定 final path 已存在時採納相同內容。不同 `resourceID` 即使具有相同 hash，仍視為不同 Photos resources，避免意外合併使用者刻意保留的重複項目。
+`contentHash` 不單獨決定 logical duplication；它用來驗證 bytes、拒絕錯誤續傳，以及在預定 final path 已存在時採納相同內容。不同 `resourceID` 即使具有相同 hash，仍視為不同 Photos resources，避免意外合併使用者刻意保留的重複項目。同一 `resourceID` 若出現在多個已選相簿，manifest 以 `(sourceBindingID, albumID, resourceID)` 產生 album-scoped record key，因此每個對應資料夾都能獨立完成或續傳。
 
 ## 5. Discovery and Network Boundary
 
@@ -224,7 +238,7 @@ Control metadata 使用 Foundation `Codable` JSON；binary chunk 不做 Base64�
 
 | Message | Direction | Purpose |
 |---|---|---|
-| `session` | bidirectional | version、identities、album 與 source binding negotiation |
+| `session` | bidirectional | version、identities、單一 album 與 source binding negotiation；多選由 iPhone 依序建立 sessions |
 | `offer` | iPhone → Mac | resource descriptor、size、hash 與 dates |
 | `decision` | Mac → iPhone | `skip`、`start(offset: 0)` 或 `resume(offset:)` |
 | `chunk` | iPhone → Mac | resourceID、offset 與 raw bytes |
@@ -250,7 +264,7 @@ flowchart LR
 - 每次 send 等待 Network.framework completion，以提供 backpressure。
 - Mac 先寫入 `.partial`，每累積 16 MiB synchronize file，再以 transaction 更新 `confirmedOffset`。
 - Crash recovery 時，partial 大於 offset 就截斷；小於 offset 就將 manifest 降至實際大小。
-- Resume 必須同時符合 `resourceID`、`contentHash` 與 expected size。
+- Resume 必須同時符合 album scope、`resourceID`、`contentHash` 與 expected size。
 - 完成 SHA-256 驗證後才 atomic rename 並將 manifest 標記 committed。
 - iPhone 收到 committed result 後才清理 staging file。
 - SHA-256 首次不符時清理 app-owned partial 並完整重傳一次；第二次仍不符就停止 session。
@@ -259,7 +273,9 @@ flowchart LR
 
 ```text
 sourceBindingID
-resourceID
+albumID
+resourceID              # persisted album-scoped manifest key
+logicalResourceID       # wire-level PhotoKit resource identity
 contentHash
 expectedSize
 confirmedOffset
@@ -272,18 +288,24 @@ Manifest 使用 SwiftData，保存在 Mac App container。
 
 ## 9. Finder Destination
 
-使用者選擇的 Finder folder 是該來源的 destination root，Mac 以 security-scoped bookmark 保存權限。
+使用者選擇的 Finder folder 是 destination root，Mac 以 security-scoped bookmark 保存權限。每個 session 通過 source/album binding 後，Mac 先建立或重用固定 `iPhoneSync` receiving folder，再建立或重用該 album 的穩定安全子資料夾；所有新的 final 與 partial resource 都寫在該階層內。
 
 ```tree
 Selected Folder/
-├── 2025/
-│   └── 12/
-│       ├── IMG_1001__A1B2C3D4.HEIC
-│       └── IMG_1001__A1B2C3D4_paired.MOV
-└── 2026/
-    └── 07/
-        ├── IMG_2048__E5F6A7B8.DNG
-        └── IMG_2048__E5F6A7B8.JPG
+└── iPhoneSync/
+    ├── Camera Roll/
+    │   └── 2025/
+    │       └── 12/
+    │           ├── IMG_1001__A1B2C3D4.HEIC
+    │           └── IMG_1001__A1B2C3D4_paired.MOV
+    ├── Family/
+    │   └── 2026/
+    │       └── 07/
+    │           └── IMG_2048__E5F6A7B8.JPG
+    └── Family (2)/
+        └── 2026/
+            └── 07/
+                └── IMG_3000__11223344.HEIC
 ```
 
 檔名格式：
@@ -294,7 +316,13 @@ Selected Folder/
 
 - 預設使用 resourceID 前 8 碼。
 - 發生不同內容的 path collision 時延長至 16 碼。
-- 阻擋 `../`、斜線、控制字元與隱藏 path injection。
+- 一般相簿名稱原樣作為直接子資料夾；空白名稱使用 `Untitled Album`。
+- 相簿名稱中的斜線、反斜線與控制字元替換為 `_`，前導 `.` 加上 `_`，阻擋 traversal 與隱藏 path injection。
+- `iPhoneSync` 與對應 album 的真實資料夾已存在時，驗證不是 symlink 且仍位於 selected folder 後直接重用，既有內容不刪除；同名項目若是檔案或 symlink，拒絕 session 並記錄 receiver error。
+- 不同 album 的安全名稱相同時，第一個使用原名，後續依序使用 `名稱 (2)`、`名稱 (3)`；`AlbumRecord` 保存穩定 mapping，避免跨 session 合併。
+- Manifest 的新 `finalRelativePath` 以 Selected Folder 為基準，格式為 `iPhoneSync/<album-folder>/<resource-path>`。
+- 舊版尚未完成的 root-level 或 direct per-album `.partial` 在續傳時安全搬入 `iPhoneSync/<album-folder>/`；已 committed 檔案保留其 manifest path，不搬移或刪除。
+- Resource filename 仍阻擋 `../`、斜線、控制字元與隱藏 path injection。
 - 原始 bytes 不修改。
 - commit 後將 Finder creation/modification dates 設成 Photos asset creation date。
 - 不建立 XMP 或 JSON sidecar。
@@ -327,7 +355,7 @@ pending
                 └── failed
 ```
 
-固定完成摘要：新增備份、已存在、不在本機、失敗。
+每個 album session 回傳固定摘要：新增備份、已存在、不在本機、失敗；iPhone 將已選 albums 的摘要相加後顯示。
 
 ## 11. Error Handling
 
@@ -354,15 +382,15 @@ Cancel 或 iOS background transition 會停止排入新 resource，讓目前 res
 
 ### iPhone
 
-首次設定依序取得 Photos Full Access、選擇單一相簿、觸發 Local Network prompt、發現 Mac 並完成配對。Limited Photos Access 無法保證完整相簿，因此 App 必須說明並要求 Full Access。
+首次設定依序取得 Photos Full Access、選擇一個或多個相簿、觸發 Local Network prompt、發現 Mac 並完成配對。Limited Photos Access 無法保證完整相簿，因此 App 必須說明並要求 Full Access。
 
 主畫面顯示：
 
-- 來源相簿。
+- 已選來源相簿數量或單一相簿名稱。
 - paired Mac 與 connection state。
 - 上次同步摘要。
 - `Sync Now`。
-- current resource 與 byte progress。
+- current album、resource 與 byte progress。
 - `Cancel`。
 
 ### Mac
@@ -371,24 +399,26 @@ Native macOS menu bar companion 顯示 `Ready`、`Pairing`、`Receiving` 或 `Er
 
 設定提供：
 
+- 已配對 iPhone 的顯示名稱與 app-specific device ID；hardware serial number 不在 iOS public API 範圍內，PSK identity 亦不得作為 UI 識別碼。
 - 更換 destination folder。
 - Forget paired iPhone。
 - Reset source binding。
 - 使用者選擇是否啟用 `Launch at Login`。
 - 最近一次同步摘要。
+- 本次執行最近 100 筆 receiver、pairing、destination、bookmark 與 launch-at-login errors；可複製與清除。
 
-更換來源相簿必須經過 `Reset Source`；既有 Finder files 永遠保留。
+使用者可直接增減來源相簿；既有 Finder files 永遠保留，取消選取不會刪除先前備份。
 
-- `Forget paired iPhone` 只撤銷 cryptographic trust，保留 current source binding、manifest 與 Finder files；重新配對同一相簿時沿用 Mac 保存的 current binding。若要切換相簿，使用者必須先按 `Reset Source`。
+- `Forget paired iPhone` 只撤銷 cryptographic trust，保留 current source binding、album mappings、manifest 與 Finder files；重新配對同一 iPhone 時可沿用 Mac 保存的 current binding。
 - `Reset Source` 建立新的 source binding，不刪除舊 manifest 或 Finder files。
-- 更換 destination folder 也建立新的 source binding；下次同步會對新 folder 執行完整的 local-only initial backup，舊 folder 完全不變。
+- 更換 destination folder 也建立新的 source binding；下次同步會在新 destination 建立 `iPhoneSync` 與每個已選相簿的對應子資料夾，並執行完整的 local-only initial backup，舊 folder 完全不變。
 
 ## 13. Privacy and Logging
 
 - 不建立 Internet connection、帳號、analytics 或 telemetry。
 - 不使用 AirDrop、Bluetooth 或 Wi-Fi peer-to-peer fallback。
-- OSLog 不記錄 PIN、private key、完整檔名或照片 metadata。
-- Manifest、logs 與暫存檔只留在各自 App container 或使用者指定 destination。
+- OSLog 與 Setup error panel 不記錄 PIN、private key、完整檔名或照片 metadata；error panel 為 bounded in-memory state，不跨 App launch 保存。
+- Manifest 與暫存檔只留在各自 App container 或使用者指定 destination。
 
 ## 14. Testing Strategy
 
@@ -399,6 +429,7 @@ Native macOS menu bar companion 顯示 `Ready`、`Pairing`、`Receiving` 或 `Er
 - frame encode/decode、malformed/truncated/version 與 size limits。
 - pairing derivation、proof validation、expiry、Keychain 與 wrong PSK。
 - manifest transaction 與 crash reconciliation。
+- multi-album scope、duplicate album-name folder allocation、existing-folder reuse 與 legacy single-album record migration。
 - SHA-256 verification、integrity single retry 與 second-failure termination。
 
 ### Integration
@@ -409,6 +440,7 @@ Native macOS menu bar companion 顯示 `Ready`、`Pairing`、`Receiving` 或 `Er
 - TLS-PSK mismatch and invalid pairing confirmation proof。
 - protocol version mismatch。
 - destination same-hash adoption and different-hash non-overwrite。
+- multi-album round trip、same-resource cross-album copy、safe album-name sanitization、existing/duplicate folder handling 與 legacy root partial migration。
 
 ### Real Devices
 
@@ -426,7 +458,10 @@ Pairing、Photos permission 與 Local Network permission 必須在實機驗證�
 
 - 首次配對要求六位數，後續正常同步不再要求。
 - 只有持有 paired PSK 的 Mac 能接收該 iPhone 的同步。
-- 未變更相簿連續同步兩次時，第二次傳送 0 個 resources。
+- 使用者可選擇一個或多個相簿，Mac 為每個相簿建立或重用對應 folder。
+- 未變更的多相簿選擇連續同步兩次時，第二次傳送 0 個 resources。
+- 同一 resource 出現在兩個相簿時，兩個對應 folders 都有獨立 committed copy。
+- 兩個相簿同名時使用不同且穩定的 folder names；預先存在的 folder 與 files 不刪除、不覆寫。
 - 中斷後從最近 durable checkpoint 恢復，而非從 0 開始。
 - iCloud-only resource 不觸發下載並計入 `skippedNotLocal`。
 - 每個 committed Mac file 的 SHA-256 與 iPhone staged bytes 相同。
@@ -435,6 +470,7 @@ Pairing、Photos permission 與 Local Network permission 必須在實機驗證�
 - Cancel、iPhone termination 與 Mac crash 不會留下被誤認為 committed 的檔案。
 - App 不建立 Internet connection。
 - 10,000 assets 可逐筆掃描與傳送，不將完整 inventory 或媒體載入記憶體。
+- Mac Setup 可查看與清除最近 100 筆 runtime errors。
 
 ## 16. External API References
 

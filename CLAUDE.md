@@ -2,12 +2,13 @@
 
 ## Current Status
 
-MVP 已實作於 `feat/local-album-sync`：包含原生 iOS sender、原生 macOS menu-bar receiver、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。自動驗證只證明 package tests 與 unsigned builds；實體裝置、真實 Photos library 與真實 LAN 驗收仍以 [README.todo](README.todo) 為準。
+MVP 已實作於 `feat/local-album-sync`：包含原生 iOS sender、原生 macOS menu-bar receiver、多相簿選取與對應資料夾、Mac error-log panel、typed persistent settings、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。自動驗證只證明 package tests 與 unsigned builds；實體裝置、真實 Photos library、完整 Mac restart 與真實 LAN 驗收仍以 [README.todo](README.todo) 為準。
 
 ## Product Invariants
 
 - iPhone 必須由使用者在前景手動觸發同步。
-- 同一時間只綁定一個來源相簿、一部 iPhone 與一部 Mac。
+- 同一時間只綁定一組使用者選取的來源相簿、一部 iPhone 與一部 Mac；來源相簿可多選。
+- 使用者選擇的 Finder folder 是 destination root；每個 album 的 resource 一律寫入固定 `iPhoneSync` 容器下的對應安全子資料夾。已存在的真實資料夾安全重用，同名的不同 album 以 `名稱 (2)`、`名稱 (3)` 穩定區分。
 - 同步只能新增，永不因來源變動刪除或覆寫 Mac 既有檔案。
 - iPhone 傳輸只能使用 Bonjour 可見的 Wi-Fi 區域網路；Mac listener 可位於同一 LAN 的 Wi-Fi 或 Ethernet。`includePeerToPeer` 固定為 `false`。
 - PhotoKit resource request 固定使用 `isNetworkAccessAllowed = false`。
@@ -20,6 +21,10 @@ MVP 已實作於 `feat/local-album-sync`：包含原生 iOS sender、原生 macO
 
 ```tree
 iphone_sync/
+├── .agents/skills/
+│   └── iphone-mac-permission/ # permission audit and synchronization workflow
+│       ├── SKILL.md
+│       └── references/permissions.md
 ├── project.yml                  # XcodeGen canonical target/plist configuration
 ├── iPhoneSync.xcodeproj/        # committed generated project
 ├── apps/
@@ -28,7 +33,7 @@ iphone_sync/
 │   │   ├── Info.plist           # generated from project.yml
 │   │   └── iPhoneSync.entitlements
 │   └── macos/
-│       ├── Sources/             # menu bar receiver、pairing、Finder writes
+│       ├── Sources/             # AppKit NSStatusItem receiver、pairing、Finder writes
 │       ├── Info.plist           # generated from project.yml
 │       └── iPhoneSyncMac.entitlements
 ├── packages/
@@ -42,6 +47,7 @@ iphone_sync/
 ├── plans/
 ├── scripts/verify.sh
 ├── README.md
+├── README.permission.md         # iOS/macOS permissions and purpose
 ├── CLAUDE.md
 ├── AGENTS.md -> CLAUDE.md
 └── README.todo
@@ -71,21 +77,30 @@ MacReceiverKit ─────────→ SyncCore
 | Integrity | SHA-256 |
 | Resume checkpoint | 16 MiB durable checkpoint |
 | Manifest | SwiftData in Mac App container |
-| Destination | User-selected Finder folder with security-scoped bookmark |
+| Destination | User-selected Finder root + fixed `iPhoneSync` folder + same-name album subfolder with security-scoped bookmark |
+| Preferences | Typed `MacSettingsStore` backed by sandbox `UserDefaults` |
+| Auto-start | `SMAppService.mainApp` with persistent requested intent |
 
 ## Runtime Ownership
 
 | State | Owner | Persistence |
 |---|---|---|
-| iPhone device ID、selected album | iOS App | `UserDefaults` |
-| Paired peer PSK、opaque identity、source binding | 各 App | Keychain |
-| Mac receiver ID、current source binding | macOS App | `UserDefaults` |
-| Destination capability | macOS App | security-scoped bookmark |
-| Album/source binding | `ManifestStore` | SwiftData `SourceRecord` |
-| Resource status、hash、size、checkpoint、final path | `ManifestStore` | SwiftData `TransferRecord` |
-| Partial media bytes | `DestinationWriter` | destination `<name>.partial` |
+| iPhone device ID、selected albums | iOS App | `UserDefaults` |
+| Paired peer PSK、opaque identity | 各 App | Keychain |
+| Mac receiver ID、current source binding、launch intent | `MacSettingsStore` | sandbox `UserDefaults` |
+| Destination capability | `DestinationBookmarkStore` + `MacSettingsStore` | security-scoped bookmark data in sandbox `UserDefaults` |
+| Launch-at-login registration | `MacAppModel` | `SMAppService.mainApp` |
+| Setup/status-item position | AppKit | `NSWindow` / `NSStatusItem` autosave |
+| Source binding、album/folder mapping | `ManifestStore` | SwiftData `SourceRecord` + `AlbumRecord` |
+| Album-scoped resource status、hash、size、checkpoint、final path | `ManifestStore` | SwiftData `TransferRecord` |
+| Partial media bytes | `DestinationWriter` | destination `iPhoneSync/<safe-album-name>/<year>/<month>/<name>.partial` |
+| Error log | macOS App | bounded in-memory list（最近 100 筆）+ unified logging |
 
-同一 `sourceBindingID` 一旦綁定 album ID，後續不同 album 必須拒絕。使用者在 Mac 明確執行 `Reset Source` 或更換 destination 時才產生新的 binding；既有 committed Finder files 不刪除。
+Mac bootstrap 先依 `launchAtLoginRequested` reconcile `SMAppService`，再讀取 Keychain paired peer、解析 security-scoped destination bookmark、開啟 SwiftData store，最後在必要狀態齊全時自動啟動 receiver。既有 `receiverID`、`sourceBindingID` 與 `destinationBookmark` keys 保持不變，加入 typed store 不需要 migration。Pairing code、active session、last summary 與 UI error list 是 transient state，不得放入 durable preferences。
+
+同一 `sourceBindingID` 代表一部 iPhone 對一個 destination 的來源集合，可登錄多個 album ID；不同 binding 仍必須拒絕。`AlbumRecord` 保存每個 album 的穩定 destination folder，`TransferRecord` 以 album scope 區分同一 PhotoKit resource 出現在多個相簿的完成狀態。使用者在 Mac 明確執行 `Reset Source` 或更換 destination 時才產生新的 binding；既有 committed Finder files 不刪除。
+
+`SyncServerSession` 通過 source/album binding 後，才由 `DestinationWriter.prepareAlbumDirectory(named:)` 建立或重用固定 `iPhoneSync` 容器及相簿子資料夾。一般相簿名稱原樣保留；斜線、反斜線、控制字元與隱藏 path injection 由 `AlbumFolderPolicy` 轉為安全的單一 path component。Manifest 的 `finalRelativePath` 以使用者選擇的 destination root 為基準，格式為 `iPhoneSync/<album-folder>/<resource-path>`。舊版 committed path 保留原位；舊版未完成的 per-album partial 可安全搬入新容器續傳。
 
 ## Build and Verification
 
@@ -120,6 +135,7 @@ swift test --package-path packages/SyncCore
 ## Canonical Documentation
 
 - 業務定義與 domain flow：[README.md](README.md)
+- 權限與能力盤點：[README.permission.md](README.permission.md)
 - 核准設計：[docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md)
 - 實作計畫：[plans/2026-07-19-local-album-sync.md](plans/2026-07-19-local-album-sync.md)
 - 待辦：[README.todo](README.todo)

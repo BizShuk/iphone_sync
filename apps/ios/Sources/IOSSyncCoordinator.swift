@@ -4,6 +4,7 @@ import SyncCore
 import UIKit
 
 struct IOSSyncProgress: Equatable, Sendable {
+    let albumName: String
     let resourceName: String
     let sentBytes: Int64
     let totalBytes: Int64
@@ -109,11 +110,30 @@ actor IOSSyncCoordinator {
         try keychain.delete(account: Self.pairedPeerAccount)
     }
 
-    func sync(album: PhotoAlbum) async throws -> SyncSummary {
+    func sync(albums: [PhotoAlbum]) async throws -> SyncSummary {
         guard var peer = try loadPairedPeer() else {
             throw IOSSyncCoordinatorError.notPaired
         }
         cancelRequested = false
+        var combinedSummary = SyncSummary.zero
+
+        for album in albums {
+            if cancelRequested { break }
+            let result = try await sync(album: album, peer: peer)
+            peer = result.peer
+            combinedSummary.added += result.summary.added
+            combinedSummary.existing += result.summary.existing
+            combinedSummary.notLocal += result.summary.notLocal
+            combinedSummary.failed += result.summary.failed
+        }
+        return combinedSummary
+    }
+
+    private func sync(
+        album: PhotoAlbum,
+        peer: PairedPeer
+    ) async throws -> (summary: SyncSummary, peer: PairedPeer) {
+        var peer = peer
         let receiver: DiscoveredReceiver
         do {
             receiver = try await discoverReceiverWithRetry(id: peer.id)
@@ -165,7 +185,12 @@ actor IOSSyncCoordinator {
             case let .staged(staged):
                 transferringResource = true
                 do {
-                    try await send(staged, bindingID: sourceBindingID, client: client)
+                    try await send(
+                        staged,
+                        albumName: album.title,
+                        bindingID: sourceBindingID,
+                        client: client
+                    )
                 } catch {
                     await staged.cleanup()
                     transferringResource = false
@@ -177,7 +202,7 @@ actor IOSSyncCoordinator {
         }
         var summary = try await client.finish()
         summary.notLocal = notLocal
-        return summary
+        return (summary, peer)
     }
 
     func cancel() async {
@@ -187,6 +212,7 @@ actor IOSSyncCoordinator {
 
     private func send(
         _ staged: StagedPhotoResource,
+        albumName: String,
         bindingID: String,
         client: SyncClient
     ) async throws {
@@ -197,6 +223,7 @@ actor IOSSyncCoordinator {
         let offer = ResourceOffer(resourceID: resourceID, descriptor: staged.descriptor)
         let progress: @Sendable (Int64, Int64) -> Void = { [onProgress] sent, total in
             onProgress(IOSSyncProgress(
+                albumName: albumName,
                 resourceName: staged.descriptor.originalFilename,
                 sentBytes: sent,
                 totalBytes: total

@@ -1,10 +1,24 @@
 import Foundation
 import SyncCore
 
-public enum SyncServerSessionError: Error, Equatable, Sendable {
+public enum SyncServerSessionError: Error, Equatable, LocalizedError, Sendable {
     case integrityFailureLimitExceeded
     case invalidChunk
     case protocolViolation
+    case sessionRejected(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .integrityFailureLimitExceeded:
+            "The same resource failed integrity verification twice."
+        case .invalidChunk:
+            "The sender provided an invalid or out-of-order chunk."
+        case .protocolViolation:
+            "The sender violated the sync protocol."
+        case let .sessionRejected(message):
+            message
+        }
+    }
 }
 
 public actor SyncServerSession {
@@ -27,27 +41,37 @@ public actor SyncServerSession {
         else {
             throw SyncServerSessionError.protocolViolation
         }
+        let acceptedAlbum: AcceptedAlbum
         do {
-            _ = try await manifest.acceptSession(
+            acceptedAlbum = try await manifest.acceptSession(
                 albumID: albumID,
                 albumName: albumName,
                 requestedBindingID: requestedBinding
             )
-        } catch ManifestStoreError.albumMismatch {
-            try await connection.send(try SyncFrame.control(
-                .session(.rejected(reason: "album-mismatch")),
-                requestID: openingFrame.requestID
-            ))
-            return SyncSummary.zero
         } catch ManifestStoreError.sourceBindingMismatch {
             try await connection.send(try SyncFrame.control(
                 .session(.rejected(reason: "source-binding-mismatch")),
                 requestID: openingFrame.requestID
             ))
-            return SyncSummary.zero
+            throw SyncServerSessionError.sessionRejected(
+                "The iPhone source binding does not match this destination."
+            )
+        }
+        do {
+            try await writer.prepareAlbumDirectory(
+                named: acceptedAlbum.destinationFolderName
+            )
+        } catch {
+            try await connection.send(try SyncFrame.control(
+                .session(.rejected(reason: "destination-unavailable")),
+                requestID: openingFrame.requestID
+            ))
+            throw SyncServerSessionError.sessionRejected(
+                "The album destination folder is unavailable: \(error.localizedDescription)"
+            )
         }
         try await connection.send(try SyncFrame.control(
-            .session(.accepted(sourceBindingID: manifest.sourceBindingID)),
+            .session(.accepted(sourceBindingID: acceptedAlbum.sourceBindingID)),
             requestID: openingFrame.requestID
         ))
 
@@ -150,6 +174,11 @@ public actor SyncServerSession {
             }
             if error is SyncServerSessionError {
                 throw error
+            }
+            if !isIntegrityMismatch {
+                throw SyncServerSessionError.sessionRejected(
+                    "Resource transfer failed: \(error.localizedDescription)"
+                )
             }
         }
     }

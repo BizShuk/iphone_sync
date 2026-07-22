@@ -4,6 +4,7 @@ import SwiftData
 @Model
 public final class SourceRecord {
     @Attribute(.unique) public var sourceBindingID: String
+    // Retained as the legacy first-album seed. AlbumRecord owns all active mappings.
     public var albumID: String
     public var albumName: String
     public var createdAt: Date

@@ -20,6 +20,10 @@ final class ReceiverHarness {
     let manifest: ManifestStore
     var writer: DestinationWriter
     let offer: ResourceOffer
+    let receivingFolderName = DestinationWriter.receivingFolderName
+    let albumName = "Camera Roll"
+    let albumFolderName = "Camera Roll"
+    let resourceRelativePath: String
     let expectedRelativePath: String
 
     init(bytes: Data = Data("photo".utf8), existingBytes: Data? = nil) throws {
@@ -27,7 +31,7 @@ final class ReceiverHarness {
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         container = try ModelContainer(
-            for: TransferRecord.self, SourceRecord.self,
+            for: TransferRecord.self, SourceRecord.self, AlbumRecord.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         manifest = ManifestStore(container: container, sourceBindingID: "binding-1")
@@ -47,12 +51,13 @@ final class ReceiverHarness {
             descriptor: descriptor
         )
         offer = ResourceOffer(resourceID: resourceID, descriptor: descriptor)
-        expectedRelativePath = try FilenamePolicy.relativePath(
+        resourceRelativePath = try FilenamePolicy.relativePath(
             originalFilename: descriptor.originalFilename,
             resourceID: resourceID,
             role: descriptor.role,
             creationDate: descriptor.creationDate
         )
+        expectedRelativePath = "\(receivingFolderName)/\(albumFolderName)/\(resourceRelativePath)"
         if let existingBytes {
             let existingURL = directory.appendingPathComponent(expectedRelativePath)
             try FileManager.default.createDirectory(
@@ -72,12 +77,38 @@ final class ReceiverHarness {
         directory.appendingPathComponent(expectedRelativePath)
     }
 
+    var receivingRootURL: URL {
+        directory.appendingPathComponent(receivingFolderName, isDirectory: true)
+    }
+
     func simulateCrash() async {
         await writer.simulateCrash()
     }
 
+    @discardableResult
+    func acceptAlbum(
+        id: String = "album-1",
+        name: String? = nil,
+        requestedBindingID: String? = nil
+    ) async throws -> AcceptedAlbum {
+        try await manifest.acceptSession(
+            albumID: id,
+            albumName: name ?? albumName,
+            requestedBindingID: requestedBindingID
+        )
+    }
+
+    @discardableResult
+    func prepareWriter() async throws -> String {
+        let accepted = try await acceptAlbum()
+        return try await writer.prepareAlbumDirectory(
+            named: accepted.destinationFolderName
+        )
+    }
+
     func recover() async throws -> Recovery {
         writer = DestinationWriter(destinationRoot: directory, manifest: manifest)
+        try await prepareWriter()
         let result = try await writer.begin(offer)
         guard case let .transfer(offset, _) = result else {
             throw ReceiverHarnessError.expectedTransfer
@@ -167,6 +198,6 @@ actor SyncTestListener {
     }
 
     private func record(_ error: any Error) {
-        failures.append(String(describing: error))
+        failures.append(error.localizedDescription)
     }
 }
