@@ -23,7 +23,7 @@ struct ContentView: View {
                             value: model.selectedAlbumsText
                         )
                     }
-                    .disabled(!model.hasFullPhotoAccess)
+                    .disabled(!model.hasFullPhotoAccess || model.isAnySyncRunning)
                 }
 
                 Section("Mac") {
@@ -32,16 +32,18 @@ struct ContentView: View {
                         value: model.pairedPeer?.displayName ?? "Not paired"
                     )
                     Button("Find Mac") { model.findMac() }
+                        .disabled(model.isAnySyncRunning)
                     ForEach(model.receivers) { receiver in
                         Button {
                             model.beginPairing(with: receiver)
                         } label: {
                             Label(receiver.displayName, systemImage: "desktopcomputer")
                         }
-                        .disabled(model.pairedPeer != nil)
+                        .disabled(model.pairedPeer != nil || model.isAnySyncRunning)
                     }
                     if model.pairedPeer != nil {
                         Button("Forget Mac", role: .destructive) { model.forgetMac() }
+                            .disabled(model.isAnySyncRunning)
                     }
                 }
 
@@ -68,6 +70,8 @@ struct ContentView: View {
                     }
                 }
 
+                AutomaticSyncSection(model: model)
+
                 if let summary = model.lastSummary {
                     Section("Last Sync") {
                         LabeledContent("Added", value: String(summary.added))
@@ -76,6 +80,8 @@ struct ContentView: View {
                         LabeledContent("Failed", value: String(summary.failed))
                     }
                 }
+
+                IOSOperationLogSection(model: model)
 
                 if case let .error(message) = model.state {
                     Section("Error") {
@@ -107,7 +113,10 @@ struct ContentView: View {
             )) {
                 PairingView(model: model)
             }
-            .task { await model.bootstrap() }
+            .task {
+                await model.bootstrap()
+                model.enteredForeground()
+            }
         }
     }
 
@@ -119,6 +128,66 @@ struct ContentView: View {
         case .restricted: "Restricted"
         case .notDetermined: "Not requested"
         @unknown default: "Unknown"
+        }
+    }
+}
+
+private struct AutomaticSyncSection: View {
+    @Bindable var model: IOSAppModel
+
+    var body: some View {
+        Section("Automatic Sync") {
+            Toggle(
+                "Automatically sync",
+                isOn: Binding(
+                    get: { model.automaticSync.isEnabled },
+                    set: { model.setAutomaticSyncEnabled($0) }
+                )
+            )
+            .disabled(
+                !model.automaticSync.isEnabled
+                    && !model.canEnableAutomaticSync
+            )
+
+            LabeledContent("Cadence", value: model.automaticCadenceText)
+            LabeledContent(
+                "Background App Refresh",
+                value: model.backgroundRefreshText
+            )
+
+            if model.automaticRunIsActive {
+                LabeledContent("Status") {
+                    HStack {
+                        ProgressView()
+                        Text("Syncing")
+                    }
+                }
+            } else {
+                LabeledContent("Last outcome", value: model.automaticOutcomeText)
+            }
+
+            if let attempt = model.automaticSync.lastAttemptAt {
+                LabeledContent(
+                    "Last attempt",
+                    value: attempt.formatted(date: .abbreviated, time: .shortened)
+                )
+            }
+            if let success = model.automaticSync.lastSuccessAt {
+                LabeledContent(
+                    "Last success",
+                    value: success.formatted(date: .abbreviated, time: .shortened)
+                )
+            }
+            if let eligible = model.automaticSync.nextEligibleAt {
+                LabeledContent(
+                    "Eligible after",
+                    value: eligible.formatted(date: .abbreviated, time: .shortened)
+                )
+            }
+
+            Text("iOS chooses the actual background run time. Keep Sync Now as the immediate fallback.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

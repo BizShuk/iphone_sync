@@ -16,7 +16,8 @@ Choose Destination
 - Menu bar icon 由標準方形 AppKit `NSStatusItem` 持有，使用專屬 `com.shuk.iphonesync.statusItem` autosave name、保持 `isVisible = true`，並監看意外的隱藏狀態以立即恢復；原生 `NSMenu` 提供狀態、設定、配對、destination、忘記裝置與結束操作。
 - Menu 與 Setup 顯示已配對 iPhone 的 `displayName` 與 app-specific `deviceID`；Setup 中的完整 ID 可複製。iOS public API 不提供硬體序號，因此 UI 不會把 `deviceID` 誤標為 serial number，也不會暴露 PSK identity。
 - macOS 在 menu bar 空間不足時仍可能暫時遮蔽 status item；Setup 會提示使用者騰出一個位置，再按住 `Command` 將 iPhone Sync 拖近右側，後續位置由 autosave name 保存。
-- Setup 使用 AppKit `NSWindow` 持有 SwiftUI `SetupView`，關閉後可由 menu bar 再次開啟；`Error Log` 面板顯示本次執行最近 100 筆錯誤並提供清除操作。
+- Setup 使用 AppKit `NSWindow` 持有 SwiftUI `SetupView`，關閉後可由 menu bar 再次開啟；`Operation Log` 面板顯示 App、menu、settings、pairing、listener/recovery、session 與每個 resource lifecycle，保留本次 process 最新 500 筆並提供 `Copy All` / clear。
+- Operation timeline 使用 levelled semantic events，不逐 chunk 記錄，並同步送入 Apple Unified Logging；panel 不包含 PSK、六位數 pairing code、cryptographic identity、source binding 或 content hash。
 - App Sandbox 只授予 incoming/outgoing network、使用者選擇資料夾 read-write 與 app-scoped bookmark 權限。
 - `MacSettingsStore` 統一管理 receiver ID、source binding、destination bookmark bytes 與 launch-at-login intent，並沿用既有 preference keys。
 - `DestinationBookmarkStore` 專責 security-scoped bookmark encode/resolve；stale bookmark 會要求重新選擇。
@@ -26,7 +27,7 @@ Choose Destination
 - `ReceiverController` 一次只接受一個正常同步 connection。
 - `ManifestStore` 以 SwiftData 保存一個 source binding 下的多個 album/folder mappings，以及 album-scoped resource checkpoint。
 - `AlbumFolderPolicy` 保留一般相簿名稱，並將 path separator、控制字元與隱藏 path injection 轉成安全的單一資料夾名稱。
-- `DestinationWriter` 固定先建立或重用 `iPhoneSync` receiving folder，再於其下準備 album folder；任一同名項目若是檔案或 symlink，session 會拒絕並寫入 Error Log。
+- `DestinationWriter` 固定先建立或重用 `iPhoneSync` receiving folder，再於其下準備 album folder；任一同名項目若是檔案或 symlink，session 會拒絕並寫入 Operation Log。
 - 已存在的真實 album folder 會安全重用且內容不刪除；不同 album 若同名，依序使用 `名稱 (2)`、`名稱 (3)`，避免合併。
 - `DestinationWriter` 不覆寫或刪除 committed user files；完整 SHA-256 驗證後才發布 final file。
 - `Forget iPhone` 只刪除 Keychain trust；`Reset Source` 只建立新的 source binding，兩者都不刪除 Finder 檔案。

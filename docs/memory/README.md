@@ -9,6 +9,7 @@
 
 ## Entries
 
+- [2026-07-23 Automatic LAN Sync](2026-07-23-automatic-lan-sync.md)
 - [2026-07-22 Persistent Mac Settings](2026-07-22-persistent-mac-settings.md)
 - [2026-07-22 iPhoneSync Receiving Container](2026-07-22-iphonesync-receiving-container.md)
 - [2026-07-22 Multi-album Sync and Error Log](2026-07-22-multi-album-sync-and-error-log.md)

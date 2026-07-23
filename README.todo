@@ -3,18 +3,29 @@
 ## 文件審閱 (Documentation Review)
 
 - [ ] 閱讀並 review [實作計畫](plans/2026-07-19-local-album-sync.md) 與 [系統設計](docs/specs/2026-07-19-local-album-sync-design.md)
+- [ ] 閱讀並 review [Automatic LAN Sync 架構計畫](plans/2026-07-23-automatic-lan-sync.md)
+- [ ] 閱讀並 review [Operation Log Panels 架構計畫](plans/2026-07-23-operation-log-panels.md)
 
 ## 實機驗收 (Live-device Acceptance)
 
-- [ ] 完整重新啟動 Mac，確認 `iPhone Sync` 於登入後自動執行，並恢復 receiver ID、source binding、paired iPhone、destination bookmark、album manifest 與 Ready listener
-- [ ] 驗證 iPhone Wi-Fi → Mac Wi-Fi 及 iPhone Wi-Fi → Mac Ethernet 的完整多相簿同步，並確認每個相簿位於 `<selected-folder>/iPhoneSync/<album-name>/`
-- [ ] 驗證對應資料夾已存在時安全重用、兩個 Photos 相簿名稱相同時使用 `名稱 (2)`，且兩者既有內容皆不被覆寫
 - [ ] 驗證 iCloud-only resource 跳過、RAW+JPEG、Live Photo、adjustment data 與大型影片
 - [ ] 驗證中斷續傳、iPhone 進入背景、Mac sleep、VPN、router isolation 與磁碟空間不足
 - [ ] 決定簽署、公證 (notarization) 與安裝/發佈方式
 
+## Automatic LAN Sync
+
+- [ ] 在 signed 實體 iPhone / Mac 驗證 simulated launch/expiration、same/different LAN、sleep/wake、resume 與 overnight delay
+
 ## Archive
 
+- [x] 修正 Automatic Sync lifecycle 重複提交、Debug eligibility 被 re-entry 往後推與前景 timer 重置；pending request 改為 idempotent reconcile @2026-07-23_16:13:46 @Completed @Automatic_LAN_Sync
+- [x] 將 Mac `Error Log` 擴充為 iOS / Mac 兩端 `Operation Log` panels，涵蓋 App、設定、配對、discovery、scheduler、listener、session、album 與 resource lifecycle，並保留最新 500 筆 @2026-07-23_15:25:06 @Completed @Operation_Log_Panels
+- [x] 加入 Debug 最早 10 分鐘與 Release 最早 local midnight 的 `BGProcessingTask` schedule、typed state 與 iPhone UI @2026-07-23_13:23:11 @Completed @Automatic_LAN_Sync
+- [x] 補強 Mac listener retry、wake/path reconcile、pairing 結束恢復與 unauthenticated opening deadline @2026-07-23_13:23:11 @Completed @Automatic_LAN_Sync
+- [x] 實作 manual / automatic 共用的 single-flight runtime、完整 active-client cancellation 與 bounded run outcome @2026-07-23_13:23:11 @Completed @Automatic_LAN_Sync
+- [x] 驗證對應資料夾已存在時安全重用、兩個 Photos 相簿名稱相同時使用 `名稱 (2)`，且兩者既有內容皆不被覆寫 @2026-07-23_12:31:01 @Completed @實機驗收_(Live-device_Acceptance)
+- [x] 驗證 iPhone Wi-Fi → Mac Wi-Fi 及 iPhone Wi-Fi → Mac Ethernet 的完整多相簿同步，並確認每個相簿位於 `<selected-folder>/iPhoneSync/<album-name>/` @2026-07-23_12:30:51 @Completed @實機驗收_(Live-device_Acceptance)
+- [x] 完整重新啟動 Mac，確認 `iPhone Sync` 於登入後自動執行，並恢復 receiver ID、source binding、paired iPhone、destination bookmark、album manifest 與 Ready listener @2026-07-23_12:30:41 @Completed @實機驗收_(Live-device_Acceptance)
 - [x] 觸發 receiver、pairing 與 destination 錯誤，確認 Mac Setup `Error Log` 可顯示、複製、清除且最多保留 100 筆 @2026-07-22_00:49:32 @Completed @實機驗收_(Live-device_Acceptance)
 - [x] 驗證 Photos Full Access、Local Network prompt、多相簿選擇與六位數配對流程 @2026-07-22_00:49:04 @Completed @實機驗收_(Live-device_Acceptance)
 - [x] 設定 Apple Development signing，在實體 iPhone 與 Mac 安裝並完成首次啟動 @2026-07-22_00:49:00 @Completed @實機驗收_(Live-device_Acceptance)

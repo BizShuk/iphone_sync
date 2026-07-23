@@ -1,4 +1,5 @@
 import SwiftUI
+import SyncCore
 
 struct SetupView: View {
     @Bindable var model: MacAppModel
@@ -62,45 +63,39 @@ struct SetupView: View {
                 }
             }
 
-            Section("Error Log") {
+            Section("Operation Log") {
                 HStack {
                     Text(
-                        model.errorLog.isEmpty
-                            ? "No errors recorded"
-                            : "\(model.errorLog.count) recorded"
+                        model.operationLog.isEmpty
+                            ? "No operations recorded"
+                            : "\(model.operationLog.count) recorded"
                     )
                     .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Clear") { model.clearErrorLog() }
-                        .disabled(model.errorLog.isEmpty)
+                    Button("Copy All") { model.copyOperationLog() }
+                        .disabled(model.operationLog.isEmpty)
+                    Button("Clear") { model.clearOperationLog() }
+                        .disabled(model.operationLog.isEmpty)
                 }
 
-                if !model.errorLog.isEmpty {
+                Text(
+                    "Keeps the latest \(OperationLogBuffer.defaultCapacity) semantic "
+                        + "operations for this app run. Secrets, pairing codes, and "
+                        + "full destination paths are not recorded."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                if !model.operationLog.isEmpty {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(model.errorLog) { entry in
-                                VStack(alignment: .leading, spacing: 4) {
-                                    HStack {
-                                        Text(entry.context)
-                                        Spacer()
-                                        Text(
-                                            entry.occurredAt.formatted(
-                                                date: .abbreviated,
-                                                time: .standard
-                                            )
-                                        )
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    }
-                                    Text(entry.message)
-                                        .font(.callout)
-                                        .textSelection(.enabled)
-                                }
+                            ForEach(model.operationLog) { entry in
+                                MacOperationLogRow(entry: entry)
                                 Divider()
                             }
                         }
                     }
-                    .frame(minHeight: 90, maxHeight: 190)
+                    .frame(minHeight: 120, maxHeight: 240)
                 }
             }
 
@@ -129,5 +124,53 @@ struct SetupView: View {
         .padding()
         .frame(minWidth: 580, minHeight: 620)
         .task { await model.bootstrap() }
+    }
+}
+
+private struct MacOperationLogRow: View {
+    let entry: OperationLogEntry
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: symbolName)
+                .foregroundStyle(tint)
+                .frame(width: 18)
+                .accessibilityLabel(entry.level.rawValue)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(entry.category)
+                    Spacer()
+                    Text(
+                        entry.occurredAt.formatted(
+                            date: .abbreviated,
+                            time: .standard
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Text(entry.message)
+                    .font(.callout)
+                    .textSelection(.enabled)
+            }
+        }
+    }
+
+    private var symbolName: String {
+        switch entry.level {
+        case .info: "info.circle.fill"
+        case .success: "checkmark.circle.fill"
+        case .warning: "exclamationmark.triangle.fill"
+        case .error: "xmark.octagon.fill"
+        }
+    }
+
+    private var tint: Color {
+        switch entry.level {
+        case .info: .blue
+        case .success: .green
+        case .warning: .orange
+        case .error: .red
+        }
     }
 }

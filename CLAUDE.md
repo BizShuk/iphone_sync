@@ -2,11 +2,16 @@
 
 ## Current Status
 
-MVP 已實作於 `feat/local-album-sync`：包含原生 iOS sender、原生 macOS menu-bar receiver、多相簿選取與對應資料夾、Mac error-log panel、typed persistent settings、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。自動驗證只證明 package tests 與 unsigned builds；實體裝置、真實 Photos library、完整 Mac restart 與真實 LAN 驗收仍以 [README.todo](README.todo) 為準。
+MVP、`automatic-lan-sync` 與兩端 `operation-log-panels` 已實作：包含原生 iOS sender、原生 macOS menu-bar receiver、多相簿選取與對應資料夾、manual / automatic single-flight runtime、best-effort `BGProcessingTask` scheduling、Mac receiver recovery、iOS / Mac semantic operation timeline、typed persistent settings、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。Canonical gate 已通過 51 個 Swift package tests、30 個 iOS unit tests、unsigned Mac / generic iOS Simulator / `Release` generic iOS device builds、generated plist / entitlement / local-only invariants 與 whitespace checks。Signed physical-device background launch、expiration、overnight timing 與完整 LAN failure matrix 仍以 [README.todo](README.todo) 為準。
+
+## Automatic LAN Sync
+
+使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Debug background request 最早為 `now + 10 minutes`，Release request 最早為 next local midnight；兩者均為 `earliestBeginDate`，不是準時或必定執行保證。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；Debug 保存的 eligibility 已到期時不會因重進 App 再延後 10 分鐘，foreground test 會立即嘗試。`Sync Now` 保留為 immediate fallback。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
 
 ## Product Invariants
 
-- iPhone 必須由使用者在前景手動觸發同步。
+- iPhone sync 可由前景 `Sync Now` 手動觸發，或由使用者預先 opt in、再由 iOS best-effort 啟動 automatic run；background runtime 不得被描述為固定 cron。
+- Automatic run 只有在 `iPhone Wi-Fi + exact paired receiverID Bonjour visible + TLS-PSK authentication` 同時成立時才傳輸；不得以 SSID、IP subnet 或 `requiresNetworkConnectivity` 取代此 gate。
 - 同一時間只綁定一組使用者選取的來源相簿、一部 iPhone 與一部 Mac；來源相簿可多選。
 - 使用者選擇的 Finder folder 是 destination root；每個 album 的 resource 一律寫入固定 `iPhoneSync` 容器下的對應安全子資料夾。已存在的真實資料夾安全重用，同名的不同 album 以 `名稱 (2)`、`名稱 (3)` 穩定區分。
 - 同步只能新增，永不因來源變動刪除或覆寫 Mac 既有檔案。
@@ -29,17 +34,18 @@ iphone_sync/
 ├── iPhoneSync.xcodeproj/        # committed generated project
 ├── apps/
 │   ├── ios/
-│   │   ├── Sources/             # PhotoKit、album selection、pairing、sender UI
+│   │   ├── Sources/             # PhotoKit、pairing、runtime、BG scheduler、operation panel、sender UI
+│   │   ├── Tests/               # automatic schedule policy、persistent state、runtime tests
 │   │   ├── Info.plist           # generated from project.yml
 │   │   └── iPhoneSync.entitlements
 │   └── macos/
-│       ├── Sources/             # AppKit NSStatusItem receiver、pairing、Finder writes
+│       ├── Sources/             # NSStatusItem receiver、pairing、Finder writes、operation panel
 │       ├── Info.plist           # generated from project.yml
 │       └── iPhoneSyncMac.entitlements
 ├── packages/
 │   └── SyncCore/
-│       ├── Sources/SyncCore/    # contracts、crypto、framing、Bonjour、TLS、client
-│       ├── Sources/MacReceiverKit/ # SwiftData manifest、safe writer、server
+│       ├── Sources/SyncCore/    # contracts、crypto、framing、Bonjour、TLS、client、operation buffer
+│       ├── Sources/MacReceiverKit/ # SwiftData manifest、safe writer、server + operation events
 │       └── Tests/
 ├── docs/
 │   ├── memory/
@@ -71,21 +77,26 @@ MacReceiverKit ─────────→ SyncCore
 | Discovery | Bonjour `_iphonesync._tcp` |
 | Transport | Network.framework TCP + TLS 1.2 PSK (`TLS_PSK_WITH_AES_128_GCM_SHA256`) |
 | Pairing | Temporary TCP + ephemeral Curve25519 + six-digit SAS |
-| Source | PhotoKit `PHAssetResourceManager` with network access disabled |
+| Source | PhotoKit `PHAssetResourceManager.requestData` with network access disabled and cancellable staging |
 | Framing | Fixed binary header、JSON control payload、raw chunk payload |
 | Chunk size | 1 MiB |
 | Integrity | SHA-256 |
 | Resume checkpoint | 16 MiB durable checkpoint |
+| Automatic schedule | iOS `BGProcessingTask`; Debug earliest `+10 minutes`、Release earliest next local midnight；pending request idempotent reconcile |
+| Automatic runtime | `IOSSyncRuntime` single-flight + 8-minute application budget + PhotoKit/discovery/active-client hard cancellation |
 | Manifest | SwiftData in Mac App container |
 | Destination | User-selected Finder root + fixed `iPhoneSync` folder + same-name album subfolder with security-scoped bookmark |
 | Preferences | Typed `MacSettingsStore` backed by sandbox `UserDefaults` |
 | Auto-start | `SMAppService.mainApp` with persistent requested intent |
+| Operation diagnostics | Semantic events、latest 500 entries per App process、Apple Unified Logging |
 
 ## Runtime Ownership
 
 | State | Owner | Persistence |
 |---|---|---|
 | iPhone device ID、selected albums | iOS App | `UserDefaults` |
+| Automatic enabled intent、last attempt/success/outcome、next eligible | `IOSAutomaticSyncStore` | iOS sandbox `UserDefaults` |
+| Active manual / automatic run ID | `IOSSyncRuntime` | transient only |
 | Paired peer PSK、opaque identity | 各 App | Keychain |
 | Mac receiver ID、current source binding、launch intent | `MacSettingsStore` | sandbox `UserDefaults` |
 | Destination capability | `DestinationBookmarkStore` + `MacSettingsStore` | security-scoped bookmark data in sandbox `UserDefaults` |
@@ -94,13 +105,13 @@ MacReceiverKit ─────────→ SyncCore
 | Source binding、album/folder mapping | `ManifestStore` | SwiftData `SourceRecord` + `AlbumRecord` |
 | Album-scoped resource status、hash、size、checkpoint、final path | `ManifestStore` | SwiftData `TransferRecord` |
 | Partial media bytes | `DestinationWriter` | destination `iPhoneSync/<safe-album-name>/<year>/<month>/<name>.partial` |
-| Error log | macOS App | bounded in-memory list（最近 100 筆）+ unified logging |
+| iOS / macOS operation timeline | 各 App model | bounded in-memory list（最新 500 筆）+ Apple Unified Logging |
 
-Mac bootstrap 先依 `launchAtLoginRequested` reconcile `SMAppService`，再讀取 Keychain paired peer、解析 security-scoped destination bookmark、開啟 SwiftData store，最後在必要狀態齊全時自動啟動 receiver。既有 `receiverID`、`sourceBindingID` 與 `destinationBookmark` keys 保持不變，加入 typed store 不需要 migration。Pairing code、active session、last summary 與 UI error list 是 transient state，不得放入 durable preferences。
+Mac bootstrap 先依 `launchAtLoginRequested` reconcile `SMAppService`，再讀取 Keychain paired peer、解析 security-scoped destination bookmark、開啟 SwiftData store，最後在必要狀態齊全時自動啟動 receiver。Normal listener failure 使用 capped exponential backoff；Mac wake、network path recovery 與 pairing 關閉後會 reconcile listener，incoming connection 另有 opening deadline。既有 `receiverID`、`sourceBindingID` 與 `destinationBookmark` keys 保持不變，加入 typed store 不需要 migration。Pairing code、active session、last summary、兩端 UI operation timeline 與 automatic active run ID 是 transient state，不得放入 durable preferences。
 
 同一 `sourceBindingID` 代表一部 iPhone 對一個 destination 的來源集合，可登錄多個 album ID；不同 binding 仍必須拒絕。`AlbumRecord` 保存每個 album 的穩定 destination folder，`TransferRecord` 以 album scope 區分同一 PhotoKit resource 出現在多個相簿的完成狀態。使用者在 Mac 明確執行 `Reset Source` 或更換 destination 時才產生新的 binding；既有 committed Finder files 不刪除。
 
-`SyncServerSession` 通過 source/album binding 後，才由 `DestinationWriter.prepareAlbumDirectory(named:)` 建立或重用固定 `iPhoneSync` 容器及相簿子資料夾。一般相簿名稱原樣保留；斜線、反斜線、控制字元與隱藏 path injection 由 `AlbumFolderPolicy` 轉為安全的單一 path component。Manifest 的 `finalRelativePath` 以使用者選擇的 destination root 為基準，格式為 `iPhoneSync/<album-folder>/<resource-path>`。舊版 committed path 保留原位；舊版未完成的 per-album partial 可安全搬入新容器續傳。
+`SyncServerSession` 通過 source/album binding 後，才由 `DestinationWriter.prepareAlbumDirectory(named:)` 建立或重用固定 `iPhoneSync` 容器及相簿子資料夾。一般相簿名稱原樣保留；斜線、反斜線、控制字元與隱藏 path injection 由 `AlbumFolderPolicy` 轉為安全的單一 path component。Manifest 的 `finalRelativePath` 以使用者選擇的 destination root 為基準，格式為 `iPhoneSync/<album-folder>/<resource-path>`。舊版 committed path 保留原位；舊版未完成的 per-album partial 可安全搬入新容器續傳。Session 透過 optional event callback 回報 open / accept / complete 與 resource offer / receive / resume / skip / commit / fail；不逐 chunk 產生 UI event。
 
 ## Build and Verification
 
@@ -122,7 +133,7 @@ bash scripts/verify.sh
 swift test --package-path packages/SyncCore
 ```
 
-驗證腳本使用 `CODE_SIGNING_ALLOWED=NO` 建置 `iPhoneSyncMac`、generic iOS Simulator 與 generic iOS device。它不安裝 App、不授予 Photos/Local Network 權限，也不證明實體裝置可同步。
+驗證腳本使用 `CODE_SIGNING_ALLOWED=NO` 建置 `iPhoneSyncMac`、generic iOS Simulator 與 `Release` generic iOS device；Release build 必須編譯 production cadence 分支。腳本也檢查 `BGTaskSchedulerPermittedIdentifiers`、`UIBackgroundModes = processing`、hard-cancellation、Mac recovery 與兩端 Operation Log source invariants。這些 Mac/BG checks 證明 source contract 與 platform compilation，不是 listener recovery、OS launch/expiration 或 signed network behavior tests。
 
 ## Security Notes
 
@@ -136,8 +147,11 @@ swift test --package-path packages/SyncCore
 
 - 業務定義與 domain flow：[README.md](README.md)
 - 權限與能力盤點：[README.permission.md](README.permission.md)
-- 核准設計：[docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md)
+- 歷史 MVP 設計：[docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md)
+- Current automatic sync 規格：[docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md)
 - 實作計畫：[plans/2026-07-19-local-album-sync.md](plans/2026-07-19-local-album-sync.md)
+- Automatic LAN Sync 實作計畫：[plans/2026-07-23-automatic-lan-sync.md](plans/2026-07-23-automatic-lan-sync.md)
+- Operation Log Panels 架構計畫：[plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)
 - 待辦：[README.todo](README.todo)
 - 歷史操作與決策：[docs/memory/README.md](docs/memory/README.md)
 

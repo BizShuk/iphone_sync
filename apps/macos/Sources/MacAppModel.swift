@@ -1,28 +1,10 @@
 import AppKit
 import Foundation
+import Network
 import Observation
 import OSLog
 import ServiceManagement
 import SyncCore
-
-struct MacErrorLogEntry: Equatable, Identifiable {
-    let id: UUID
-    let occurredAt: Date
-    let context: String
-    let message: String
-
-    init(
-        id: UUID = UUID(),
-        occurredAt: Date = Date(),
-        context: String,
-        message: String
-    ) {
-        self.id = id
-        self.occurredAt = occurredAt
-        self.context = context
-        self.message = message
-    }
-}
 
 @MainActor
 @Observable
@@ -43,17 +25,25 @@ final class MacAppModel {
     var pairedPeer: PairedPeer?
     var lastSummary: SyncSummary?
     var launchAtLogin = false
-    var errorLog: [MacErrorLogEntry] = []
+    var operationLog: [OperationLogEntry] = []
 
     @ObservationIgnored private let settings: MacSettingsStore
     @ObservationIgnored private let bookmarkStore: DestinationBookmarkStore
     @ObservationIgnored private let logger = Logger(
         subsystem: "com.shuk.iphonesync.mac",
-        category: "runtime"
+        category: "operations"
     )
+    @ObservationIgnored private var operationLogBuffer = OperationLogBuffer()
     @ObservationIgnored private var controller: ReceiverController?
     @ObservationIgnored private var bootstrapped = false
     @ObservationIgnored private var destinationAccessActive = false
+    @ObservationIgnored private let pathMonitor = NWPathMonitor()
+    @ObservationIgnored private let pathMonitorQueue = DispatchQueue(
+        label: "com.shuk.iphonesync.mac-path-monitor"
+    )
+    @ObservationIgnored private var pathMonitorStarted = false
+    @ObservationIgnored private var lastPathStatus: NWPath.Status?
+    @ObservationIgnored private var wakeObserver: NSObjectProtocol?
 
     private init(settings: MacSettingsStore = MacSettingsStore()) {
         self.settings = settings
@@ -92,6 +82,11 @@ final class MacAppModel {
     func bootstrap() async {
         guard !bootstrapped else { return }
         bootstrapped = true
+        recordOperation(
+            .info,
+            category: "App",
+            message: "Loading saved receiver settings."
+        )
         restoreLaunchAtLogin()
         do {
             controller = try ReceiverController(
@@ -102,6 +97,10 @@ final class MacAppModel {
                 onPaired: { [weak self] peer in
                     guard let self else { return }
                     self.pairedPeer = peer
+                    Task { await self.startReceiverIfReady() }
+                },
+                onPairingClosed: { [weak self] in
+                    guard let self else { return }
                     Task { await self.startReceiverIfReady() }
                 },
                 onRuntimeState: { [weak self] runtimeState in
@@ -115,15 +114,36 @@ final class MacAppModel {
                 },
                 onSummary: { [weak self] summary in
                     self?.lastSummary = summary
+                },
+                onOperation: { [weak self] event in
+                    self?.recordOperation(event)
                 }
             )
+            startRecoveryMonitoring()
             pairedPeer = try controller?.loadPairedPeer()
+            recordOperation(
+                .info,
+                category: "Pairing",
+                message: pairedPeer == nil
+                    ? "No paired iPhone was restored."
+                    : "Restored the paired iPhone from Keychain."
+            )
             do {
                 let resolved = try bookmarkStore.resolve()
                 destinationAccessActive = resolved.startAccessingSecurityScopedResource()
                 destinationURL = resolved
+                recordOperation(
+                    .success,
+                    category: "Destination",
+                    message: "Restored access to “\(resolved.lastPathComponent)”."
+                )
             } catch DestinationBookmarkError.missing {
                 destinationURL = nil
+                recordOperation(
+                    .info,
+                    category: "Destination",
+                    message: "No destination is selected."
+                )
             } catch {
                 bookmarkStore.clear()
                 destinationURL = nil
@@ -131,19 +151,36 @@ final class MacAppModel {
                 return
             }
             await startReceiverIfReady()
+            recordOperation(
+                .success,
+                category: "App",
+                message: "Startup completed."
+            )
         } catch {
             recordError(error.localizedDescription, context: "Startup")
         }
     }
 
     func chooseDestination() {
+        recordOperation(
+            .info,
+            category: "Destination",
+            message: "Opened the destination chooser."
+        )
         let panel = NSOpenPanel()
         panel.title = "Choose iPhone Backup Destination"
         panel.prompt = "Choose"
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        guard panel.runModal() == .OK, let url = panel.url else { return }
+        guard panel.runModal() == .OK, let url = panel.url else {
+            recordOperation(
+                .info,
+                category: "Destination",
+                message: "Destination selection cancelled."
+            )
+            return
+        }
 
         Task {
             await controller?.stopAll()
@@ -155,6 +192,11 @@ final class MacAppModel {
                 destinationAccessActive = url.startAccessingSecurityScopedResource()
                 destinationURL = url
                 resetSourceIdentifier()
+                recordOperation(
+                    .success,
+                    category: "Destination",
+                    message: "Selected “\(url.lastPathComponent)” and reset source binding."
+                )
                 await startReceiverIfReady()
             } catch {
                 recordError(error.localizedDescription, context: "Destination")
@@ -165,6 +207,11 @@ final class MacAppModel {
     func openPairingWindow() {
         guard destinationURL != nil else {
             state = .needsDestination
+            recordOperation(
+                .warning,
+                category: "Pairing",
+                message: "Choose a destination before opening pairing."
+            )
             return
         }
         state = .pairing(
@@ -194,16 +241,32 @@ final class MacAppModel {
 
     func resetSource() {
         resetSourceIdentifier()
+        recordOperation(
+            .info,
+            category: "Source",
+            message: "Reset the source binding; existing Finder files were preserved."
+        )
         Task { await startReceiverIfReady() }
     }
 
-    func startReceiverIfReady() async {
+    func startReceiverIfReady(forceRestart: Bool = false) async {
+        guard controller?.isPairingWindowOpen != true else { return }
         guard let destinationURL else {
             state = .needsDestination
+            recordOperation(
+                .info,
+                category: "Receiver",
+                message: "Receiver is waiting for a destination."
+            )
             return
         }
         guard let pairedPeer else {
             state = .needsPairing
+            recordOperation(
+                .info,
+                category: "Receiver",
+                message: "Receiver is waiting for a paired iPhone."
+            )
             return
         }
         do {
@@ -211,7 +274,8 @@ final class MacAppModel {
                 destination: destinationURL,
                 peer: pairedPeer,
                 sourceBindingID: sourceBindingID,
-                displayName: computerName
+                displayName: computerName,
+                forceRestart: forceRestart
             )
         } catch {
             recordError(error.localizedDescription, context: "Receiver")
@@ -219,6 +283,11 @@ final class MacAppModel {
     }
 
     func stopReceiver() {
+        recordOperation(
+            .info,
+            category: "Receiver",
+            message: "Stop requested."
+        )
         controller?.stopReceiver()
     }
 
@@ -231,24 +300,69 @@ final class MacAppModel {
                 try SMAppService.mainApp.unregister()
             }
             launchAtLogin = SMAppService.mainApp.status == .enabled
+            recordOperation(
+                .success,
+                category: "Launch at Login",
+                message: enabled
+                    ? "Launch at Login enabled."
+                    : "Launch at Login disabled."
+            )
         } catch {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             recordError(error.localizedDescription, context: "Launch at Login")
         }
     }
 
-    func clearErrorLog() {
-        errorLog.removeAll()
+    func clearOperationLog() {
+        operationLogBuffer.clear()
+        operationLog = operationLogBuffer.entries
+        logger.notice("Operation Log cleared")
+    }
+
+    func copyOperationLog() {
+        guard !operationLog.isEmpty else { return }
+        let formatter = ISO8601DateFormatter()
+        let text = operationLog.reversed().map { entry in
+            "\(formatter.string(from: entry.occurredAt)) "
+                + "[\(entry.level.rawValue.uppercased())] "
+                + "\(entry.category): \(entry.message)"
+        }
+        .joined(separator: "\n")
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        recordOperation(
+            .info,
+            category: "Operation Log",
+            message: "Copied \(operationLog.count) entries to the clipboard."
+        )
     }
 
     func recordError(_ message: String, context: String) {
-        let entry = MacErrorLogEntry(context: context, message: message)
-        errorLog.insert(entry, at: 0)
-        if errorLog.count > 100 {
-            errorLog.removeLast(errorLog.count - 100)
-        }
-        logger.error("\(context, privacy: .public): \(message, privacy: .private)")
+        recordOperation(.error, category: context, message: message)
         state = .error(message)
+    }
+
+    func recordOperation(_ event: OperationLogEvent) {
+        operationLogBuffer.record(event)
+        operationLog = operationLogBuffer.entries
+        switch event.level {
+        case .info:
+            logger.info(
+                "\(event.category, privacy: .public): \(event.message, privacy: .private)"
+            )
+        case .success:
+            logger.notice(
+                "\(event.category, privacy: .public): \(event.message, privacy: .private)"
+            )
+        case .warning:
+            logger.warning(
+                "\(event.category, privacy: .public): \(event.message, privacy: .private)"
+            )
+        case .error:
+            logger.error(
+                "\(event.category, privacy: .public): \(event.message, privacy: .private)"
+            )
+        }
     }
 
     private var computerName: String {
@@ -257,6 +371,58 @@ final class MacAppModel {
 
     private func resetSourceIdentifier() {
         settings.resetSourceBindingID()
+    }
+
+    private func startRecoveryMonitoring() {
+        guard !pathMonitorStarted else { return }
+        pathMonitorStarted = true
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                self?.handlePathUpdate(path.status)
+            }
+        }
+        pathMonitor.start(queue: pathMonitorQueue)
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.recoverReceiver(reason: "Mac wake")
+            }
+        }
+    }
+
+    private func handlePathUpdate(_ status: NWPath.Status) {
+        let previousStatus = lastPathStatus
+        lastPathStatus = status
+        guard previousStatus != nil,
+              previousStatus != .satisfied,
+              status == .satisfied else {
+            return
+        }
+        recoverReceiver(reason: "Network path recovery")
+    }
+
+    private func recoverReceiver(reason: String) {
+        guard controller?.isPairingWindowOpen != true else {
+            logger.notice(
+                "\(reason, privacy: .public); receiver reconcile deferred while pairing"
+            )
+            recordOperation(
+                .info,
+                category: "Recovery",
+                message: "\(reason); deferred receiver recovery while pairing."
+            )
+            return
+        }
+        logger.notice("\(reason, privacy: .public); reconciling receiver listener")
+        recordOperation(
+            .info,
+            category: "Recovery",
+            message: "\(reason); reconciling the receiver listener."
+        )
+        Task { await startReceiverIfReady(forceRestart: true) }
     }
 
     private func restoreLaunchAtLogin() {
@@ -284,8 +450,22 @@ final class MacAppModel {
             recordError(error.localizedDescription, context: "Launch at Login")
         }
         launchAtLogin = service.status == .enabled
-        logger.notice(
-            "Launch at Login restored; requested=\(requested, privacy: .public), status=\(String(describing: service.status), privacy: .public)"
+        recordOperation(
+            .info,
+            category: "Launch at Login",
+            message: "Restored requested=\(requested); status=\(String(describing: service.status))."
         )
+    }
+
+    private func recordOperation(
+        _ level: OperationLogLevel,
+        category: String,
+        message: String
+    ) {
+        recordOperation(OperationLogEvent(
+            level: level,
+            category: category,
+            message: message
+        ))
     }
 }

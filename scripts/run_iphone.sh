@@ -13,7 +13,7 @@ BUILD_ROOT="${BUILD_ROOT:-build/iphone}"
 ARCHIVE_PATH="$BUILD_ROOT/iPhoneSync.xcarchive"
 DERIVED_DATA_PATH="$BUILD_ROOT/DerivedData"
 APP_PATH="$ARCHIVE_PATH/Products/Applications/${APP_NAME}.app"
-MODE="${1:-run}"
+MODE="run"
 
 step() {
   printf '\n▸ %s\n' "$*"
@@ -26,21 +26,59 @@ fail() {
 
 usage() {
   cat <<'USAGE'
-Usage: ./scripts/run_iphone.sh [--build-only|--console|--help]
+Usage: ./scripts/run_iphone.sh [--profile=debug|production] [--build-only|--console|--help]
 
   (no option)   Build, install, and launch iPhone Sync on one paired iPhone.
+  --profile=... Select debug (Debug) or production (Release); debug is the default.
   --build-only  Create a signed iPhone archive without requiring a device.
   --console     Relaunch the installed app and attach its process console.
+  --help        Show this help.
+
+Examples:
+  ./scripts/run_iphone.sh
+  ./scripts/run_iphone.sh --profile=production
+  ./scripts/run_iphone.sh --profile=production --build-only
 
 Optional environment:
   DEVICE_UDID                 Select a specific paired iPhone.
   DEVELOPMENT_TEAM            Override the Apple Development team ID.
-  CONFIGURATION               Xcode configuration (default: Debug).
+  CONFIGURATION               Xcode configuration (default: Debug);
+                              --profile overrides it.
   BUILD_ROOT                  Generated output directory (default: build/iphone).
   APP_NAME                    Archive product name (default: iPhone Sync).
   ALLOW_PROVISIONING_UPDATES  Set to 0 to omit -allowProvisioningUpdates.
 USAGE
 }
+
+while (( $# > 0 )); do
+  case "$1" in
+    --profile=debug)
+      CONFIGURATION="Debug"
+      ;;
+    --profile=production)
+      CONFIGURATION="Release"
+      ;;
+    --profile=*)
+      fail "不支援的 profile: ${1#--profile=}（使用 debug 或 production）"
+      ;;
+    --build-only)
+      [[ "$MODE" == "run" ]] || fail "只能指定一種執行模式"
+      MODE="build-only"
+      ;;
+    --console)
+      [[ "$MODE" == "run" ]] || fail "只能指定一種執行模式"
+      MODE="console"
+      ;;
+    --help)
+      usage
+      exit 0
+      ;;
+    *)
+      fail "未知參數: $1（使用 --help 查看說明）"
+      ;;
+  esac
+  shift
+done
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || fail "缺少 $1"
@@ -200,16 +238,10 @@ build_archive() {
 }
 
 case "$MODE" in
-  --help)
-    usage
-    exit 0
-    ;;
-  --build-only)
-    [[ $# -eq 1 ]] || fail "--build-only 不接受其他參數"
+  build-only)
     build_archive
     ;;
-  --console)
-    [[ $# -eq 1 ]] || fail "--console 不接受其他參數"
+  console)
     require_command xcrun
     device="$(select_device)"
     step "Launching $BUNDLE_ID with console on $device"
@@ -217,7 +249,6 @@ case "$MODE" in
       --device "$device" --terminate-existing --console "$BUNDLE_ID"
     ;;
   run)
-    [[ $# -eq 0 ]] || fail "未知參數: $*"
     require_command xcrun
     device="$(select_device)"
     build_archive
@@ -226,8 +257,5 @@ case "$MODE" in
     step "Launching $BUNDLE_ID"
     xcrun devicectl device process launch \
       --device "$device" --terminate-existing "$BUNDLE_ID"
-    ;;
-  *)
-    fail "未知參數: $MODE（使用 --help 查看說明）"
     ;;
 esac

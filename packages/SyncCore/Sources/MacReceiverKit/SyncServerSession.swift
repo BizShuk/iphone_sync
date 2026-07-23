@@ -4,6 +4,7 @@ import SyncCore
 public enum SyncServerSessionError: Error, Equatable, LocalizedError, Sendable {
     case integrityFailureLimitExceeded
     case invalidChunk
+    case openingTimedOut
     case protocolViolation
     case sessionRejected(String)
 
@@ -13,6 +14,8 @@ public enum SyncServerSessionError: Error, Equatable, LocalizedError, Sendable {
             "The same resource failed integrity verification twice."
         case .invalidChunk:
             "The sender provided an invalid or out-of-order chunk."
+        case .openingTimedOut:
+            "The incoming connection did not open a valid session before the deadline."
         case .protocolViolation:
             "The sender violated the sync protocol."
         case let .sessionRejected(message):
@@ -22,6 +25,11 @@ public enum SyncServerSessionError: Error, Equatable, LocalizedError, Sendable {
 }
 
 public actor SyncServerSession {
+    public typealias AcceptedHandler = @Sendable () async -> Void
+    public typealias EventHandler = @Sendable (OperationLogEvent) async -> Void
+
+    public static let defaultOpeningTimeout: Duration = .seconds(15)
+
     private let manifest: ManifestStore
     private let writer: DestinationWriter
     private var integrityFailures: [String: Int] = [:]
@@ -31,16 +39,104 @@ public actor SyncServerSession {
         self.writer = writer
     }
 
-    public func run(connection: FramedConnection) async throws -> SyncSummary {
-        try await connection.start()
+    public func run(
+        connection: FramedConnection,
+        openingTimeout: Duration = SyncServerSession.defaultOpeningTimeout,
+        onAccepted: AcceptedHandler? = nil,
+        onEvent: EventHandler? = nil
+    ) async throws -> SyncSummary {
         defer { connection.cancel() }
 
+        try await openSession(
+            connection: connection,
+            timeout: openingTimeout,
+            onEvent: onEvent
+        )
+        await onAccepted?()
+
+        var summary = SyncSummary.zero
+        while true {
+            let frame = try await connection.receive()
+            let message = try frame.controlMessage()
+            switch message {
+            case .session(.finished):
+                try await connection.send(try SyncFrame.control(
+                    .result(.sessionCompleted(summary)),
+                    requestID: frame.requestID
+                ))
+                await onEvent?(OperationLogEvent(
+                    level: .success,
+                    category: "Session",
+                    message: "Completed: \(summary.added) added, "
+                        + "\(summary.existing) already present, "
+                        + "\(summary.notLocal) not local, \(summary.failed) failed."
+                ))
+                return summary
+            case let .offer(offer):
+                try await handle(
+                    offer: offer,
+                    requestID: frame.requestID,
+                    connection: connection,
+                    summary: &summary,
+                    onEvent: onEvent
+                )
+            default:
+                throw SyncServerSessionError.protocolViolation
+            }
+        }
+    }
+
+    private func openSession(
+        connection: FramedConnection,
+        timeout: Duration,
+        onEvent: EventHandler?
+    ) async throws {
+        let deadline = SessionOpeningDeadline()
+        let timeoutTask = Task {
+            do {
+                try await Task.sleep(for: timeout)
+            } catch {
+                return
+            }
+            guard await deadline.markTimedOut() else { return }
+            connection.cancel()
+        }
+        defer { timeoutTask.cancel() }
+
+        do {
+            try await connection.start()
+            try Task.checkCancellation()
+
+            try await acceptOpeningRequest(
+                connection: connection,
+                onEvent: onEvent
+            )
+            guard await deadline.markAccepted() else {
+                throw SyncServerSessionError.openingTimedOut
+            }
+        } catch {
+            if await deadline.didTimeOut {
+                throw SyncServerSessionError.openingTimedOut
+            }
+            throw error
+        }
+    }
+
+    private func acceptOpeningRequest(
+        connection: FramedConnection,
+        onEvent: EventHandler?
+    ) async throws {
         let openingFrame = try await connection.receive()
         guard openingFrame.kind == .session,
               case let .session(.request(albumID, albumName, requestedBinding)) = try openingFrame.controlMessage()
         else {
             throw SyncServerSessionError.protocolViolation
         }
+        await onEvent?(OperationLogEvent(
+            level: .info,
+            category: "Session",
+            message: "Opening album “\(albumName)”."
+        ))
         let acceptedAlbum: AcceptedAlbum
         do {
             acceptedAlbum = try await manifest.acceptSession(
@@ -49,6 +145,11 @@ public actor SyncServerSession {
                 requestedBindingID: requestedBinding
             )
         } catch ManifestStoreError.sourceBindingMismatch {
+            await onEvent?(OperationLogEvent(
+                level: .error,
+                category: "Session",
+                message: "Rejected album “\(albumName)”: source binding mismatch."
+            ))
             try await connection.send(try SyncFrame.control(
                 .session(.rejected(reason: "source-binding-mismatch")),
                 requestID: openingFrame.requestID
@@ -62,6 +163,12 @@ public actor SyncServerSession {
                 named: acceptedAlbum.destinationFolderName
             )
         } catch {
+            await onEvent?(OperationLogEvent(
+                level: .error,
+                category: "Destination",
+                message: "Could not prepare album “\(albumName)”: "
+                    + error.localizedDescription
+            ))
             try await connection.send(try SyncFrame.control(
                 .session(.rejected(reason: "destination-unavailable")),
                 requestID: openingFrame.requestID
@@ -74,37 +181,28 @@ public actor SyncServerSession {
             .session(.accepted(sourceBindingID: acceptedAlbum.sourceBindingID)),
             requestID: openingFrame.requestID
         ))
-
-        var summary = SyncSummary.zero
-        while true {
-            let frame = try await connection.receive()
-            let message = try frame.controlMessage()
-            switch message {
-            case .session(.finished):
-                try await connection.send(try SyncFrame.control(
-                    .result(.sessionCompleted(summary)),
-                    requestID: frame.requestID
-                ))
-                return summary
-            case let .offer(offer):
-                try await handle(
-                    offer: offer,
-                    requestID: frame.requestID,
-                    connection: connection,
-                    summary: &summary
-                )
-            default:
-                throw SyncServerSessionError.protocolViolation
-            }
-        }
+        await onEvent?(OperationLogEvent(
+            level: .success,
+            category: "Session",
+            message: "Accepted album “\(albumName)” in folder "
+                + "“\(acceptedAlbum.destinationFolderName)”."
+        ))
     }
 
     private func handle(
         offer: ResourceOffer,
         requestID: UUID,
         connection: FramedConnection,
-        summary: inout SyncSummary
+        summary: inout SyncSummary,
+        onEvent: EventHandler?
     ) async throws {
+        let resourceName = offer.descriptor.originalFilename
+        await onEvent?(OperationLogEvent(
+            level: .info,
+            category: "Resource",
+            message: "Offered “\(resourceName)” "
+                + "(\(offer.descriptor.expectedSize) bytes)."
+        ))
         do {
             switch try await writer.begin(offer) {
             case .adopted:
@@ -114,6 +212,11 @@ public actor SyncServerSession {
                     .decision(.skip),
                     requestID: requestID
                 ))
+                await onEvent?(OperationLogEvent(
+                    level: .info,
+                    category: "Resource",
+                    message: "Skipped “\(resourceName)”; already present."
+                ))
                 return
             case let .transfer(offset, _):
                 let decision: TransferDecision = offset == 0
@@ -122,6 +225,13 @@ public actor SyncServerSession {
                 try await connection.send(try SyncFrame.control(
                     .decision(decision),
                     requestID: requestID
+                ))
+                await onEvent?(OperationLogEvent(
+                    level: .info,
+                    category: "Resource",
+                    message: offset == 0
+                        ? "Receiving “\(resourceName)”."
+                        : "Resuming “\(resourceName)” at byte \(offset)."
                 ))
                 try await receiveBytes(
                     offer: offer,
@@ -147,6 +257,12 @@ public actor SyncServerSession {
                 .result(.committed(relativePath: committedRelativePath)),
                 requestID: requestID
             ))
+            await onEvent?(OperationLogEvent(
+                level: .success,
+                category: "Resource",
+                message: "Committed “\(resourceName)” to "
+                    + "“\(committedRelativePath)”."
+            ))
         } catch {
             await writer.abort()
             let isIntegrityMismatch = (error as? DestinationWriterError) == .integrityMismatch
@@ -165,6 +281,12 @@ public actor SyncServerSession {
                 for: error,
                 retryableIntegrityFailure: retryableIntegrityFailure
             )
+            await onEvent?(OperationLogEvent(
+                level: retryableIntegrityFailure ? .warning : .error,
+                category: "Resource",
+                message: "Failed “\(resourceName)”: \(error.localizedDescription)"
+                    + (retryableIntegrityFailure ? " Retrying once." : "")
+            ))
             try? await connection.send(try SyncFrame.control(
                 .result(failure),
                 requestID: requestID
@@ -231,5 +353,31 @@ public actor SyncServerSession {
             message: "The destination could not accept this resource.",
             retryable: false
         )
+    }
+}
+
+private actor SessionOpeningDeadline {
+    private enum State: Equatable {
+        case pending
+        case accepted
+        case timedOut
+    }
+
+    private var state = State.pending
+
+    var didTimeOut: Bool {
+        state == .timedOut
+    }
+
+    func markAccepted() -> Bool {
+        guard state == .pending else { return false }
+        state = .accepted
+        return true
+    }
+
+    func markTimedOut() -> Bool {
+        guard state == .pending else { return false }
+        state = .timedOut
+        return true
     }
 }

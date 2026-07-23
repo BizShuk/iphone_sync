@@ -6,6 +6,7 @@ cd "$repo_dir"
 
 command -v xcodegen >/dev/null
 command -v xcodebuild >/dev/null
+command -v jq >/dev/null
 command -v plutil >/dev/null
 
 settings_test_dir="build/verification"
@@ -19,6 +20,19 @@ xcrun swiftc \
 
 swift test --package-path packages/SyncCore
 xcodegen generate
+
+ios_test_device_id="$(
+    xcrun simctl list devices available -j \
+        | jq -r '[.devices[][] | select(.isAvailable and (.name | startswith("iPhone")))] | first | .udid // empty'
+)"
+test -n "$ios_test_device_id"
+
+xcodebuild -quiet \
+    -project iPhoneSync.xcodeproj \
+    -scheme iPhoneSyncIOS \
+    -destination "platform=iOS Simulator,id=$ios_test_device_id" \
+    CODE_SIGNING_ALLOWED=NO \
+    test
 
 xcodebuild -quiet \
     -project iPhoneSync.xcodeproj \
@@ -37,10 +51,13 @@ xcodebuild -quiet \
 xcodebuild -quiet \
     -project iPhoneSync.xcodeproj \
     -scheme iPhoneSyncIOS \
+    -configuration Release \
     -destination 'generic/platform=iOS' \
     CODE_SIGNING_ALLOWED=NO \
     build
 
+test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.0 raw -o - apps/ios/Info.plist)" = "com.bizshuk.iphonesync.ios.scheduled-sync"
+test "$(plutil -extract UIBackgroundModes.0 raw -o - apps/ios/Info.plist)" = "processing"
 test "$(plutil -extract NSBonjourServices.0 raw -o - apps/ios/Info.plist)" = "_iphonesync._tcp"
 test "$(plutil -extract NSBonjourServices.1 raw -o - apps/ios/Info.plist)" = "_iphonesync-pair._tcp"
 test "$(plutil -extract NSBonjourServices.0 raw -o - apps/macos/Info.plist)" = "_iphonesync._tcp"
@@ -63,15 +80,33 @@ rg -F 'cancelPairing' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
 rg -F 'var selectedAlbums: [PhotoAlbum]' apps/ios/Sources/IOSAppModel.swift >/dev/null
 rg -F '.navigationTitle("Choose Albums")' apps/ios/Sources/AlbumPickerView.swift >/dev/null
 rg -F 'func sync(albums: [PhotoAlbum])' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'com.bizshuk.iphonesync.ios.scheduled-sync' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
+rg -F 'using: .main' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
+rg -F 'execution.worker?.cancel()' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
+rg -F 'execution.forcedOutcome = .budgetExhausted' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
+rg -F 'restoredRequestDate(' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
+rg -F 'requestScheduler.pendingRequests()' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
+rg -F 'guard !isSceneActive else { return }' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'guard isSceneActive else { return }' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'nextEligibleAt: self.automaticSync.nextEligibleAt' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'await activeClient.cancel()' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'cancelDataRequest' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
+rg -F 'defaultOpeningTimeout: Duration = .seconds(15)' packages/SyncCore/Sources/MacReceiverKit/SyncServerSession.swift >/dev/null
 rg -F 'public static let receivingFolderName = "iPhoneSync"' packages/SyncCore/Sources/MacReceiverKit/DestinationWriter.swift >/dev/null
 rg -F 'struct MacSettingsStore' apps/macos/Sources/MacSettingsStore.swift >/dev/null
 rg -F 'var launchAtLoginRequested: Bool' apps/macos/Sources/MacSettingsStore.swift >/dev/null
-rg -F 'Section("Error Log")' apps/macos/Sources/SetupView.swift >/dev/null
-rg -F 'errorLog.count > 100' apps/macos/Sources/MacAppModel.swift >/dev/null
+rg -F 'struct IOSOperationLogSection' apps/ios/Sources/IOSOperationLogView.swift >/dev/null
+rg -F 'Section("Operation Log")' apps/macos/Sources/SetupView.swift >/dev/null
+rg -F 'public static let defaultCapacity = 500' packages/SyncCore/Sources/SyncCore/OperationLog.swift >/dev/null
+rg -F 'onEvent: EventHandler? = nil' packages/SyncCore/Sources/MacReceiverKit/SyncServerSession.swift >/dev/null
+rg -F 'operationLogBuffer.record(event)' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'operationLogBuffer.record(event)' apps/macos/Sources/MacAppModel.swift >/dev/null
 rg -F 'NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
 rg -F 'item.autosaveName = "com.shuk.iphonesync.statusItem"' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
 rg -F 'statusItem.isVisible = true' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
 rg -F 'item.observe(\.isVisible' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
+rg -F 'maximumListenerRetryAttempts = 5' apps/macos/Sources/ReceiverController.swift >/dev/null
+rg -F 'NSWorkspace.didWakeNotification' apps/macos/Sources/MacAppModel.swift >/dev/null
 if rg -F 'MenuBarExtra(' apps/macos/Sources >/dev/null; then
     exit 1
 fi
@@ -87,3 +122,13 @@ if sed -n '/func cancel()/,/^    }/p' apps/ios/Sources/IOSAppModel.swift \
 fi
 
 git diff --check
+git diff --cached --check
+while IFS= read -r -d '' untracked_file; do
+    untracked_check="$(
+        git diff --no-index --check -- /dev/null "$untracked_file" 2>&1 || true
+    )"
+    if [[ -n "$untracked_check" ]]; then
+        printf '%s\n' "$untracked_check" >&2
+        exit 1
+    fi
+done < <(git ls-files --others --exclude-standard -z)

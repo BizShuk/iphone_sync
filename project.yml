@@ -27,6 +27,8 @@ targets:
       path: apps/ios/Info.plist
       properties:
         CFBundleDisplayName: iPhone Sync
+        BGTaskSchedulerPermittedIdentifiers:
+          - com.bizshuk.iphonesync.ios.scheduled-sync
         LSRequiresIPhoneOS: true
         NSBonjourServices:
           - _iphonesync._tcp
@@ -34,6 +36,8 @@ targets:
         NSLocalNetworkUsageDescription: Find your Mac and transfer original photo resources on this local network.
         NSPhotoLibraryUsageDescription: Select one or more albums and back up their original resources to your paired Mac.
         UILaunchScreen: {}
+        UIBackgroundModes:
+          - processing
         UIRequiredDeviceCapabilities:
           - arm64
           - wifi
@@ -93,3 +97,28 @@ targets:
         CODE_SIGN_ENTITLEMENTS: apps/macos/iPhoneSyncMac.entitlements
         MARKETING_VERSION: 1.0
         CURRENT_PROJECT_VERSION: 1
+
+  iPhoneSyncIOSTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: apps/ios/Tests
+    dependencies:
+      - target: iPhoneSyncIOS
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bizshuk.iphonesync.ios.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/iPhone Sync.app/iPhone Sync"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  iPhoneSyncIOS:
+    build:
+      targets:
+        iPhoneSyncIOS: all
+        iPhoneSyncIOSTests: [test]
+    test:
+      targets:
+        - iPhoneSyncIOSTests

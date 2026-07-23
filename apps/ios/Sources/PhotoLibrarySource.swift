@@ -21,7 +21,7 @@ enum PhotoLibrarySourceError: Error, LocalizedError {
 
 enum PhotoResourceEvent: Sendable {
     case staged(StagedPhotoResource)
-    case skippedNotLocal
+    case skippedNotLocal(resourceName: String)
 }
 
 struct StagedPhotoResource: Sendable {
@@ -68,6 +68,170 @@ actor StagingLease {
         try? FileManager.default.removeItem(at: fileURL)
         continuation?.resume()
         continuation = nil
+    }
+}
+
+private final class PhotoResourceDataRequest: @unchecked Sendable {
+    private let fileURL: URL
+    private let manager: PHAssetResourceManager
+    private let lock = NSLock()
+
+    private var fileHandle: FileHandle?
+    private var continuation: CheckedContinuation<Void, any Error>?
+    private var requestID: PHAssetResourceDataRequestID?
+    private var cancelRequestWhenAvailable = false
+    private var finished = false
+
+    init(
+        fileURL: URL,
+        manager: PHAssetResourceManager = .default()
+    ) throws {
+        self.fileURL = fileURL
+        self.manager = manager
+
+        guard FileManager.default.createFile(
+            atPath: fileURL.path,
+            contents: nil
+        ) else {
+            throw NSError(
+                domain: NSCocoaErrorDomain,
+                code: NSFileWriteUnknownError,
+                userInfo: [NSFilePathErrorKey: fileURL.path]
+            )
+        }
+
+        do {
+            fileHandle = try FileHandle(forWritingTo: fileURL)
+        } catch {
+            try? FileManager.default.removeItem(at: fileURL)
+            throw error
+        }
+    }
+
+    func load(
+        resource: PHAssetResource,
+        options: PHAssetResourceRequestOptions
+    ) async throws {
+        try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            try await withCheckedThrowingContinuation { continuation in
+                begin(
+                    resource: resource,
+                    options: options,
+                    continuation: continuation
+                )
+            }
+        } onCancel: {
+            self.cancel()
+        }
+    }
+
+    private func begin(
+        resource: PHAssetResource,
+        options: PHAssetResourceRequestOptions,
+        continuation: CheckedContinuation<Void, any Error>
+    ) {
+        lock.lock()
+        if finished {
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+
+        let requestID = manager.requestData(
+            for: resource,
+            options: options
+        ) { data in
+            self.receive(data)
+        } completionHandler: { error in
+            if let error {
+                self.finish(
+                    with: .failure(error),
+                    cancelRequest: false,
+                    removePartialFile: true
+                )
+            } else {
+                self.finish(
+                    with: .success(()),
+                    cancelRequest: false,
+                    removePartialFile: false
+                )
+            }
+        }
+
+        lock.lock()
+        self.requestID = requestID
+        let shouldCancel = cancelRequestWhenAvailable
+        lock.unlock()
+
+        if shouldCancel {
+            manager.cancelDataRequest(requestID)
+        }
+    }
+
+    private func receive(_ data: Data) {
+        var writeError: (any Error)?
+
+        lock.lock()
+        if !finished, let fileHandle {
+            do {
+                try fileHandle.write(contentsOf: data)
+            } catch {
+                writeError = error
+            }
+        }
+        lock.unlock()
+
+        if let writeError {
+            finish(
+                with: .failure(writeError),
+                cancelRequest: true,
+                removePartialFile: true
+            )
+        }
+    }
+
+    func cancel() {
+        finish(
+            with: .failure(CancellationError()),
+            cancelRequest: true,
+            removePartialFile: true
+        )
+    }
+
+    private func finish(
+        with result: Result<Void, any Error>,
+        cancelRequest: Bool,
+        removePartialFile: Bool
+    ) {
+        lock.lock()
+        guard !finished else {
+            lock.unlock()
+            return
+        }
+        finished = true
+        let continuation = self.continuation
+        self.continuation = nil
+        let fileHandle = self.fileHandle
+        self.fileHandle = nil
+
+        var requestIDToCancel: PHAssetResourceDataRequestID?
+        if cancelRequest {
+            cancelRequestWhenAvailable = true
+            requestIDToCancel = requestID
+        }
+        lock.unlock()
+
+        try? fileHandle?.close()
+        if removePartialFile {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        if let requestIDToCancel {
+            manager.cancelDataRequest(requestIDToCancel)
+        }
+        continuation?.resume(with: result)
     }
 }
 
@@ -152,7 +316,9 @@ final class PhotoLibrarySource: @unchecked Sendable {
                             } catch let error as NSError
                                 where error.domain == PHPhotosErrorDomain
                                     && error.code == PHPhotosError.networkAccessRequired.rawValue {
-                                continuation.yield(.skippedNotLocal)
+                                continuation.yield(.skippedNotLocal(
+                                    resourceName: resource.originalFilename
+                                ))
                             }
                         }
                     }
@@ -187,25 +353,12 @@ final class PhotoLibrarySource: @unchecked Sendable {
         options.isNetworkAccessAllowed = false
 
         do {
-            try await withCheckedThrowingContinuation {
-                (continuation: CheckedContinuation<Void, any Error>) in
-                PHAssetResourceManager.default().writeData(
-                    for: resource,
-                    toFile: fileURL,
-                    options: options
-                ) { error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume()
-                    }
-                }
-            }
+            let request = try PhotoResourceDataRequest(fileURL: fileURL)
+            try await request.load(resource: resource, options: options)
+            try Task.checkCancellation()
         } catch {
             try? FileManager.default.removeItem(at: fileURL)
-            let nsError = error as NSError
-            if nsError.domain == PHPhotosErrorDomain,
-               nsError.code == PHPhotosError.notEnoughSpace.rawValue {
+            if isNotEnoughSpace(error) {
                 throw PhotoLibrarySourceError.notEnoughSpace
             }
             throw error
@@ -258,5 +411,30 @@ final class PhotoLibrarySource: @unchecked Sendable {
         default:
             resourceTypeName(type)
         }
+    }
+
+    private func isNotEnoughSpace(_ error: any Error) -> Bool {
+        var currentError: NSError? = error as NSError
+        var remainingUnderlyingErrors = 4
+
+        while let candidate = currentError, remainingUnderlyingErrors > 0 {
+            if candidate.domain == PHPhotosErrorDomain,
+               candidate.code == PHPhotosError.notEnoughSpace.rawValue {
+                return true
+            }
+            if candidate.domain == NSCocoaErrorDomain,
+               candidate.code == NSFileWriteOutOfSpaceError {
+                return true
+            }
+            if candidate.domain == NSPOSIXErrorDomain,
+               candidate.code == POSIXErrorCode.ENOSPC.rawValue {
+                return true
+            }
+
+            currentError = candidate.userInfo[NSUnderlyingErrorKey] as? NSError
+            remainingUnderlyingErrors -= 1
+        }
+
+        return false
     }
 }

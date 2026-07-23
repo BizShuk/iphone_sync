@@ -1,0 +1,105 @@
+import Foundation
+
+enum AutomaticSyncCadence: Equatable, Sendable {
+    case tenMinutes
+    case dailyAtLocalMidnight
+}
+
+enum AutomaticSyncScheduleReason: Equatable, Sendable {
+    case enabled
+    case completed
+    case retry
+    case needsAttention
+    case restore
+}
+
+struct AutomaticSyncPolicy: Sendable {
+    static let debugInterval: TimeInterval = 10 * 60
+    static let productionRetryInterval: TimeInterval = 60 * 60
+    static let scheduledRunMaximumDuration: Duration = .seconds(8 * 60)
+
+    let cadence: AutomaticSyncCadence
+    var calendar: Calendar
+
+    init(
+        cadence: AutomaticSyncCadence,
+        calendar: Calendar = .autoupdatingCurrent
+    ) {
+        self.cadence = cadence
+        self.calendar = calendar
+    }
+
+    static var current: AutomaticSyncPolicy {
+#if DEBUG
+        AutomaticSyncPolicy(cadence: .tenMinutes)
+#else
+        AutomaticSyncPolicy(cadence: .dailyAtLocalMidnight)
+#endif
+    }
+
+    func foregroundTestDelay(
+        after now: Date,
+        nextEligibleAt: Date?
+    ) -> Duration? {
+        guard cadence == .tenMinutes else { return nil }
+        let eligibleAt = nextEligibleAt
+            ?? now.addingTimeInterval(Self.debugInterval)
+        return .seconds(max(0, eligibleAt.timeIntervalSince(now)))
+    }
+
+    func hasSuccessfulRunToday(_ lastSuccess: Date?, now: Date) -> Bool {
+        guard let lastSuccess else { return false }
+        return calendar.isDate(lastSuccess, inSameDayAs: now)
+    }
+
+    func nextRequestDate(
+        after now: Date,
+        lastSuccess: Date?,
+        reason: AutomaticSyncScheduleReason
+    ) -> Date {
+        switch cadence {
+        case .tenMinutes:
+            return now.addingTimeInterval(Self.debugInterval)
+        case .dailyAtLocalMidnight:
+            if reason == .retry, !hasSuccessfulRunToday(lastSuccess, now: now) {
+                return now.addingTimeInterval(Self.productionRetryInterval)
+            }
+            if reason == .restore, !hasSuccessfulRunToday(lastSuccess, now: now) {
+                return now
+            }
+            return nextLocalMidnight(after: now)
+        }
+    }
+
+    func restoredRequestDate(
+        after now: Date,
+        lastSuccess: Date?,
+        persistedDate: Date?
+    ) -> Date {
+        switch cadence {
+        case .tenMinutes:
+            if let persistedDate {
+                return persistedDate
+            }
+            return nextRequestDate(
+                after: now,
+                lastSuccess: lastSuccess,
+                reason: .restore
+            )
+        case .dailyAtLocalMidnight:
+            // A persisted absolute date was calculated in the previous local
+            // timezone. Recompute daily scheduling whenever the app wakes.
+            return nextRequestDate(
+                after: now,
+                lastSuccess: lastSuccess,
+                reason: .restore
+            )
+        }
+    }
+
+    private func nextLocalMidnight(after now: Date) -> Date {
+        let today = calendar.startOfDay(for: now)
+        return calendar.date(byAdding: .day, value: 1, to: today)
+            ?? now.addingTimeInterval(24 * 60 * 60)
+    }
+}

@@ -6,7 +6,7 @@ struct PhotoAlbum: Codable, Equatable, Hashable, Identifiable, Sendable {
     let assetCount: Int
 }
 
-struct AlbumSelectionStore {
+struct AlbumSelectionStore: @unchecked Sendable {
     private let defaults: UserDefaults
     private let key = "selectedPhotoAlbums"
     private let legacyKey = "selectedPhotoAlbum"

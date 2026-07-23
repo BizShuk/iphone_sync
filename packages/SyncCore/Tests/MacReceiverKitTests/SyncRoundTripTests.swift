@@ -7,6 +7,74 @@ import Testing
 extension MacReceiverKitTestSuite {
 
 @Test
+func validPSKHalfOpenSessionTimesOutBeforeAcceptance() async throws {
+    let harness = try ReceiverHarness()
+    let psk = Data(repeating: 0x42, count: 32)
+    let identity = Data("phone-1".utf8)
+    let acceptanceRecorder = SessionAcceptanceRecorder()
+    let listener = try SyncTestListener(
+        parameters: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .server,
+            requireWiFi: false
+        ),
+        manifest: harness.manifest,
+        destinationRoot: harness.directory,
+        openingTimeout: .milliseconds(250),
+        onAccepted: {
+            await acceptanceRecorder.record()
+        }
+    )
+    let port = try await listener.start()
+    defer { Task { await listener.stop() } }
+
+    let halfOpenConnection = FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    ))
+    defer { halfOpenConnection.cancel() }
+    try await halfOpenConnection.start()
+
+    for _ in 0..<100 {
+        if !(await listener.recordedSessionErrors()).isEmpty {
+            break
+        }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+
+    #expect(await listener.recordedSessionErrors() == [.openingTimedOut])
+    #expect(await acceptanceRecorder.count == 0)
+    await #expect(throws: (any Error).self) {
+        _ = try await halfOpenConnection.receive()
+    }
+
+    let client = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+    _ = try await client.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: nil
+    )
+    _ = try await client.finish()
+    #expect(await acceptanceRecorder.count == 1)
+}
+
+@Test
 func roundTripSecondSyncSkipsCommittedResource() async throws {
     let bytes = Data(repeating: 0x5a, count: SyncConstants.chunkSize * 2 + 17)
     let harness = try ReceiverHarness(bytes: bytes)
@@ -76,6 +144,75 @@ func roundTripSecondSyncSkipsCommittedResource() async throws {
             == SyncSummary(added: 0, existing: 1, notLocal: 0, failed: 0)
     )
     #expect(await listener.recordedFailures().isEmpty)
+}
+
+@Test
+func roundTripEmitsSessionAndResourceOperations() async throws {
+    let bytes = Data("logged photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes)
+    let sourceURL = harness.directory.appendingPathComponent("logged-source.bin")
+    try bytes.write(to: sourceURL)
+    let psk = Data(repeating: 0x42, count: 32)
+    let identity = Data("phone-1".utf8)
+    let recorder = ServerOperationRecorder()
+    let listener = try SyncTestListener(
+        parameters: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .server,
+            requireWiFi: false
+        ),
+        manifest: harness.manifest,
+        destinationRoot: harness.directory,
+        onEvent: { event in
+            await recorder.record(event)
+        }
+    )
+    let port = try await listener.start()
+    defer { Task { await listener.stop() } }
+    let client = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+
+    _ = try await client.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: nil
+    )
+    _ = try await client.sendResource(harness.offer, fileURL: sourceURL)
+    _ = try await client.finish()
+
+    for _ in 0..<100 {
+        if await recorder.events.count >= 6 {
+            break
+        }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+
+    let events = await recorder.events
+    #expect(events.contains {
+        $0.level == .success
+            && $0.category == "Session"
+            && $0.message.contains("Accepted album")
+    })
+    #expect(events.contains {
+        $0.level == .info
+            && $0.category == "Resource"
+            && $0.message.contains("Offered “IMG_0001.HEIC”")
+    })
+    #expect(events.contains {
+        $0.level == .success
+            && $0.category == "Resource"
+            && $0.message.contains("Committed “IMG_0001.HEIC”")
+    })
+    #expect(events.last?.message.contains("1 added") == true)
 }
 
 @Test
@@ -387,4 +524,20 @@ func recoveredIntegrityRetryDoesNotCountAsFailedResource() async throws {
     #expect(await listener.recordedFailures().isEmpty)
 }
 
+}
+
+private actor SessionAcceptanceRecorder {
+    private(set) var count = 0
+
+    func record() {
+        count += 1
+    }
+}
+
+private actor ServerOperationRecorder {
+    private(set) var events: [OperationLogEvent] = []
+
+    func record(_ event: OperationLogEvent) {
+        events.append(event)
+    }
 }

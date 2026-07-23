@@ -130,19 +130,29 @@ actor SyncTestListener {
     private let listener: NWListener
     private let manifest: ManifestStore
     private let destinationRoot: URL
+    private let openingTimeout: Duration
+    private let onAccepted: SyncServerSession.AcceptedHandler?
+    private let onEvent: SyncServerSession.EventHandler?
     private let queue = DispatchQueue(label: "com.bizshuk.iphonesync.tests.sync-listener")
     private var readyContinuation: CheckedContinuation<NWEndpoint.Port, any Error>?
     private var sessions: [Task<Void, Never>] = []
     private var failures: [String] = []
+    private var sessionErrors: [SyncServerSessionError] = []
 
     init(
         parameters: NWParameters,
         manifest: ManifestStore,
-        destinationRoot: URL
+        destinationRoot: URL,
+        openingTimeout: Duration = SyncServerSession.defaultOpeningTimeout,
+        onAccepted: SyncServerSession.AcceptedHandler? = nil,
+        onEvent: SyncServerSession.EventHandler? = nil
     ) throws {
         listener = try NWListener(using: parameters, on: .any)
         self.manifest = manifest
         self.destinationRoot = destinationRoot
+        self.openingTimeout = openingTimeout
+        self.onAccepted = onAccepted
+        self.onEvent = onEvent
     }
 
     func start() async throws -> NWEndpoint.Port {
@@ -168,6 +178,10 @@ actor SyncTestListener {
         failures
     }
 
+    func recordedSessionErrors() -> [SyncServerSessionError] {
+        sessionErrors
+    }
+
     private func handle(_ state: NWListener.State) {
         switch state {
         case .ready:
@@ -185,11 +199,19 @@ actor SyncTestListener {
     private func accept(_ connection: NWConnection) {
         let manifest = manifest
         let root = destinationRoot
+        let openingTimeout = openingTimeout
+        let onAccepted = onAccepted
+        let onEvent = onEvent
         let task = Task { [weak self] in
             do {
                 let writer = DestinationWriter(destinationRoot: root, manifest: manifest)
                 let session = SyncServerSession(manifest: manifest, writer: writer)
-                _ = try await session.run(connection: FramedConnection(connection))
+                _ = try await session.run(
+                    connection: FramedConnection(connection),
+                    openingTimeout: openingTimeout,
+                    onAccepted: onAccepted,
+                    onEvent: onEvent
+                )
             } catch {
                 await self?.record(error)
             }
@@ -199,5 +221,8 @@ actor SyncTestListener {
 
     private func record(_ error: any Error) {
         failures.append(error.localizedDescription)
+        if let sessionError = error as? SyncServerSessionError {
+            sessionErrors.append(sessionError)
+        }
     }
 }

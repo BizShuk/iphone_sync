@@ -10,19 +10,37 @@ struct IOSSyncProgress: Equatable, Sendable {
     let totalBytes: Int64
 }
 
-enum IOSSyncCoordinatorError: Error, LocalizedError {
+enum IOSSyncCoordinatorError: Error, LocalizedError, Sendable {
     case macNotFound
     case notPaired
     case pairingNotStarted
-    case resourceFailed(String)
+    case resourceFailed(
+        code: TransferFailureCode,
+        message: String,
+        retryable: Bool
+    )
 
     var errorDescription: String? {
         switch self {
         case .macNotFound: "The paired Mac is not available on this local network."
         case .notPaired: "Pair this iPhone with a Mac first."
         case .pairingNotStarted: "Choose a Mac before entering its pairing code."
-        case let .resourceFailed(message): message
+        case let .resourceFailed(_, message, _): message
         }
+    }
+}
+
+enum IOSSyncDiscoveryStrategy: Sendable {
+    case foregroundRetries
+    case singleAttempt
+}
+
+enum IOSSyncResourceRetryPolicy {
+    static func shouldRetryImmediately(
+        code: TransferFailureCode,
+        retryable: Bool
+    ) -> Bool {
+        code == .integrity && retryable
     }
 }
 
@@ -34,6 +52,7 @@ actor IOSSyncCoordinator {
     private let keychain = KeychainSecretStore()
     private let deviceID: String
     private let onProgress: @Sendable (IOSSyncProgress?) -> Void
+    private let onOperation: @Sendable (OperationLogEvent) async -> Void
     private var discovery: BonjourDiscovery?
     private var pendingPairing: PendingPairing?
     private var activeClient: SyncClient?
@@ -43,11 +62,13 @@ actor IOSSyncCoordinator {
     init(
         photoSource: PhotoLibrarySource,
         deviceID: String,
-        onProgress: @escaping @Sendable (IOSSyncProgress?) -> Void
+        onProgress: @escaping @Sendable (IOSSyncProgress?) -> Void,
+        onOperation: @escaping @Sendable (OperationLogEvent) async -> Void = { _ in }
     ) {
         self.photoSource = photoSource
         self.deviceID = deviceID
         self.onProgress = onProgress
+        self.onOperation = onOperation
     }
 
     func loadPairedPeer() throws -> PairedPeer? {
@@ -71,10 +92,20 @@ actor IOSSyncCoordinator {
 
     func beginPairing(receiver: DiscoveredReceiver) async throws {
         stopDiscovery()
+        await emit(
+            .info,
+            category: "Pairing",
+            message: "Connecting to “\(receiver.displayName)”."
+        )
         let client = PairingClient(deviceID: deviceID, requireWiFi: true)
         pendingPairing = try await client.begin(
             endpoint: receiver.endpoint,
             deviceName: UIDevice.current.name
+        )
+        await emit(
+            .info,
+            category: "Pairing",
+            message: "Secure pairing channel opened; waiting for code confirmation."
         )
     }
 
@@ -85,6 +116,11 @@ actor IOSSyncCoordinator {
         let peer = try await pendingPairing.confirm(code: code)
         try keychain.save(peer, account: Self.pairedPeerAccount)
         self.pendingPairing = nil
+        await emit(
+            .success,
+            category: "Pairing",
+            message: "Paired with “\(peer.displayName)”."
+        )
         return peer
     }
 
@@ -93,6 +129,11 @@ actor IOSSyncCoordinator {
             await pendingPairing.cancel()
         }
         pendingPairing = nil
+        await emit(
+            .info,
+            category: "Pairing",
+            message: "Pairing cancelled."
+        )
     }
 
     func pair(endpoint: NWEndpoint, code: String) async throws -> PairedPeer {
@@ -111,6 +152,13 @@ actor IOSSyncCoordinator {
     }
 
     func sync(albums: [PhotoAlbum]) async throws -> SyncSummary {
+        try await sync(albums: albums, discoveryStrategy: .foregroundRetries)
+    }
+
+    func sync(
+        albums: [PhotoAlbum],
+        discoveryStrategy: IOSSyncDiscoveryStrategy
+    ) async throws -> SyncSummary {
         guard var peer = try loadPairedPeer() else {
             throw IOSSyncCoordinatorError.notPaired
         }
@@ -118,25 +166,50 @@ actor IOSSyncCoordinator {
         var combinedSummary = SyncSummary.zero
 
         for album in albums {
-            if cancelRequested { break }
-            let result = try await sync(album: album, peer: peer)
+            try Task.checkCancellation()
+            if cancelRequested { throw CancellationError() }
+            await emit(
+                .info,
+                category: "Album",
+                message: "Starting album “\(album.title)” "
+                    + "(\(album.assetCount) assets)."
+            )
+            let result = try await sync(
+                album: album,
+                peer: peer,
+                discoveryStrategy: discoveryStrategy
+            )
             peer = result.peer
             combinedSummary.added += result.summary.added
             combinedSummary.existing += result.summary.existing
             combinedSummary.notLocal += result.summary.notLocal
             combinedSummary.failed += result.summary.failed
+            await emit(
+                .success,
+                category: "Album",
+                message: "Finished “\(album.title)”: \(result.summary.added) added, "
+                    + "\(result.summary.existing) already present, "
+                    + "\(result.summary.notLocal) not local, "
+                    + "\(result.summary.failed) failed."
+            )
         }
         return combinedSummary
     }
 
     private func sync(
         album: PhotoAlbum,
-        peer: PairedPeer
+        peer: PairedPeer,
+        discoveryStrategy: IOSSyncDiscoveryStrategy
     ) async throws -> (summary: SyncSummary, peer: PairedPeer) {
         var peer = peer
         let receiver: DiscoveredReceiver
         do {
-            receiver = try await discoverReceiverWithRetry(id: peer.id)
+            switch discoveryStrategy {
+            case .foregroundRetries:
+                receiver = try await discoverReceiverWithRetry(id: peer.id)
+            case .singleAttempt:
+                receiver = try await discoverReceiver(id: peer.id)
+            }
         } catch {
             if cancelRequested { throw CancellationError() }
             throw error
@@ -157,57 +230,89 @@ actor IOSSyncCoordinator {
         defer {
             activeClient = nil
             onProgress(nil)
-            Task { await client.cancel() }
         }
 
-        let sourceBindingID = try await client.openSession(
-            albumID: album.id,
-            albumName: album.title,
-            sourceBindingID: peer.sourceBindingID
-        )
-        if peer.sourceBindingID != sourceBindingID {
-            peer = PairedPeer(
-                id: peer.id,
-                displayName: peer.displayName,
-                pskIdentity: peer.pskIdentity,
-                psk: peer.psk,
-                sourceBindingID: sourceBindingID
+        do {
+            let sourceBindingID = try await client.openSession(
+                albumID: album.id,
+                albumName: album.title,
+                sourceBindingID: peer.sourceBindingID
             )
-            try keychain.save(peer, account: Self.pairedPeerAccount)
-        }
+            await emit(
+                .success,
+                category: "Session",
+                message: "Mac accepted album “\(album.title)”."
+            )
+            if peer.sourceBindingID != sourceBindingID {
+                peer = PairedPeer(
+                    id: peer.id,
+                    displayName: peer.displayName,
+                    pskIdentity: peer.pskIdentity,
+                    psk: peer.psk,
+                    sourceBindingID: sourceBindingID
+                )
+                try keychain.save(peer, account: Self.pairedPeerAccount)
+                await emit(
+                    .info,
+                    category: "Session",
+                    message: "Saved the destination source binding."
+                )
+            }
 
-        var notLocal = 0
-        for try await event in photoSource.resources(albumID: album.id) {
-            if cancelRequested { break }
-            switch event {
-            case .skippedNotLocal:
-                notLocal += 1
-            case let .staged(staged):
-                transferringResource = true
-                do {
-                    try await send(
-                        staged,
-                        albumName: album.title,
-                        bindingID: sourceBindingID,
-                        client: client
+            var notLocal = 0
+            for try await event in photoSource.resources(albumID: album.id) {
+                try Task.checkCancellation()
+                if cancelRequested { throw CancellationError() }
+                switch event {
+                case let .skippedNotLocal(resourceName):
+                    notLocal += 1
+                    await emit(
+                        .warning,
+                        category: "Resource",
+                        message: "Skipped “\(resourceName)”; it is not stored on this iPhone."
                     )
-                } catch {
+                case let .staged(staged):
+                    transferringResource = true
+                    do {
+                        try await send(
+                            staged,
+                            albumName: album.title,
+                            bindingID: sourceBindingID,
+                            client: client
+                        )
+                    } catch {
+                        await staged.cleanup()
+                        transferringResource = false
+                        throw error
+                    }
                     await staged.cleanup()
                     transferringResource = false
-                    throw error
                 }
-                await staged.cleanup()
-                transferringResource = false
             }
+            try Task.checkCancellation()
+            if cancelRequested { throw CancellationError() }
+            var summary = try await client.finish()
+            summary.notLocal = notLocal
+            return (summary, peer)
+        } catch {
+            await client.cancel()
+            throw error
         }
-        var summary = try await client.finish()
-        summary.notLocal = notLocal
-        return (summary, peer)
     }
 
     func cancel() async {
         cancelRequested = true
         discovery?.stop()
+        if let activeClient {
+            await activeClient.cancel()
+        }
+        await emit(
+            .warning,
+            category: "Sync",
+            message: transferringResource
+                ? "Cancelled the active resource transfer."
+                : "Cancelled the active sync operation."
+        )
     }
 
     private func send(
@@ -221,6 +326,13 @@ actor IOSSyncCoordinator {
             descriptor: staged.descriptor
         )
         let offer = ResourceOffer(resourceID: resourceID, descriptor: staged.descriptor)
+        let resourceName = staged.descriptor.originalFilename
+        await emit(
+            .info,
+            category: "Resource",
+            message: "Sending “\(resourceName)” "
+                + "(\(staged.descriptor.expectedSize) bytes)."
+        )
         let progress: @Sendable (Int64, Int64) -> Void = { [onProgress] sent, total in
             onProgress(IOSSyncProgress(
                 albumName: albumName,
@@ -234,19 +346,59 @@ actor IOSSyncCoordinator {
             fileURL: staged.fileURL,
             progress: progress
         )
-        if case let .failed(_, _, retryable) = result, retryable {
+        try Task.checkCancellation()
+        if cancelRequested { throw CancellationError() }
+        if case let .failed(code, _, retryable) = result,
+           IOSSyncResourceRetryPolicy.shouldRetryImmediately(
+               code: code,
+               retryable: retryable
+           ) {
+            await emit(
+                .warning,
+                category: "Resource",
+                message: "Integrity verification failed for “\(resourceName)”; retrying once."
+            )
             result = try await client.sendResource(
                 offer,
                 fileURL: staged.fileURL,
                 progress: progress
             )
         }
-        if case let .failed(_, message, _) = result {
-            throw IOSSyncCoordinatorError.resourceFailed(message)
+        try Task.checkCancellation()
+        if cancelRequested { throw CancellationError() }
+        switch result {
+        case .skipped:
+            await emit(
+                .info,
+                category: "Resource",
+                message: "Skipped “\(resourceName)”; already present on the Mac."
+            )
+        case let .committed(relativePath):
+            await emit(
+                .success,
+                category: "Resource",
+                message: "Sent “\(resourceName)” to “\(relativePath)”."
+            )
+        case let .failed(code, message, retryable):
+            await emit(
+                .error,
+                category: "Resource",
+                message: "Failed “\(resourceName)”: \(message)"
+            )
+            throw IOSSyncCoordinatorError.resourceFailed(
+                code: code,
+                message: message,
+                retryable: retryable
+            )
         }
     }
 
     private func discoverReceiver(id: String) async throws -> DiscoveredReceiver {
+        await emit(
+            .info,
+            category: "Discovery",
+            message: "Looking for the exact paired Mac on Wi-Fi."
+        )
         let discovery = BonjourDiscovery(
             serviceType: SyncConstants.normalServiceType,
             requireWiFi: true
@@ -273,6 +425,11 @@ actor IOSSyncCoordinator {
                 throw IOSSyncCoordinatorError.macNotFound
             }
             group.cancelAll()
+            await emit(
+                .success,
+                category: "Discovery",
+                message: "Found “\(receiver.displayName)”."
+            )
             return receiver
         }
     }
@@ -292,8 +449,25 @@ actor IOSSyncCoordinator {
                     throw CancellationError()
                 }
                 lastError = error
+                await emit(
+                    .warning,
+                    category: "Discovery",
+                    message: "The paired Mac was not found in this discovery attempt."
+                )
             }
         }
         throw lastError
+    }
+
+    private func emit(
+        _ level: OperationLogLevel,
+        category: String,
+        message: String
+    ) async {
+        await onOperation(OperationLogEvent(
+            level: level,
+            category: category,
+            message: message
+        ))
     }
 }

@@ -5,8 +5,9 @@
 | Name | Description | What is it for in current project? |
 | --- | --- | --- |
 | `iPhone Photos Full Access` | iOS 使用者授權 (TCC)。App 以 `PHPhotoLibrary.requestAuthorization(for: .readWrite)` 請求，並以 `NSPhotoLibraryUsageDescription` 說明用途；目前只接受 `.authorized`，不接受 `.limited`。PhotoKit 的讀取 access level 名稱是 `.readWrite`，但本專案不會修改 Photos library。 | 列出使用者相簿並讀取所選相簿內全部本機 `PHAssetResource` 原始 bytes，確保完整備份。`isNetworkAccessAllowed = false`，不會為此下載 iCloud resource。 |
-| `iPhone Local Network` | iOS 14+ 使用者授權 (TCC)。`NSLocalNetworkUsageDescription` 必須說明 LAN 存取目的。 | 讓前景 iOS App 透過 Bonjour 尋找已配對 Mac，並以 Network.framework 建立 pairing 與 sync TCP/TLS 連線。 |
+| `iPhone Local Network` | iOS 14+ 使用者授權 (TCC)。`NSLocalNetworkUsageDescription` 必須說明 LAN 存取目的；首次授權仍須在使用者可操作的前景流程完成。 | 讓前景手動同步或 system-granted automatic run 透過 Bonjour 尋找已配對 Mac，並以 Network.framework 建立 sync TCP/TLS 連線；pairing 只在前景執行。 |
 | `iPhone Bonjour Services` | 必要 Info.plist 宣告，不是另一個獨立 prompt。`NSBonjourServices` 必須列出 `_iphonesync._tcp` 與 `_iphonesync-pair._tcp`。 | 允許 iPhone 瀏覽一般同步 receiver 與 120 秒暫時配對 service。 |
+| `iPhone Background Processing` | `UIBackgroundModes = processing` 與 `BGTaskSchedulerPermittedIdentifiers` 是 Info.plist capability declarations，不是 privacy prompt，也不是 sandbox entitlement。 | 允許 iOS 以 `BGProcessingTask` 提供 automatic sync 的 best-effort 執行機會。Debug request 最早為 `+10 minutes`，Release request 最早為下一個 local midnight；實際啟動時間由系統決定。 |
 | `Mac Local Network` | macOS 15+ 使用者授權 (TCC)；macOS 14 沒有此 prompt。`NSLocalNetworkUsageDescription` 必須保留，讓支援版本顯示 receiver 的 LAN 用途。 | 讓 menu-bar receiver 在同一 LAN 上被 iPhone 發現、完成配對並接收原始資源。 |
 | `Mac Bonjour Services` | 必要 Info.plist 宣告，不是另一個獨立 prompt。`NSBonjourServices` 列出 `_iphonesync._tcp` 與 `_iphonesync-pair._tcp`。 | 宣告 Mac 會發布的一般同步 service 與暫時配對 service。 |
 | `Mac App Sandbox` | `com.apple.security.app-sandbox = true`。此 entitlement 啟用 macOS App Sandbox，其他檔案與網路能力必須逐項允許。 | 限制 receiver 只能存取自己的 App container，以及使用者選取的 destination、明確宣告的 LAN 能力與系統服務。 |
@@ -22,7 +23,7 @@
 - 不要求 `Full Disk Access`；Mac 只寫入使用者透過 `NSOpenPanel` 選取的 destination。
 - 不要求 macOS Photos、Camera、Microphone、Contacts、Location、Bluetooth、Nearby Interaction 或 Network Extension。
 - 不要求 iOS custom multicast entitlement；目前只使用 Bonjour API，沒有自訂 multicast socket。
-- 不要求 iCloud Photos 或 background transfer；`isNetworkAccessAllowed = false`，iPhone 同步必須由使用者在前景觸發。
+- 不要求 iCloud Photos、background `URLSession` 或 PhotoKit Background Resource Upload；`isNetworkAccessAllowed = false`。Automatic sync 使用既有 local-only transport，並只在 iOS 實際啟動 `BGProcessingTask` 且同網路 gate 通過時傳輸。
 - `UIRequiredDeviceCapabilities` 的 `wifi` / `arm64` 是安裝相容性條件，不是 privacy permission；`LSUIElement` 是 menu-bar App 行為，也不是 permission。
 
 ## 驗證
@@ -32,11 +33,13 @@ xcodegen generate
 bash scripts/verify.sh
 ```
 
-Unsigned build 只能驗證 plist、entitlements 與編譯，不會授予或證明 Photos、Local Network、Finder destination 或 Login Item 權限。這些項目必須用 signed 實體 iPhone 與 signed macOS App 驗收。
+Unsigned build 只能驗證 plist、entitlements 與編譯，不會授予或證明 Photos、Local Network、Finder destination 或 Login Item 權限，也不證明 iOS 會啟動 `BGProcessingTask`。這些項目必須用 signed 實體 iPhone 與 signed macOS App 驗收。
 
 ## Apple 官方參考
 
 - [Local Network Privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
+- [Choosing background strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)
+- [Background task earliest begin date](https://developer.apple.com/documentation/backgroundtasks/bgtaskrequest/earliestbegindate)
 - [PhotoKit privacy authorization](https://developer.apple.com/documentation/photokit/delivering-an-enhanced-privacy-experience-in-your-photos-app)
 - [macOS App Sandbox](https://developer.apple.com/documentation/security/app-sandbox)
 - [User-selected file read/write entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.files.user-selected.read-write)

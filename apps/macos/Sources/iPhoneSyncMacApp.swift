@@ -2,6 +2,7 @@ import AppKit
 import Observation
 import OSLog
 import SwiftUI
+import SyncCore
 
 @main
 @MainActor
@@ -64,12 +65,22 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         }
 
         logger.notice("AppKit status item created; visible=\(item.isVisible, privacy: .public)")
+        model.recordOperation(OperationLogEvent(
+            level: .success,
+            category: "Menu Bar",
+            message: "Created the menu bar status item."
+        ))
         perform(#selector(logStatusItemDiagnostics), with: nil, afterDelay: 1)
     }
 
     private func restoreStatusItemVisibility() {
         guard let statusItem, !statusItem.isVisible else { return }
         logger.notice("Status item became hidden; restoring visibility")
+        model.recordOperation(OperationLogEvent(
+            level: .warning,
+            category: "Menu Bar",
+            message: "The status item became hidden; restored visibility."
+        ))
         statusItem.isVisible = true
     }
 
@@ -86,6 +97,11 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         logger.notice(
             "Status item diagnostic: visible=\(statusItem.isVisible, privacy: .public), length=\(statusItem.length, privacy: .public), hasImage=\(button?.image != nil, privacy: .public), buttonFrame=\(buttonFrame, privacy: .public), windowFrame=\(windowFrame, privacy: .public), windowVisible=\(button?.window?.isVisible == true, privacy: .public)"
         )
+        model.recordOperation(OperationLogEvent(
+            level: .info,
+            category: "Menu Bar",
+            message: "Status item diagnostics completed; visible=\(statusItem.isVisible)."
+        ))
     }
 
     private func observeModel() {
@@ -207,6 +223,11 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 
     private func showSetupWindow() {
         if let setupWindow {
+            model.recordOperation(OperationLogEvent(
+                level: .info,
+                category: "Setup",
+                message: "Brought the existing Setup window forward."
+            ))
             setupWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -231,5 +252,10 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         setupWindow = window
+        model.recordOperation(OperationLogEvent(
+            level: .info,
+            category: "Setup",
+            message: "Opened the Setup window."
+        ))
     }
 }
