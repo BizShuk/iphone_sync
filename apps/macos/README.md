@@ -1,11 +1,11 @@
 # Mac Receiver
 
-`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。它保存使用者選擇的 Finder destination、顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 將已配對 iPhone 的多相簿增量備份寫入 `iPhoneSync/<album-name>/`。
+`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。第一次開啟 destination chooser 時預設顯示使用者的 `Downloads` 資料夾；使用者確認後 App 保存該 Finder destination。它顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 將已配對 iPhone 的多相簿增量備份寫入 `iPhoneSync/<album-name>/`。
 
 ## Flow
 
 ```text
-Choose Destination
+Choose Destination (defaults to Downloads on first use)
 └── Pair iPhone
     └── TLS receiver ready
         └── iPhoneSync → album folder → partial write → checkpoint → SHA-256 → atomic commit

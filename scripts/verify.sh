@@ -95,6 +95,8 @@ rg -F 'defaultOpeningTimeout: Duration = .seconds(15)' packages/SyncCore/Sources
 rg -F 'public static let receivingFolderName = "iPhoneSync"' packages/SyncCore/Sources/MacReceiverKit/DestinationWriter.swift >/dev/null
 rg -F 'struct MacSettingsStore' apps/macos/Sources/MacSettingsStore.swift >/dev/null
 rg -F 'var launchAtLoginRequested: Bool' apps/macos/Sources/MacSettingsStore.swift >/dev/null
+rg -F 'FileManager.default.urls(' apps/macos/Sources/MacAppModel.swift >/dev/null
+rg -F 'for: .downloadsDirectory' apps/macos/Sources/MacAppModel.swift >/dev/null
 rg -F 'struct IOSOperationLogSection' apps/ios/Sources/IOSOperationLogView.swift >/dev/null
 rg -F 'Section("Operation Log")' apps/macos/Sources/SetupView.swift >/dev/null
 rg -F 'public static let defaultCapacity = 500' packages/SyncCore/Sources/SyncCore/OperationLog.swift >/dev/null

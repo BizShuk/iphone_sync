@@ -79,7 +79,7 @@ launch_app() {
 
     step "Launching $APP_PATH"
     /usr/bin/open "$APP_PATH" --args --open-setup
-    printf '\nMac receiver 已啟動，Setup 視窗應已開啟；請選擇 destination 並完成配對。\n'
+    printf '\nMac receiver 已啟動，Setup 視窗應已開啟；第一次選擇 destination 時會預設在 Downloads，請確認後完成配對。\n'
 }
 
 case "${1:-run}" in

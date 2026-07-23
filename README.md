@@ -55,7 +55,7 @@ open iPhoneSync.xcodeproj
 在 Xcode 為 `iPhoneSyncMac` 與 `iPhoneSyncIOS` 選擇同一開發團隊後：
 
 1. 先在 Mac 執行 `iPhoneSyncMac`，從選單列開啟 `Open Setup`。
-2. 選擇 Finder destination 並按 `Pair iPhone`。
+2. 選擇 Finder destination（第一次開啟會預設在 `Downloads`）並按 `Pair iPhone`。
 3. 在實體 iPhone 執行 `iPhoneSyncIOS`，完成授權、相簿選擇與配對。
 
 也可以從專案根目錄以 Terminal 啟動 Mac receiver：

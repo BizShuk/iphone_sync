@@ -11,6 +11,15 @@ import SyncCore
 final class MacAppModel {
     static let shared = MacAppModel()
 
+    /// The first destination chooser opens here; access is still granted only
+    /// after the user confirms the folder in `NSOpenPanel`.
+    static var defaultDestinationURL: URL? {
+        FileManager.default.urls(
+            for: .downloadsDirectory,
+            in: .userDomainMask
+        ).first
+    }
+
     enum State: Equatable {
         case needsDestination
         case needsPairing
@@ -142,7 +151,7 @@ final class MacAppModel {
                 recordOperation(
                     .info,
                     category: "Destination",
-                    message: "No destination is selected."
+                    message: "No destination is selected; the chooser defaults to Downloads."
                 )
             } catch {
                 bookmarkStore.clear()
@@ -170,6 +179,7 @@ final class MacAppModel {
         let panel = NSOpenPanel()
         panel.title = "Choose iPhone Backup Destination"
         panel.prompt = "Choose"
+        panel.directoryURL = destinationURL ?? Self.defaultDestinationURL
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false

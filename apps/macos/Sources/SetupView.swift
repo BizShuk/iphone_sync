@@ -27,6 +27,11 @@ struct SetupView: View {
                         .lineLimit(2)
                         .multilineTextAlignment(.trailing)
                 }
+                if model.destinationURL == nil {
+                    Text("The first destination chooser opens in Downloads.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 HStack {
                     Button("Choose Destination") { model.chooseDestination() }
                     Button("Pair iPhone") { model.openPairingWindow() }
