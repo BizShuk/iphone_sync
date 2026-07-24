@@ -1,4 +1,13 @@
 import Foundation
+#if canImport(SyncCore) && !VERIFY_STANDALONE
+import SyncCore
+#else
+enum DestinationStorageMode: String, Codable, Equatable, Sendable {
+    case albumDate
+    case albumOnly
+    case flat
+}
+#endif
 
 struct MacSettingsStore {
     static let setupWindowFrameAutosaveName = "com.shuk.iphonesync.setupWindow"
@@ -8,6 +17,7 @@ struct MacSettingsStore {
         static let launchAtLoginRequested = "launchAtLoginRequested"
         static let receiverID = "receiverID"
         static let sourceBindingID = "sourceBindingID"
+        static let destinationStorageMode = "destinationStorageMode"
     }
 
     private let defaults: UserDefaults
@@ -45,6 +55,28 @@ struct MacSettingsStore {
             return defaults.bool(forKey: Key.launchAtLoginRequested)
         }
         nonmutating set { defaults.set(newValue, forKey: Key.launchAtLoginRequested) }
+    }
+
+    var destinationStorageMode: DestinationStorageMode {
+        get {
+            if let rawValue = defaults.string(forKey: Key.destinationStorageMode) {
+                if let mode = DestinationStorageMode(rawValue: rawValue) {
+                    return mode
+                }
+                // Legacy raw value from pre-flat builds; treat as `.flat`.
+                if rawValue == "singleFolder" {
+                    let migrated: DestinationStorageMode = .flat
+                    defaults.set(migrated.rawValue, forKey: Key.destinationStorageMode)
+                    return migrated
+                }
+            }
+            let defaultMode: DestinationStorageMode = .albumDate
+            defaults.set(defaultMode.rawValue, forKey: Key.destinationStorageMode)
+            return defaultMode
+        }
+        nonmutating set {
+            defaults.set(newValue.rawValue, forKey: Key.destinationStorageMode)
+        }
     }
 
     private func stableIdentifier(forKey key: String) -> String {

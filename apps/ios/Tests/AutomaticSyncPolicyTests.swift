@@ -95,18 +95,19 @@ final class AutomaticSyncPolicyTests: XCTestCase {
         )
     }
 
-    func testDailyCadenceRestoresImmediatelyUntilSuccessfulToday() {
+    func testDailyCadenceRestoresAtNextConfiguredLocalTimeRegardlessOfLastSuccess() {
         let policy = AutomaticSyncPolicy(
-            cadence: .dailyAtLocalMidnight,
+            cadence: .dailyAtLocalTime(hour: 0, minute: 53),
             calendar: calendar
         )
-        let now = date(year: 2026, month: 7, day: 23, hour: 15, minute: 30)
+        let now = date(year: 2026, month: 7, day: 23, hour: 20, minute: 34)
         let previousDay = date(year: 2026, month: 7, day: 22, hour: 23, minute: 59)
         let successfulToday = date(year: 2026, month: 7, day: 23, hour: 8)
+        let nextConfiguredTime = date(year: 2026, month: 7, day: 24, hour: 0, minute: 53)
 
         XCTAssertEqual(
             policy.nextRequestDate(after: now, lastSuccess: nil, reason: .restore),
-            now
+            nextConfiguredTime
         )
         XCTAssertEqual(
             policy.nextRequestDate(
@@ -114,7 +115,7 @@ final class AutomaticSyncPolicyTests: XCTestCase {
                 lastSuccess: previousDay,
                 reason: .restore
             ),
-            now
+            nextConfiguredTime
         )
         XCTAssertEqual(
             policy.nextRequestDate(
@@ -122,7 +123,7 @@ final class AutomaticSyncPolicyTests: XCTestCase {
                 lastSuccess: successfulToday,
                 reason: .restore
             ),
-            date(year: 2026, month: 7, day: 24)
+            nextConfiguredTime
         )
     }
 
@@ -198,6 +199,7 @@ final class AutomaticSyncPolicyTests: XCTestCase {
 
     func testDailyRestoreIgnoresPersistedDateFromPreviousTimezone() {
         var utc = Calendar(identifier: .gregorian)
+        utc.locale = Locale(identifier: "en_US_POSIX")
         utc.timeZone = TimeZone(secondsFromGMT: 0)!
         let now = utc.date(from: DateComponents(
             year: 2026,
@@ -207,20 +209,28 @@ final class AutomaticSyncPolicyTests: XCTestCase {
         ))!
         let staleLosAngelesMidnight = now.addingTimeInterval(13 * 60 * 60)
         var tokyo = Calendar(identifier: .gregorian)
+        tokyo.locale = Locale(identifier: "en_US_POSIX")
         tokyo.timeZone = TimeZone(identifier: "Asia/Tokyo")!
         let policy = AutomaticSyncPolicy(
             cadence: .dailyAtLocalMidnight,
             calendar: tokyo
         )
+        let nextTokyoMidnight = tokyo.date(from: DateComponents(
+            timeZone: tokyo.timeZone,
+            year: 2026,
+            month: 7,
+            day: 25
+        ))!
 
-        XCTAssertEqual(
-            policy.restoredRequestDate(
-                after: now,
-                lastSuccess: now,
-                persistedDate: staleLosAngelesMidnight
-            ),
-            now.addingTimeInterval(21 * 60 * 60)
+        let restoredDate = policy.restoredRequestDate(
+            after: now,
+            lastSuccess: nil,
+            persistedDate: staleLosAngelesMidnight
         )
+
+        XCTAssertEqual(restoredDate, nextTokyoMidnight)
+        XCTAssertNotEqual(restoredDate, staleLosAngelesMidnight)
+        XCTAssertNotEqual(restoredDate, now)
     }
 
     func testDebugRestorePreservesFutureEligibility() {

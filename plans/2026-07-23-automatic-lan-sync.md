@@ -54,7 +54,7 @@ Automatic run 必須同時通過：
 - Internet relay、push server、iCloud download、Bluetooth、AirDrop 或 peer-to-peer fallback。
 - 自動 pairing、authentication failure 後自動重新配對，或自動接受另一部 Mac / iPhone。
 - 改成 HTTP(S)、background `URLSession` 或 PhotoKit Background Resource Upload。
-- iOS 26+ `BGContinuedProcessingTask`；本 feature 維持 iOS 17+，manual run 進入背景後的延續可另立計畫。
+- iOS 26+ `BGContinuedProcessingTask`；本 feature 維持 iOS 18+，manual run 進入背景後的延續可另立計畫。
 
 ## 2. 實作前架構與缺口 (Pre-implementation Architecture and Gaps)
 

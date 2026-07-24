@@ -46,9 +46,8 @@ private final class LiveAutomaticSyncRequestScheduler: AutomaticSyncRequestSched
 
 @MainActor
 final class AutomaticSyncScheduler {
-    static let taskIdentifier = "com.bizshuk.iphonesync.ios.scheduled-sync"
-    static let dailyTaskIdentifier = "com.bizshuk.iphonesync.ios.scheduled-sync.daily"
-    static let debugTaskIdentifier = "com.bizshuk.iphonesync.ios.scheduled-sync.debug"
+    static let taskIdentifier = "com.shuk.iphonesync.ios.scheduled-sync"
+    static let debugTaskIdentifier = "com.shuk.iphonesync.ios.scheduled-sync.debug"
 
     private let runtime: IOSSyncRuntime
     private let store: IOSAutomaticSyncStore
@@ -116,7 +115,7 @@ final class AutomaticSyncScheduler {
     func updatePolicy(_ policy: AutomaticSyncPolicy) {
         self.policy = policy
         if isRegistered, store.snapshot.isEnabled {
-            replaceSchedule(reason: .restore)
+            _ = replaceSchedule(reason: .restore)
         }
     }
 
@@ -153,7 +152,16 @@ final class AutomaticSyncScheduler {
             enabled ? "Automatic Sync enabled." : "Automatic Sync disabled."
         )
         if enabled {
-            if !replaceSchedule(reason: .enabled), !store.snapshot.isEnabled {
+            let didSubmit = replaceSchedule(reason: .enabled)
+            if !didSubmit, let nextDate = store.snapshot.nextEligibleAt {
+                emit(
+                    .info,
+                    "Next automatic sync attempt scheduled at "
+                        + Self.formattedAttemptDate(nextDate)
+                        + "."
+                )
+            }
+            if !didSubmit, !store.snapshot.isEnabled {
                 emit(
                     .warning,
                     "Automatic Sync could not be scheduled and has been disabled."
@@ -175,6 +183,10 @@ final class AutomaticSyncScheduler {
             }
         }
         publishSnapshot()
+    }
+
+    private static func formattedAttemptDate(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .standard)
     }
 
     func ensureScheduled() async {
@@ -445,7 +457,7 @@ final class AutomaticSyncScheduler {
             emit(
                 .info,
                 "Submitted a background request eligible after "
-                    + date.formatted(date: .abbreviated, time: .standard)
+                    + Self.formattedAttemptDate(date)
                     + "."
             )
             return true

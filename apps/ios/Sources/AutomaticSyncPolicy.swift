@@ -70,9 +70,6 @@ struct AutomaticSyncPolicy: Sendable {
             if reason == .retry, !hasSuccessfulRunToday(lastSuccess, now: now) {
                 return now.addingTimeInterval(Self.productionRetryInterval)
             }
-            if reason == .restore, !hasSuccessfulRunToday(lastSuccess, now: now) {
-                return now
-            }
             let components = dailyTimeComponents
             return nextDailyRun(after: now, hour: components.hour, minute: components.minute)
         }

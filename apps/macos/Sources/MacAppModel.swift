@@ -33,6 +33,7 @@ final class MacAppModel {
     var destinationURL: URL?
     var pairedPeer: PairedPeer?
     var lastSummary: SyncSummary?
+    var destinationStorageMode: DestinationStorageMode = .albumDate
     var launchAtLogin = false
     var operationLog: [OperationLogEntry] = []
 
@@ -57,6 +58,7 @@ final class MacAppModel {
     private init(settings: MacSettingsStore = MacSettingsStore()) {
         self.settings = settings
         self.bookmarkStore = DestinationBookmarkStore(settings: settings)
+        destinationStorageMode = settings.destinationStorageMode
     }
 
     private var receiverID: String {
@@ -283,6 +285,7 @@ final class MacAppModel {
             try controller?.startReceiver(
                 destination: destinationURL,
                 peer: pairedPeer,
+                storageMode: destinationStorageMode,
                 sourceBindingID: sourceBindingID,
                 displayName: computerName,
                 forceRestart: forceRestart
@@ -327,6 +330,18 @@ final class MacAppModel {
         operationLogBuffer.clear()
         operationLog = operationLogBuffer.entries
         logger.notice("Operation Log cleared")
+    }
+
+    func setDestinationStorageMode(_ mode: DestinationStorageMode) {
+        guard destinationStorageMode != mode else { return }
+        destinationStorageMode = mode
+        settings.destinationStorageMode = mode
+        recordOperation(
+            .info,
+            category: "Destination",
+            message: "Storage mode changed to \(mode.rawValue)."
+        )
+        Task { await startReceiverIfReady(forceRestart: true) }
     }
 
     func copyOperationLog() {

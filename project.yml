@@ -1,10 +1,10 @@
 name: iPhoneSync
 
 options:
-  bundleIdPrefix: com.bizshuk
+  bundleIdPrefix: com.shuk
   deploymentTarget:
     macOS: "14.0"
-    iOS: "17.0"
+    iOS: "18.0"
   xcodeVersion: "26.0"
 
 settings:
@@ -20,15 +20,21 @@ targets:
   iPhoneSyncIOS:
     type: application
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     sources:
       - path: apps/ios/Sources
+      - path: apps/ios/Shared
     info:
       path: apps/ios/Info.plist
       properties:
         CFBundleDisplayName: iPhone Sync
+        CFBundleURLTypes:
+          - CFBundleURLName: com.shuk.iphonesync.sync
+            CFBundleURLSchemes:
+              - iphonesync
         BGTaskSchedulerPermittedIdentifiers:
-          - com.bizshuk.iphonesync.ios.scheduled-sync
+          - com.shuk.iphonesync.ios.scheduled-sync
+          - com.shuk.iphonesync.ios.scheduled-sync.debug
         LSRequiresIPhoneOS: true
         NSBonjourServices:
           - _iphonesync._tcp
@@ -49,15 +55,36 @@ targets:
     dependencies:
       - package: SyncCore
         product: SyncCore
+      - target: iPhoneSyncControlCenter
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.bizshuk.iphonesync.ios
+        PRODUCT_BUNDLE_IDENTIFIER: com.shuk.iphonesync.ios
         PRODUCT_NAME: iPhone Sync
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: apps/ios/iPhoneSync.entitlements
         MARKETING_VERSION: 1.0
         CURRENT_PROJECT_VERSION: 1
         TARGETED_DEVICE_FAMILY: 1
+
+  iPhoneSyncControlCenter:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: apps/ios/ControlCenter
+      - path: apps/ios/Shared
+    info:
+      path: apps/ios/ControlCenter/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.controlcenter-widget-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shuk.iphonesync.ios.controlcenter
+        PRODUCT_NAME: iPhone Sync Control
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: 1.0
+        CURRENT_PROJECT_VERSION: 1
 
   iPhoneSyncMac:
     type: application
@@ -101,14 +128,14 @@ targets:
   iPhoneSyncIOSTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "17.0"
+    deploymentTarget: "18.0"
     sources:
       - path: apps/ios/Tests
     dependencies:
       - target: iPhoneSyncIOS
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.bizshuk.iphonesync.ios.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.shuk.iphonesync.ios.tests
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/iPhone Sync.app/iPhone Sync"
         BUNDLE_LOADER: "$(TEST_HOST)"
@@ -118,6 +145,7 @@ schemes:
     build:
       targets:
         iPhoneSyncIOS: all
+        iPhoneSyncControlCenter: all
         iPhoneSyncIOSTests: [test]
     test:
       targets:

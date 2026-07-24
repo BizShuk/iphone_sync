@@ -25,7 +25,7 @@ extension ResourceDescriptor {
 
 actor TestListener {
     private let listener: NWListener
-    private let queue = DispatchQueue(label: "com.bizshuk.iphonesync.tests.listener")
+    private let queue = DispatchQueue(label: "com.shuk.iphonesync.tests.listener")
     private var portContinuation: CheckedContinuation<NWEndpoint.Port, any Error>?
     private var frameContinuation: CheckedContinuation<SyncFrame, any Error>?
     private var received: SyncFrame?

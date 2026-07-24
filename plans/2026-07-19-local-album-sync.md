@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Deployment floors are iOS 17 and macOS 14.
+- Deployment floors are iOS 18 and macOS 14.
 - The iPhone app runs synchronization only while foregrounded and after `Sync Now`.
 - One selected source-album set, one iPhone and one Mac are active at a time; the set may contain multiple albums.
 - The Mac never deletes or overwrites committed user files.

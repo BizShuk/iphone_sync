@@ -32,6 +32,7 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     private let model = MacAppModel.shared
     private let statusMenu = NSMenu()
     private var statusItem: NSStatusItem?
+    private var statusItemWatchdogTask: Task<Void, Never>?
     private var visibilityObservation: NSKeyValueObservation?
     private var setupWindow: NSWindow?
 
@@ -47,13 +48,28 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         model.stopReceiver()
+        statusItemWatchdogTask?.cancel()
     }
 
     private func configureStatusItem() {
+        createStatusItem()
+        startStatusItemWatchdog()
+
+        logger.notice("AppKit status item created; visible=\(self.statusItem?.isVisible == true, privacy: .public)")
+        model.recordOperation(OperationLogEvent(
+            level: .success,
+            category: "Menu Bar",
+            message: "Created the menu bar status item."
+        ))
+        perform(#selector(logStatusItemDiagnostics), with: nil, afterDelay: 1)
+    }
+
+    private func createStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         item.autosaveName = "com.shuk.iphonesync.statusItem"
         item.menu = statusMenu
         item.isVisible = true
+        item.button?.imagePosition = .imageOnly
         statusItem = item
         visibilityObservation = item.observe(\.isVisible, options: [.new]) { [weak self] _, change in
             guard change.newValue == false else { return }
@@ -61,14 +77,56 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
                 self?.restoreStatusItemVisibility()
             }
         }
+    }
 
-        logger.notice("AppKit status item created; visible=\(item.isVisible, privacy: .public)")
+    private func startStatusItemWatchdog() {
+        statusItemWatchdogTask?.cancel()
+        statusItemWatchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(2))
+                await MainActor.run {
+                    self?.validateStatusItemGeometry()
+                }
+            }
+        }
+    }
+
+    private func validateStatusItemGeometry() {
+        guard let item = statusItem else { return }
+        if !item.isVisible {
+            return
+        }
+        guard let button = item.button else {
+            recreateStatusItem(reason: "missing button")
+            return
+        }
+        let hostFrame = button.window?.frame ?? .zero
+        let hostHeight = hostFrame.height
+        let hostWidth = hostFrame.width
+        if hostHeight <= 0 || hostWidth <= 0 || button.frame.width <= 0 || button.frame.height <= 0 {
+            logger.notice("Status item has invalid frame; hostWidth=\(hostWidth, privacy: .public), hostHeight=\(hostHeight, privacy: .public), buttonWidth=\(button.frame.width, privacy: .public), buttonHeight=\(button.frame.height, privacy: .public)")
+            recreateStatusItem(reason: "invalid host frame")
+        }
+    }
+
+    private func recreateStatusItem(reason: String) {
+        statusItemWatchdogTask?.cancel()
+        statusItemWatchdogTask = nil
+        visibilityObservation?.invalidate()
+        visibilityObservation = nil
+        if let statusItem {
+            NSStatusBar.system.removeStatusItem(statusItem)
+        }
+        statusItem = nil
+
+        logger.warning("Recreating status item. reason=\(reason, privacy: .public)")
         model.recordOperation(OperationLogEvent(
-            level: .success,
+            level: .warning,
             category: "Menu Bar",
-            message: "Created the menu bar status item."
+            message: "Recreated status item due \(reason)."
         ))
-        perform(#selector(logStatusItemDiagnostics), with: nil, afterDelay: 1)
+        createStatusItem()
+        startStatusItemWatchdog()
     }
 
     private func restoreStatusItemVisibility() {

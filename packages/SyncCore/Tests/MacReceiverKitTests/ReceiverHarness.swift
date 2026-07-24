@@ -18,6 +18,7 @@ final class ReceiverHarness {
     let directory: URL
     let container: ModelContainer
     let manifest: ManifestStore
+    let storageMode: DestinationStorageMode
     var writer: DestinationWriter
     let offer: ResourceOffer
     let receivingFolderName = DestinationWriter.receivingFolderName
@@ -26,7 +27,11 @@ final class ReceiverHarness {
     let resourceRelativePath: String
     let expectedRelativePath: String
 
-    init(bytes: Data = Data("photo".utf8), existingBytes: Data? = nil) throws {
+    init(
+        bytes: Data = Data("photo".utf8),
+        existingBytes: Data? = nil,
+        storageMode: DestinationStorageMode = .albumDate
+    ) throws {
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -35,6 +40,7 @@ final class ReceiverHarness {
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         manifest = ManifestStore(container: container, sourceBindingID: "binding-1")
+        self.storageMode = storageMode
         let hash = SHA256.hash(data: bytes).map { String(format: "%02x", $0) }.joined()
         let descriptor = ResourceDescriptor(
             assetLocalIdentifier: "asset-1",
@@ -51,13 +57,22 @@ final class ReceiverHarness {
             descriptor: descriptor
         )
         offer = ResourceOffer(resourceID: resourceID, descriptor: descriptor)
-        resourceRelativePath = try FilenamePolicy.relativePath(
+        let generatedResourcePath = try FilenamePolicy.relativePath(
             originalFilename: descriptor.originalFilename,
             resourceID: resourceID,
             role: descriptor.role,
             creationDate: descriptor.creationDate
         )
-        expectedRelativePath = "\(receivingFolderName)/\(albumFolderName)/\(resourceRelativePath)"
+        resourceRelativePath = Self.normalizedResourcePath(
+            generatedResourcePath,
+            mode: storageMode
+        )
+        expectedRelativePath = Self.expectedRelativePath(
+            receivingFolderName: receivingFolderName,
+            albumFolderName: albumFolderName,
+            resourceRelativePath: resourceRelativePath,
+            mode: storageMode
+        )
         if let existingBytes {
             let existingURL = directory.appendingPathComponent(expectedRelativePath)
             try FileManager.default.createDirectory(
@@ -66,7 +81,11 @@ final class ReceiverHarness {
             )
             try existingBytes.write(to: existingURL)
         }
-        writer = DestinationWriter(destinationRoot: directory, manifest: manifest)
+        writer = DestinationWriter(
+            destinationRoot: directory,
+            manifest: manifest,
+            storageMode: storageMode
+        )
     }
 
     deinit {
@@ -107,7 +126,11 @@ final class ReceiverHarness {
     }
 
     func recover() async throws -> Recovery {
-        writer = DestinationWriter(destinationRoot: directory, manifest: manifest)
+        writer = DestinationWriter(
+            destinationRoot: directory,
+            manifest: manifest,
+            storageMode: storageMode
+        )
         try await prepareWriter()
         let result = try await writer.begin(offer)
         guard case let .transfer(offset, _) = result else {
@@ -119,6 +142,32 @@ final class ReceiverHarness {
             offset: offset,
             fileSize: (attributes[.size] as? NSNumber)?.int64Value ?? -1
         )
+    }
+
+    private static func normalizedResourcePath(
+        _ generatedResourcePath: String,
+        mode: DestinationStorageMode
+    ) -> String {
+        switch mode {
+        case .albumDate:
+            return generatedResourcePath
+        case .albumOnly, .flat:
+            return URL(fileURLWithPath: generatedResourcePath).lastPathComponent
+        }
+    }
+
+    private static func expectedRelativePath(
+        receivingFolderName: String,
+        albumFolderName: String,
+        resourceRelativePath: String,
+        mode: DestinationStorageMode
+    ) -> String {
+        switch mode {
+        case .albumDate, .albumOnly:
+            return "\(receivingFolderName)/\(albumFolderName)/\(resourceRelativePath)"
+        case .flat:
+            return "\(receivingFolderName)/\(resourceRelativePath)"
+        }
     }
 }
 
@@ -133,7 +182,7 @@ actor SyncTestListener {
     private let openingTimeout: Duration
     private let onAccepted: SyncServerSession.AcceptedHandler?
     private let onEvent: SyncServerSession.EventHandler?
-    private let queue = DispatchQueue(label: "com.bizshuk.iphonesync.tests.sync-listener")
+    private let queue = DispatchQueue(label: "com.shuk.iphonesync.tests.sync-listener")
     private var readyContinuation: CheckedContinuation<NWEndpoint.Port, any Error>?
     private var sessions: [Task<Void, Never>] = []
     private var failures: [String] = []

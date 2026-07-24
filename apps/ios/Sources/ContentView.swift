@@ -474,6 +474,7 @@ private struct AutomaticSyncCard: View {
 
             statRow("Last attempt", value: formattedDate(snapshot.lastAttemptAt))
             statRow("Last success", value: formattedDate(snapshot.lastSuccessAt))
+            statRow("Next attempt", value: formattedDate(snapshot.nextEligibleAt))
 
             if mode == .production {
                 HStack(spacing: 8) {

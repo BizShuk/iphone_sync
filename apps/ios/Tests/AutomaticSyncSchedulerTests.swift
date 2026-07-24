@@ -6,6 +6,47 @@ import XCTest
 
 @MainActor
 final class AutomaticSyncSchedulerTests: XCTestCase {
+    func testAppInfoPlistPermitsProductionAndDebugTaskIdentifiers() throws {
+        let permittedIdentifiers = try XCTUnwrap(
+            Bundle.main.object(
+                forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers"
+            ) as? [String]
+        )
+
+        XCTAssertTrue(Set([
+            AutomaticSyncScheduler.taskIdentifier,
+            AutomaticSyncScheduler.debugTaskIdentifier,
+        ]).isSubset(of: Set(permittedIdentifiers)))
+    }
+
+    func testNotPermittedSubmissionDisablesAutomaticSync() async {
+        let now = Date(timeIntervalSince1970: 1_774_300_000)
+        let requestScheduler = FakeAutomaticSyncRequestScheduler(
+            submitError: NSError(
+                domain: "BGTaskSchedulerErrorDomain",
+                code: 3
+            )
+        )
+        let (scheduler, store, defaults) = makeScheduler(
+            now: now,
+            requestScheduler: requestScheduler
+        )
+        defer {
+            defaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+        store.setEnabled(true)
+
+        await scheduler.ensureScheduled()
+
+        XCTAssertFalse(store.snapshot.isEnabled)
+        XCTAssertEqual(store.snapshot.lastOutcome, .failed)
+        XCTAssertNil(store.snapshot.nextEligibleAt)
+        XCTAssertEqual(
+            requestScheduler.cancelledIdentifiers,
+            [AutomaticSyncScheduler.taskIdentifier]
+        )
+    }
+
     func testRestoreKeepsMatchingPendingRequestWithoutResubmitting() async {
         let now = Date(timeIntervalSince1970: 1_774_300_000)
         let eligibleAt = now.addingTimeInterval(4 * 60)
@@ -89,13 +130,69 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         ))
     }
 
+    func testDailyRestoreRecomputesElapsedEligibilityAtNextConfiguredLocalTime() async {
+        var gregorian = Calendar(identifier: .gregorian)
+        gregorian.locale = Locale(identifier: "en_US_POSIX")
+        gregorian.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+
+        let now = gregorian.date(from: DateComponents(
+            timeZone: gregorian.timeZone,
+            year: 2026,
+            month: 7,
+            day: 23,
+            hour: 20,
+            minute: 34
+        ))!
+        let elapsedDate = now.addingTimeInterval(-4 * 60)
+        let expectedNextDailyRun = gregorian.date(from: DateComponents(
+            timeZone: gregorian.timeZone,
+            year: 2026,
+            month: 7,
+            day: 24,
+            hour: 0,
+            minute: 53
+        ))!
+        let requestScheduler = FakeAutomaticSyncRequestScheduler()
+        let (scheduler, store, defaults) = makeScheduler(
+            now: now,
+            requestScheduler: requestScheduler,
+            policy: AutomaticSyncPolicy(
+                cadence: .dailyAtLocalTime(hour: 0, minute: 53),
+                calendar: gregorian
+            )
+        )
+        defer {
+            defaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+        store.setEnabled(true)
+        store.recordNextEligibleAt(elapsedDate)
+
+        await scheduler.ensureScheduled()
+
+        XCTAssertEqual(
+            requestScheduler.submittedRequests,
+            [AutomaticSyncPendingRequest(
+                identifier: AutomaticSyncScheduler.taskIdentifier,
+                earliestBeginDate: expectedNextDailyRun
+            )]
+        )
+        XCTAssertEqual(requestScheduler.cancelledIdentifiers, [])
+        XCTAssertEqual(store.snapshot.nextEligibleAt, expectedNextDailyRun)
+        XCTAssertNotEqual(store.snapshot.nextEligibleAt, elapsedDate)
+        XCTAssertNotEqual(store.snapshot.nextEligibleAt, now)
+    }
+
     private var defaultsSuiteName: String {
         "AutomaticSyncSchedulerTests"
     }
 
     private func makeScheduler(
         now: Date,
-        requestScheduler: FakeAutomaticSyncRequestScheduler
+        requestScheduler: FakeAutomaticSyncRequestScheduler,
+        policy: AutomaticSyncPolicy = AutomaticSyncPolicy(
+            cadence: .tenMinutes,
+            calendar: Calendar(identifier: .gregorian)
+        )
     ) -> (
         scheduler: AutomaticSyncScheduler,
         store: IOSAutomaticSyncStore,
@@ -114,10 +211,7 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         let scheduler = AutomaticSyncScheduler(
             runtime: runtime,
             store: store,
-            policy: AutomaticSyncPolicy(
-                cadence: .tenMinutes,
-                calendar: Calendar(identifier: .gregorian)
-            ),
+            policy: policy,
             requestScheduler: requestScheduler,
             now: { now },
             onSnapshotChange: { _ in },
@@ -133,12 +227,20 @@ private final class FakeAutomaticSyncRequestScheduler:
     private(set) var submittedRequests: [AutomaticSyncPendingRequest] = []
     private(set) var cancelledIdentifiers: [String] = []
     private(set) var pendingRequestSnapshots: [AutomaticSyncPendingRequest]
+    private let submitError: Error?
 
-    init(pendingRequests: [AutomaticSyncPendingRequest] = []) {
+    init(
+        pendingRequests: [AutomaticSyncPendingRequest] = [],
+        submitError: Error? = nil
+    ) {
         pendingRequestSnapshots = pendingRequests
+        self.submitError = submitError
     }
 
     func submit(_ request: BGTaskRequest) throws {
+        if let submitError {
+            throw submitError
+        }
         let snapshot = AutomaticSyncPendingRequest(
             identifier: request.identifier,
             earliestBeginDate: request.earliestBeginDate

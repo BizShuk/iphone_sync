@@ -28,7 +28,7 @@ public struct DiscoveredReceiver: Hashable, Identifiable, Sendable {
 public final class BonjourDiscovery: @unchecked Sendable {
     private let serviceType: String
     private let requireWiFi: Bool
-    private let queue = DispatchQueue(label: "com.bizshuk.iphonesync.discovery")
+    private let queue = DispatchQueue(label: "com.shuk.iphonesync.discovery")
     private let lock = NSLock()
     private var browser: NWBrowser?
 

@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+usage() {
+    cat <<'USAGE'
+Usage:
+  bash scripts/verify.sh [--build-only|--launch-view|--help]
+
+  --build-only   run canonical verification only (build + checks). This is the default.
+  --launch-view  launch the built macOS receiver app for visual check only.
+  --help         show this usage.
+USAGE
+}
+
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_dir"
 
@@ -9,10 +20,37 @@ command -v xcodebuild >/dev/null
 command -v jq >/dev/null
 command -v plutil >/dev/null
 
+case "${1:-}" in
+    --help|-h)
+        usage
+        exit 0
+        ;;
+    --launch-view)
+        bash scripts/run_server.sh --no-build
+        exit 0
+        ;;
+    --build-only|"")
+        [[ $# -le 1 ]] || {
+            printf '錯誤: 僅接受 --build-only、--launch-view 或 --help\n' >&2
+            exit 1
+        }
+        ;;
+    *)
+        printf '錯誤: 不支援參數: %s\n' "$1" >&2
+        usage
+        exit 1
+        ;;
+esac
+
 settings_test_dir="build/verification"
 settings_test_binary="$settings_test_dir/verify-mac-settings"
 mkdir -p "$settings_test_dir"
+synccore_build_dir="$(swift build --package-path packages/SyncCore --show-bin-path)"
+synccore_module_dir="$synccore_build_dir/Modules"
+test -f "$synccore_module_dir/SyncCore.swiftmodule"
 xcrun swiftc \
+    -D VERIFY_STANDALONE \
+    -I "$synccore_module_dir" \
     apps/macos/Sources/MacSettingsStore.swift \
     scripts/verify_mac_settings.swift \
     -o "$settings_test_binary"
@@ -32,7 +70,7 @@ xcodebuild -quiet \
     -scheme iPhoneSyncIOS \
     -destination "platform=iOS Simulator,id=$ios_test_device_id" \
     CODE_SIGNING_ALLOWED=NO \
-    test
+    clean test
 
 xcodebuild -quiet \
     -project iPhoneSync.xcodeproj \
@@ -56,7 +94,8 @@ xcodebuild -quiet \
     CODE_SIGNING_ALLOWED=NO \
     build
 
-test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.0 raw -o - apps/ios/Info.plist)" = "com.bizshuk.iphonesync.ios.scheduled-sync"
+test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.0 raw -o - apps/ios/Info.plist)" = "com.shuk.iphonesync.ios.scheduled-sync"
+test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.1 raw -o - apps/ios/Info.plist)" = "com.shuk.iphonesync.ios.scheduled-sync.debug"
 test "$(plutil -extract UIBackgroundModes.0 raw -o - apps/ios/Info.plist)" = "processing"
 test "$(plutil -extract NSBonjourServices.0 raw -o - apps/ios/Info.plist)" = "_iphonesync._tcp"
 test "$(plutil -extract NSBonjourServices.1 raw -o - apps/ios/Info.plist)" = "_iphonesync-pair._tcp"
@@ -80,7 +119,7 @@ rg -F 'cancelPairing' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
 rg -F 'var selectedAlbums: [PhotoAlbum]' apps/ios/Sources/IOSAppModel.swift >/dev/null
 rg -F '.navigationTitle("Choose Albums")' apps/ios/Sources/AlbumPickerView.swift >/dev/null
 rg -F 'func sync(albums: [PhotoAlbum])' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
-rg -F 'com.bizshuk.iphonesync.ios.scheduled-sync' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
+rg -F 'com.shuk.iphonesync.ios.scheduled-sync' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
 rg -F 'using: .main' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
 rg -F 'execution.worker?.cancel()' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
 rg -F 'execution.forcedOutcome = .budgetExhausted' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
@@ -88,7 +127,9 @@ rg -F 'restoredRequestDate(' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev
 rg -F 'requestScheduler.pendingRequests()' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
 rg -F 'guard !isSceneActive else { return }' apps/ios/Sources/IOSAppModel.swift >/dev/null
 rg -F 'guard isSceneActive else { return }' apps/ios/Sources/IOSAppModel.swift >/dev/null
-rg -F 'nextEligibleAt: self.automaticSync.nextEligibleAt' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'nextEligibleAt: self.automaticDebugSync.nextEligibleAt' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'await automaticProductionScheduler.ensureScheduled()' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'await automaticDebugScheduler.ensureScheduled()' apps/ios/Sources/IOSAppModel.swift >/dev/null
 rg -F 'await activeClient.cancel()' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
 rg -F 'cancelDataRequest' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
 rg -F 'defaultOpeningTimeout: Duration = .seconds(15)' packages/SyncCore/Sources/MacReceiverKit/SyncServerSession.swift >/dev/null

@@ -1,14 +1,14 @@
 # Mac Receiver
 
-`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。第一次開啟 destination chooser 時預設顯示使用者的 `Downloads` 資料夾；使用者確認後 App 保存該 Finder destination。它顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 將已配對 iPhone 的多相簿增量備份寫入 `iPhoneSync/<album-name>/`。
+`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。第一次開啟 destination chooser 時預設顯示使用者的 `Downloads` 資料夾；使用者確認後 App 保存該 Finder destination。它顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 將已配對 iPhone 的多相簿增量備份寫入 `iPhoneSync/` 底下，依儲存模式分派：預設為「相簿日期分類」(`iPhoneSync/<album>/<year>/<month>/`)，或「單一資料匣 (不分類)」(`iPhoneSync/<file>` )。
 
 ## Flow
 
 ```text
 Choose Destination (defaults to Downloads on first use)
-└── Pair iPhone
+    └── Pair iPhone
     └── TLS receiver ready
-        └── iPhoneSync → album folder → partial write → checkpoint → SHA-256 → atomic commit
+        └── iPhoneSync → album folder / date folder or single folder → partial write → checkpoint → SHA-256 → atomic commit
 ```
 
 ## Boundaries
@@ -27,8 +27,8 @@ Choose Destination (defaults to Downloads on first use)
 - `ReceiverController` 一次只接受一個正常同步 connection。
 - `ManifestStore` 以 SwiftData 保存一個 source binding 下的多個 album/folder mappings，以及 album-scoped resource checkpoint。
 - `AlbumFolderPolicy` 保留一般相簿名稱，並將 path separator、控制字元與隱藏 path injection 轉成安全的單一資料夾名稱。
-- `DestinationWriter` 固定先建立或重用 `iPhoneSync` receiving folder，再於其下準備 album folder；任一同名項目若是檔案或 symlink，session 會拒絕並寫入 Operation Log。
-- 已存在的真實 album folder 會安全重用且內容不刪除；不同 album 若同名，依序使用 `名稱 (2)`、`名稱 (3)`，避免合併。
+- `DestinationWriter` 固定先建立或重用 `iPhoneSync` receiving folder；`相簿日期分類` 模式會於其下建立相簿資料夾與日期子資料夾，`單一資料匣 (不分類)` 模式則直接寫入 `iPhoneSync` 根。任一同名項目若是檔案或 symlink，session 會拒絕並寫入 Operation Log。
+- 已存在的真實寫入資料夾會安全重用且內容不刪除；`相簿日期分類` 模式下不同 album 若同名，依序使用 `名稱 (2)`、`名稱 (3)`，避免合併。
 - `DestinationWriter` 不覆寫或刪除 committed user files；完整 SHA-256 驗證後才發布 final file。
 - `Forget iPhone` 只刪除 Keychain trust；`Reset Source` 只建立新的 source binding，兩者都不刪除 Finder 檔案。
 

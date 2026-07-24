@@ -21,6 +21,19 @@ fail() {
     exit 1
 }
 
+is_headless_session() {
+    if [[ "${NO_GUI_OPEN:-0}" == "1" ]]; then
+        return 0
+    fi
+    if [[ -n "${CI:-}" ]]; then
+        return 0
+    fi
+    if [[ -n "${SSH_CONNECTION:-}" || -n "${SSH_CLIENT:-}" || -n "${SSH_TTY:-}" ]]; then
+        return 0
+    fi
+    return 1
+}
+
 require_command() {
     command -v "$1" >/dev/null 2>&1 || fail "缺少 $1"
 }
@@ -78,6 +91,10 @@ launch_app() {
     fi
 
     step "Launching $APP_PATH"
+    if is_headless_session; then
+        printf '\n目前為無 GUI 環境，已跳過 open；已完成建置，請改由本機手動開啟 App。\n'
+        return 0
+    fi
     /usr/bin/open "$APP_PATH" --args --open-setup
     printf '\nMac receiver 已啟動，Setup 視窗應已開啟；第一次選擇 destination 時會預設在 Downloads，請確認後完成配對。\n'
 }

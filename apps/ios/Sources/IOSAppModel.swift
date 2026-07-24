@@ -46,7 +46,7 @@ final class IOSAppModel {
     @ObservationIgnored private let automaticProductionStore: IOSAutomaticSyncStore
     @ObservationIgnored private let debugPolicy: AutomaticSyncPolicy
     @ObservationIgnored private let logger = Logger(
-        subsystem: "com.bizshuk.iphonesync.ios",
+        subsystem: "com.shuk.iphonesync.ios",
         category: "operations"
     )
     @ObservationIgnored private var operationLogBuffer = OperationLogBuffer()
@@ -63,11 +63,19 @@ final class IOSAppModel {
     @ObservationIgnored private let automaticCalendar = Calendar.autoupdatingCurrent
 
     var automaticSchedulerRegistered: Bool {
+#if DEBUG
         automaticDebugSchedulerRegistered && automaticProductionSchedulerRegistered
+#else
+        automaticProductionSchedulerRegistered
+#endif
     }
 
     var automaticRunIsActive: Bool {
+#if DEBUG
         automaticDebugRunIsActive || automaticProductionRunIsActive
+#else
+        automaticProductionRunIsActive
+#endif
     }
 
     init() {
@@ -134,7 +142,7 @@ final class IOSAppModel {
             runtime: runtime,
             store: automaticProductionStore,
             policy: productionPolicy,
-            taskIdentifier: AutomaticSyncScheduler.dailyTaskIdentifier,
+            taskIdentifier: AutomaticSyncScheduler.taskIdentifier,
             isPaired: { [weak self] in self?.pairedPeer != nil },
             onSnapshotChange: { [weak self] snapshot in
                 self?.automaticProductionSync = snapshot
@@ -150,7 +158,9 @@ final class IOSAppModel {
 
     @discardableResult
     func registerAutomaticSyncScheduler() -> Bool {
+#if DEBUG
         automaticDebugSchedulerRegistered = automaticDebugScheduler.register()
+#endif
         automaticProductionSchedulerRegistered = automaticProductionScheduler.register()
         return automaticSchedulerRegistered
     }
@@ -405,6 +415,45 @@ final class IOSAppModel {
         }
     }
 
+    func handleIncomingURL(_ url: URL) {
+        guard let action = parseIncomingURLAction(from: url),
+              action == .syncNow else {
+            return
+        }
+        recordOperation(
+            .info,
+            category: "Widget",
+            message: "Sync Now requested from widget link."
+        )
+        if canSync {
+            syncNow()
+        } else {
+            recordOperation(
+                .warning,
+                category: "Widget",
+                message: "Widget trigger ignored because sync prerequisites are not met."
+            )
+        }
+    }
+
+    private func parseIncomingURLAction(from url: URL) -> IncomingURLAction? {
+        guard url.scheme == "iphonesync" else {
+            return nil
+        }
+        let host = url.host?.lowercased()
+        let path = url.path
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if host == "sync-now" || path == "sync-now" {
+            return .syncNow
+        }
+        return nil
+    }
+
+    private enum IncomingURLAction: Equatable {
+        case syncNow
+    }
+
     func setAutomaticSyncEnabled(_ enabled: Bool, mode: AutomaticSyncMode) {
         switch mode {
         case .debug:
@@ -469,7 +518,9 @@ final class IOSAppModel {
         automaticProductionSync = automaticProductionStore.snapshot
         Task {
             await ensureAutomaticSchedulersScheduled()
+#if DEBUG
             startDebugForegroundAutomaticTestingIfNeeded()
+#endif
         }
     }
 
@@ -594,7 +645,9 @@ final class IOSAppModel {
     }
 
     private func ensureAutomaticSchedulersScheduled() async {
+#if DEBUG
         await automaticDebugScheduler.ensureScheduled()
+#endif
         await automaticProductionScheduler.ensureScheduled()
     }
 

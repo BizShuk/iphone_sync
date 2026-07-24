@@ -319,4 +319,85 @@ func legacyCommittedFileIsAdoptedWithoutMoving() async throws {
     #expect(!FileManager.default.fileExists(atPath: harness.existingURL.path))
 }
 
+@Test
+func albumOnlyModeWritesFileDirectlyUnderAlbum() async throws {
+    let bytes = Data("photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes, storageMode: .albumOnly)
+    try await harness.prepareWriter()
+
+    let result = try await harness.writer.begin(harness.offer)
+    #expect(result == .transfer(offset: 0, relativePath: harness.expectedRelativePath))
+
+    let albumRoot = harness.receivingRootURL.appendingPathComponent(
+        harness.albumFolderName,
+        isDirectory: true
+    )
+    var isDirectory: ObjCBool = false
+    #expect(FileManager.default.fileExists(atPath: albumRoot.path, isDirectory: &isDirectory))
+    #expect(isDirectory.boolValue)
+
+    try await harness.writer.append(bytes, offset: 0)
+    let committed = try await harness.writer.commit(expectedHash: harness.offer.descriptor.contentHash)
+    #expect(committed == harness.existingURL)
+    #expect(try Data(contentsOf: committed) == bytes)
+    #expect(committed.path.hasPrefix(albumRoot.path + "/"))
+    #expect(!committed.path.contains("/2025/"))
+}
+
+@Test
+func flatModeWritesFileDirectlyUnderReceivingFolder() async throws {
+    let bytes = Data("photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes, storageMode: .flat)
+    try await harness.prepareWriter()
+
+    let result = try await harness.writer.begin(harness.offer)
+    #expect(result == .transfer(offset: 0, relativePath: harness.expectedRelativePath))
+
+    let albumRoot = harness.receivingRootURL.appendingPathComponent(
+        harness.albumFolderName,
+        isDirectory: true
+    )
+    var isDirectory: ObjCBool = false
+    #expect(
+        !FileManager.default.fileExists(atPath: albumRoot.path, isDirectory: &isDirectory)
+    )
+
+    try await harness.writer.append(bytes, offset: 0)
+    let committed = try await harness.writer.commit(expectedHash: harness.offer.descriptor.contentHash)
+    #expect(committed == harness.existingURL)
+    #expect(try Data(contentsOf: committed) == bytes)
+    #expect(committed.deletingLastPathComponent().standardizedFileURL
+        == harness.receivingRootURL.standardizedFileURL)
+}
+
+@Test
+func flatModeAdoptsLegacyRootPartialWithoutAlbumFolder() async throws {
+    let bytes = Data("photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes, storageMode: .flat)
+    try await harness.acceptAlbum()
+    _ = try await harness.manifest.decision(for: harness.offer)
+    try await harness.manifest.recordCheckpoint(
+        resourceID: harness.offer.resourceID,
+        offset: 3
+    )
+    let legacyPartialURL = harness.directory
+        .appendingPathComponent(harness.resourceRelativePath)
+        .appendingPathExtension("partial")
+    try FileManager.default.createDirectory(
+        at: legacyPartialURL.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+    )
+    try Data(bytes.prefix(3)).write(to: legacyPartialURL)
+
+    try await harness.prepareWriter()
+    #expect(
+        try await harness.writer.begin(harness.offer)
+            == .transfer(offset: 3, relativePath: harness.expectedRelativePath)
+    )
+    let activePartial = try await harness.writer.activePartialURL()
+    #expect(activePartial.path.hasPrefix(harness.receivingRootURL.path + "/"))
+    #expect(!FileManager.default.fileExists(atPath: legacyPartialURL.path))
+    #expect(try Data(contentsOf: activePartial) == Data(bytes.prefix(3)))
+}
+
 }

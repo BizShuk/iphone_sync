@@ -100,7 +100,7 @@ actor IOSSyncCoordinator {
         let client = PairingClient(deviceID: deviceID, requireWiFi: true)
         pendingPairing = try await client.begin(
             endpoint: receiver.endpoint,
-            deviceName: UIDevice.current.name
+            deviceName: resolvedDeviceName()
         )
         await emit(
             .info,
@@ -141,10 +141,16 @@ actor IOSSyncCoordinator {
             let client = PairingClient(deviceID: deviceID, requireWiFi: true)
             pendingPairing = try await client.begin(
                 endpoint: endpoint,
-                deviceName: UIDevice.current.name
+                deviceName: await resolvedDeviceName()
             )
         }
         return try await confirmPairing(code: code)
+    }
+
+    @MainActor
+    private func resolvedDeviceName() -> String {
+        let trimmedName = UIDevice.current.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmedName.isEmpty ? "iPhone" : trimmedName
     }
 
     func forgetPeer() throws {

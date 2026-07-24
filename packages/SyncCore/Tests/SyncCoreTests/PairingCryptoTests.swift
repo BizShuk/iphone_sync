@@ -63,7 +63,7 @@ func transcriptTamperingChangesDerivedSecret() throws {
 @Test
 func pairedPeerKeychainRoundTrips() throws {
     let account = "test-\(UUID().uuidString)"
-    let store = KeychainSecretStore(service: "com.bizshuk.iphonesync.tests")
+    let store = KeychainSecretStore(service: "com.shuk.iphonesync.tests")
     defer { try? store.delete(account: account) }
     let peer = PairedPeer(
         id: "mac-1",

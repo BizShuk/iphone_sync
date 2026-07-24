@@ -4,7 +4,7 @@ import Security
 public struct KeychainSecretStore: Sendable {
     public let service: String
 
-    public init(service: String = "com.bizshuk.iphonesync") {
+    public init(service: String = "com.shuk.iphonesync") {
         self.service = service
     }
 

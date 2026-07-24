@@ -125,7 +125,7 @@ public actor PendingPairing {
             channel.cancel()
             return PairedPeer(
                 id: server.deviceID,
-                displayName: server.displayName,
+                displayName: server.displayName.nonEmptyFallback("Mac"),
                 pskIdentity: secret.pskIdentity,
                 psk: secret.psk,
                 sourceBindingID: nil

@@ -6,7 +6,7 @@ MVP、`automatic-lan-sync` 與兩端 `operation-log-panels` 已實作：包含�
 
 ## Automatic LAN Sync
 
-使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Debug background request 最早為 `now + 10 minutes`，Release request 最早為 next local midnight；兩者均為 `earliestBeginDate`，不是準時或必定執行保證。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；Debug 保存的 eligibility 已到期時不會因重進 App 再延後 10 分鐘，foreground test 會立即嘗試。`Sync Now` 保留為 immediate fallback。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
+使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Release request 最早為使用者設定的每日本地時間（預設 local midnight）；Debug 額外暴露獨立的 10 分鐘測試 scheduler，僅在 `#if DEBUG` 建置下註冊與 reconcile。兩者均為 `earliestBeginDate`，不是準時或必定執行保證。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；Release restore 重新計算 desired eligibility 時一律使用下一個使用者設定的本地時間，不因本日尚未成功而改用 now；Debug 保存的 eligibility 已到期時不會因重進 App 再延後 10 分鐘，foreground test 會立即嘗試。`Sync Now` 保留為 immediate fallback。`BGTaskSchedulerPermittedIdentifiers` 同時包含 production 與 debug identifier，防止 iOS 以 `BGTaskSchedulerErrorDomain` code `3` 拒絕尚未宣告的 identifier 並回滾使用者意圖。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
 
 ## Product Invariants
 
@@ -35,6 +35,9 @@ iphone_sync/
 ├── apps/
 │   ├── ios/
 │   │   ├── Sources/             # PhotoKit、pairing、runtime、BG scheduler、operation panel、sender UI
+│   │   ├── Sources/Intents/     # AppShortcutsProvider for the 1x1 Sync Now shortcut
+│   │   ├── Shared/              # SyncNowIntent + Darwin bridge shared with the extension
+│   │   ├── ControlCenter/       # iPhoneSyncControlCenter control widget extension
 │   │   ├── Tests/               # automatic schedule policy、persistent state、runtime tests
 │   │   ├── Info.plist           # generated from project.yml
 │   │   └── iPhoneSync.entitlements
@@ -73,7 +76,7 @@ MacReceiverKit ─────────→ SyncCore
 
 | Concern | Choice |
 |---|---|
-| Platforms | iOS 17+、macOS 14+、Swift 6 |
+| Platforms | iOS 18+、macOS 14+、Swift 6（App targets 與 `SyncCore` package floors 一致） |
 | Discovery | Bonjour `_iphonesync._tcp` |
 | Transport | Network.framework TCP + TLS 1.2 PSK (`TLS_PSK_WITH_AES_128_GCM_SHA256`) |
 | Pairing | Temporary TCP + ephemeral Curve25519 + six-digit SAS |
@@ -82,7 +85,7 @@ MacReceiverKit ─────────→ SyncCore
 | Chunk size | 1 MiB |
 | Integrity | SHA-256 |
 | Resume checkpoint | 16 MiB durable checkpoint |
-| Automatic schedule | iOS `BGProcessingTask`; Debug earliest `+10 minutes`、Release earliest next local midnight；pending request idempotent reconcile |
+| Automatic schedule | iOS `BGProcessingTask`; Release earliest 由使用者設定的每日本地時間（預設 local midnight），Debug earliest `+10 minutes` 並由獨立 identifier 註冊；pending request idempotent reconcile |
 | Automatic runtime | `IOSSyncRuntime` single-flight + 8-minute application budget + PhotoKit/discovery/active-client hard cancellation |
 | Manifest | SwiftData in Mac App container |
 | Destination | User-selected Finder root + fixed `iPhoneSync` folder + same-name album subfolder with security-scoped bookmark |

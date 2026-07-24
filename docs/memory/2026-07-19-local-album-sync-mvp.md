@@ -6,7 +6,7 @@ Status: `Automated MVP verification complete; live-device acceptance pending`
 
 ## Delivered
 
-- 原生 iOS 17+ foreground sender 與 macOS 14+ menu-bar receiver。
+- 原生 iOS 18+ foreground sender 與 macOS 14+ menu-bar receiver。
 - 一個 Photos 相簿 → 一個 Finder destination 的單向增量備份。
 - PhotoKit local-only original resource staging，固定 `isNetworkAccessAllowed = false`。
 - Bonjour discovery、ephemeral Curve25519 + six-digit SAS pairing、Keychain trust 與 TLS 1.2 static PSK normal transport。

@@ -20,13 +20,13 @@ iPhone UI 顯示 opt-in、cadence、`Background App Refresh`、last attempt/succ
 
 | Build / trigger | Policy | Contract |
 |---|---|---|
-| Debug background | `earliestBeginDate = now + 10 minutes` | iOS 不會更早啟動；可能晚很多，也可能不啟動。 |
+| Debug background | `earliestBeginDate = now + 10 minutes`，identifier `com.bizshuk.iphonesync.ios.scheduled-sync.debug` | iOS 不會更早啟動；可能晚很多，也可能不啟動。 |
 | Debug foreground test | App active 時依 persisted `Eligible after` 檢查 | 未到期只等待剩餘時間；回到前景時若已到期便立即用相同 automatic runtime 驗證 flow。 |
-| Release success / normal request | `earliestBeginDate = next local midnight` | 午夜只是 earliest target，不是準時執行保證。 |
+| Release success / normal request | `earliestBeginDate = 使用者設定的 local time`（預設 `local midnight`），identifier `com.bizshuk.iphonesync.ios.scheduled-sync` | 設定時間只是 earliest target，不是準時執行保證。 |
 | Release retryable outcome | `earliestBeginDate = now + 1 hour` | paired Mac 不可達、網路中斷、already running 或 budget exhausted 時，當日尚未成功才重試。 |
 | Manual | `Sync Now` | 前景立即嘗試，不受 background scheduler 時機控制。 |
 
-`BGProcessingTask` 是 best-effort system scheduling，不是 cron。`earliestBeginDate` 只限制「不得早於」，actual launch 與 runtime duration 由 iOS 決定。Release 以 `Calendar.autoupdatingCurrent` 計算 local day；同一 local day 已成功後，後續 automatic request 只排到下一個 local midnight。
+`BGProcessingTask` 是 best-effort system scheduling，不是 cron。`earliestBeginDate` 只限制「不得早於」，actual launch 與 runtime duration 由 iOS 決定。Release 以 `Calendar.autoupdatingCurrent` 計算 local day；同一 local day 已成功後，後續 automatic request 只排到下個使用者設定的時間。`BGTaskSchedulerPermittedIdentifiers` 必須同時包含 production 與 debug identifier；缺少時 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕 submit，scheduler 立即回滾 enabled intent 並 emit error，使用者切換會被視為「沒成功」。Debug scheduler 只在 `#if DEBUG` build 註冊與 reconcile，Release build 不暴露前景 10 分鐘測試迴圈。
 
 Startup 與 scene transition 以 lifecycle edge 為準，不因同一 active/background state 的重複 callback 再 reconcile。Reconcile 會先查詢同 identifier 的 pending request；既有 request 的 eligibility 相同或更早時直接保留，只有新目標更早時才 replacement submit。Debug persisted eligibility 即使已過期也保持原值，讓 system request 立即 eligible，且 App 回到前景時立即執行 foreground test，而不是重新計算 `now + 10 minutes`。
 
@@ -64,7 +64,7 @@ flowchart TD
 |---|---|
 | `AutomaticSyncPolicy` | Debug 10-minute、Release local-midnight、retry 與 bounded-run policy。 |
 | `IOSAutomaticSyncStore` | 保存 enabled intent、last attempt/success/outcome/message 與 next eligible time。 |
-| `AutomaticSyncScheduler` | 由 `iPhoneSyncApp.init()` 在 `MainActor` / main queue 註冊 `com.bizshuk.iphonesync.ios.scheduled-sync`，以 pending-request reconcile 與 execution gate 管理 idempotent request、expiration、single completion 與 reschedule。 |
+| `AutomaticSyncScheduler` | 由 `iPhoneSyncApp.init()` 在 `MainActor` / main queue 註冊 production identifier `com.bizshuk.iphonesync.ios.scheduled-sync` 與（`#if DEBUG` only）debug identifier `com.bizshuk.iphonesync.ios.scheduled-sync.debug`，以 pending-request reconcile 與 execution gate 管理 idempotent request、expiration、single completion 與 reschedule。 |
 | `IOSSyncRuntime` | Manual / automatic 共用 prerequisite reload、single-flight、run outcome、budget 與 cancellation。 |
 | `IOSSyncCoordinator` | 執行 PhotoKit → Bonjour → TLS → wire protocol；automatic 使用 bounded single discovery，manual 保留 foreground retries。 |
 | `ReceiverController` | 被動接收、listener retry、pairing-close restore、opening deadline 與 transfer session。 |

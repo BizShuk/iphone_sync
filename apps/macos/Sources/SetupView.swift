@@ -85,6 +85,26 @@ struct SetupView: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
 
+            HStack(spacing: 10) {
+                Text("Storage Mode")
+                    .font(Tokens.Typography.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Picker("Storage Mode", selection: Binding(
+                    get: { model.destinationStorageMode },
+                    set: { model.setDestinationStorageMode($0) }
+                )) {
+                    Text(storageModeTitle(.albumDate))
+                        .tag(DestinationStorageMode.albumDate)
+                    Text(storageModeTitle(.albumOnly))
+                        .tag(DestinationStorageMode.albumOnly)
+                    Text(storageModeTitle(.flat))
+                        .tag(DestinationStorageMode.flat)
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+
             if let info = pairingInfo {
                 PairingCodeDisplay(
                     code: info.code,
@@ -247,6 +267,17 @@ struct SetupView: View {
             .tracking(0.5)
             .textCase(.uppercase)
             .foregroundStyle(.secondary)
+    }
+
+    private func storageModeTitle(_ mode: DestinationStorageMode) -> String {
+        switch mode {
+        case .albumDate:
+            "Album / Year / Month"
+        case .albumOnly:
+            "Album"
+        case .flat:
+            "Single Folder"
+        }
     }
 }
 

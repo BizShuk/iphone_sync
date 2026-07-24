@@ -61,12 +61,18 @@ public actor DestinationWriter {
 
     private let destinationRoot: URL
     private let manifest: ManifestStore
+    private let storageMode: DestinationStorageMode
     private var albumFolderName: String?
     private var active: ActiveTransfer?
 
-    public init(destinationRoot: URL, manifest: ManifestStore) {
+    public init(
+        destinationRoot: URL,
+        manifest: ManifestStore,
+        storageMode: DestinationStorageMode = .albumDate
+    ) {
         self.destinationRoot = destinationRoot.standardizedFileURL
         self.manifest = manifest
+        self.storageMode = storageMode
     }
 
     @discardableResult
@@ -79,13 +85,15 @@ public actor DestinationWriter {
         try prepareSafeDirectory(receivingRoot, expectedParent: destinationRoot)
 
         let folderName = AlbumFolderPolicy.folderName(for: albumName)
-        let folderURL = receivingRoot.appendingPathComponent(folderName, isDirectory: true)
-        let standardizedParent = folderURL.deletingLastPathComponent().standardizedFileURL
-        guard standardizedParent == receivingRoot else {
-            throw DestinationWriterError.unsafeDestination
-        }
-        try prepareSafeDirectory(folderURL, expectedParent: receivingRoot)
         albumFolderName = folderName
+        if storageMode != .flat {
+            let folderURL = receivingRoot.appendingPathComponent(folderName, isDirectory: true)
+            let standardizedParent = folderURL.deletingLastPathComponent().standardizedFileURL
+            guard standardizedParent == receivingRoot else {
+                throw DestinationWriterError.unsafeDestination
+            }
+            try prepareSafeDirectory(folderURL, expectedParent: receivingRoot)
+        }
         return folderName
     }
 
@@ -117,22 +125,25 @@ public actor DestinationWriter {
         let partialURL = finalURL.appendingPathExtension("partial")
         try rejectSymbolicLink(at: partialURL)
         if !FileManager.default.fileExists(atPath: partialURL.path) {
-            guard let albumFolderName else {
-                throw DestinationWriterError.albumNotPrepared
-            }
-            let previousAlbumPartialURL = destinationRoot
-                .appendingPathComponent(albumFolderName, isDirectory: true)
-                .appendingPathComponent(resolution.resourceRelativePath)
-                .appendingPathExtension("partial")
+            let previousAlbumPartialURL: URL? = {
+                guard storageMode != .flat, let albumFolderName else { return nil }
+                return destinationRoot
+                    .appendingPathComponent(albumFolderName, isDirectory: true)
+                    .appendingPathComponent(resolution.resourceRelativePath)
+                    .appendingPathExtension("partial")
+            }()
             let legacyPartialURL = destinationRoot
                 .appendingPathComponent(resolution.resourceRelativePath)
                 .appendingPathExtension("partial")
-            try rejectSymbolicLink(at: previousAlbumPartialURL)
+            if let previousAlbumPartialURL {
+                try rejectSymbolicLink(at: previousAlbumPartialURL)
+            }
             try rejectSymbolicLink(at: legacyPartialURL)
-            if FileManager.default.fileExists(atPath: previousAlbumPartialURL.path) {
+            if let previousAlbumPartialURL,
+               FileManager.default.fileExists(atPath: previousAlbumPartialURL.path) {
                 try FileManager.default.moveItem(at: previousAlbumPartialURL, to: partialURL)
             } else if try await manifest.activeAlbumUsesLegacyPaths(),
-               FileManager.default.fileExists(atPath: legacyPartialURL.path) {
+                      FileManager.default.fileExists(atPath: legacyPartialURL.path) {
                 try FileManager.default.moveItem(at: legacyPartialURL, to: partialURL)
             } else {
                 guard FileManager.default.createFile(atPath: partialURL.path, contents: nil) else {
@@ -261,13 +272,14 @@ public actor DestinationWriter {
         for offer: ResourceOffer
     ) async throws -> PathResolution {
         for prefixLength in [8, 16, 64] {
-            let resourceRelativePath = try FilenamePolicy.relativePath(
+            let generatedResourcePath = try FilenamePolicy.relativePath(
                 originalFilename: offer.descriptor.originalFilename,
                 resourceID: offer.resourceID,
                 role: offer.descriptor.role,
                 creationDate: offer.descriptor.creationDate,
                 resourceIDPrefixLength: prefixLength
             )
+            let resourceRelativePath = normalizedResourceRelativePath(from: generatedResourcePath)
             let relativePath = try albumRelativePath(for: resourceRelativePath)
             let url = destinationRoot.appendingPathComponent(relativePath)
             if !FileManager.default.fileExists(atPath: url.path) {
@@ -293,7 +305,10 @@ public actor DestinationWriter {
             creationDate: offer.descriptor.creationDate,
             resourceIDPrefixLength: 64
         )
-        let fullURL = URL(fileURLWithPath: fullResourcePath)
+        let normalizedFullResourcePath = normalizedResourceRelativePath(
+            from: fullResourcePath
+        )
+        let fullURL = URL(fileURLWithPath: normalizedFullResourcePath)
         let fileExtension = fullURL.pathExtension
         let base = fullURL.deletingPathExtension().path
         for ordinal in 2...10_000 {
@@ -321,10 +336,24 @@ public actor DestinationWriter {
     }
 
     private func albumRelativePath(for resourceRelativePath: String) throws -> String {
-        guard let albumFolderName else {
-            throw DestinationWriterError.albumNotPrepared
+        switch storageMode {
+        case .albumDate, .albumOnly:
+            guard let albumFolderName else {
+                throw DestinationWriterError.albumNotPrepared
+            }
+            return "\(Self.receivingFolderName)/\(albumFolderName)/\(resourceRelativePath)"
+        case .flat:
+            return "\(Self.receivingFolderName)/\(resourceRelativePath)"
         }
-        return "\(Self.receivingFolderName)/\(albumFolderName)/\(resourceRelativePath)"
+    }
+
+    private func normalizedResourceRelativePath(from generatedResourcePath: String) -> String {
+        switch storageMode {
+        case .albumDate:
+            return generatedResourcePath
+        case .albumOnly, .flat:
+            return URL(fileURLWithPath: generatedResourcePath).lastPathComponent
+        }
     }
 
     private func prepareSafeDirectory(_ url: URL, expectedParent: URL) throws {

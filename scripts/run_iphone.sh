@@ -6,7 +6,7 @@ cd "$ROOT"
 
 PROJECT="${PROJECT:-iPhoneSync.xcodeproj}"
 SCHEME="${SCHEME:-iPhoneSyncIOS}"
-BUNDLE_ID="${BUNDLE_ID:-com.bizshuk.iphonesync.ios}"
+BUNDLE_ID="${BUNDLE_ID:-com.shuk.iphonesync.ios}"
 APP_NAME="${APP_NAME:-iPhone Sync}"
 CONFIGURATION="${CONFIGURATION:-Debug}"
 BUILD_ROOT="${BUILD_ROOT:-build/iphone}"

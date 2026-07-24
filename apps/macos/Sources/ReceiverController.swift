@@ -15,6 +15,7 @@ final class ReceiverController {
     private struct ReceiverConfiguration: Equatable {
         let destination: URL
         let peer: PairedPeer
+        let storageMode: DestinationStorageMode
         let sourceBindingID: String
         let displayName: String
     }
@@ -149,6 +150,7 @@ final class ReceiverController {
     func startReceiver(
         destination: URL,
         peer: PairedPeer,
+        storageMode: DestinationStorageMode,
         sourceBindingID: String,
         displayName: String,
         forceRestart: Bool = false
@@ -156,6 +158,7 @@ final class ReceiverController {
         let configuration = ReceiverConfiguration(
             destination: destination,
             peer: peer,
+            storageMode: storageMode,
             sourceBindingID: sourceBindingID,
             displayName: displayName
         )
@@ -300,7 +303,8 @@ final class ReceiverController {
                 self.accept(
                     connection,
                     destination: configuration.destination,
-                    sourceBindingID: configuration.sourceBindingID
+                    sourceBindingID: configuration.sourceBindingID,
+                    storageMode: configuration.storageMode
                 )
             }
         }
@@ -479,7 +483,8 @@ final class ReceiverController {
     private func accept(
         _ nwConnection: NWConnection,
         destination: URL,
-        sourceBindingID: String
+        sourceBindingID: String,
+        storageMode: DestinationStorageMode
     ) {
         guard activeConnection == nil else {
             emit(
@@ -513,7 +518,8 @@ final class ReceiverController {
                 )
                 let writer = DestinationWriter(
                     destinationRoot: destination,
-                    manifest: manifest
+                    manifest: manifest,
+                    storageMode: storageMode
                 )
                 let session = SyncServerSession(manifest: manifest, writer: writer)
                 let summary = try await session.run(

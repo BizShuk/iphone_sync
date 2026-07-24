@@ -26,7 +26,7 @@ public actor PairingServer {
     private let serviceType: String?
     private let requestedPort: NWEndpoint.Port
     private let requireWiFi: Bool
-    private let queue = DispatchQueue(label: "com.bizshuk.iphonesync.pairing-listener")
+    private let queue = DispatchQueue(label: "com.shuk.iphonesync.pairing-listener")
 
     private var listener: NWListener?
     private var activeChannel: PairingChannel?
@@ -61,6 +61,7 @@ public actor PairingServer {
         onPaired: @escaping PairedHandler
     ) async throws {
         guard listener == nil else { throw PairingServerError.alreadyOpen }
+        let normalizedDisplayName = displayName.nonEmptyFallback("Mac")
         let parameters = NWParameters.tcp
         parameters.includePeerToPeer = false
         if requireWiFi {
@@ -74,7 +75,7 @@ public actor PairingServer {
                 type: serviceType,
                 txtRecord: NWTXTRecord([
                     "id": receiverID,
-                    "name": displayName,
+                    "name": normalizedDisplayName,
                     "pairing": "1",
                     "version": String(SyncConstants.protocolVersion),
                 ])
@@ -83,7 +84,7 @@ public actor PairingServer {
         self.listener = listener
         self.onCode = onCode
         self.onPaired = onPaired
-        self.displayName = displayName
+        self.displayName = normalizedDisplayName
         let expiry = Date().addingTimeInterval(window)
         self.expiry = expiry
 
@@ -201,7 +202,7 @@ public actor PairingServer {
         try await channel.send(.accepted(proof: secret.serverProof))
         return PairedPeer(
             id: clientHello.deviceID,
-            displayName: clientHello.displayName,
+            displayName: clientHello.displayName.nonEmptyFallback("iPhone"),
             pskIdentity: secret.pskIdentity,
             psk: secret.psk,
             sourceBindingID: nil

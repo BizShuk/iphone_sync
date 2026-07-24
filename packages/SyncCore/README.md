@@ -1,13 +1,13 @@
 # SyncCore
 
-此 Swift 6 package 提供 iOS sender 與 macOS receiver 共用的純區域網路同步元件，deployment floors 為 iOS 17 與 macOS 14，沒有第三方 runtime dependency。
+此 Swift 6 package 提供 iOS sender 與 macOS receiver 共用的純區域網路同步元件，deployment floors 為 iOS 18 與 macOS 14，沒有第三方 runtime dependency。
 
 ## Products
 
 | Product | Responsibility |
 |---|---|
 | `SyncCore` | wire contracts、frame codec、identity、SHA-256、pairing、Keychain、Bonjour、TLS 1.2 PSK、sync client、bounded operation log values |
-| `MacReceiverKit` | SwiftData manifest、multi-album/folder mapping、album-scoped checkpoint、fixed `iPhoneSync` receiving folder、safe album folder、crash-safe destination writer、sync server session events |
+| `MacReceiverKit` | SwiftData manifest、multi-album/folder mapping、album-scoped checkpoint、`iPhoneSync` receiving folder、safe album/single-root layout、crash-safe destination writer、sync server session events |
 
 依賴方向固定為：
 

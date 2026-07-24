@@ -56,7 +56,7 @@ final class PairingChannel: @unchecked Sendable {
 
     init(
         _ connection: NWConnection,
-        queue: DispatchQueue = DispatchQueue(label: "com.bizshuk.iphonesync.pairing")
+        queue: DispatchQueue = DispatchQueue(label: "com.shuk.iphonesync.pairing")
     ) {
         self.connection = connection
         self.queue = queue
@@ -199,5 +199,12 @@ final class PairingChannel: @unchecked Sendable {
             }
         }
         return result
+    }
+}
+
+extension String {
+    func nonEmptyFallback(_ fallback: String) -> String {
+        let normalized = trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.isEmpty ? fallback : normalized
     }
 }

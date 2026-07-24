@@ -24,7 +24,7 @@ public final class FramedConnection: @unchecked Sendable {
 
     public init(
         _ connection: NWConnection,
-        queue: DispatchQueue = DispatchQueue(label: "com.bizshuk.iphonesync.connection")
+        queue: DispatchQueue = DispatchQueue(label: "com.shuk.iphonesync.connection")
     ) {
         self.connection = connection
         self.queue = queue

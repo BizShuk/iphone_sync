@@ -1,6 +1,6 @@
 # iPhone Sender
 
-`iPhoneSyncIOS` 是 iOS 17+ local-only sender。它取得 Photos Full Access、保存多個相簿選擇、透過 Bonjour 發現 Mac，完成六位數 SAS pairing 後，可由 `Sync Now` 立即同步，或在使用者 opt in 後由 `BGProcessingTask` best-effort 觸發 automatic sync。
+`iPhoneSyncIOS` 是 iOS 18+ local-only sender。它取得 Photos Full Access、保存多個相簿選擇、透過 Bonjour 發現 Mac，完成六位數 SAS pairing 後，可由 `Sync Now` 立即同步，或在使用者 opt in 後由 `BGProcessingTask` best-effort 觸發 automatic sync。另提供 1x1 `Sync Now` shortcut（Shortcuts / Siri，`SyncNowShortcuts`）與 Control Center control widget（`iPhoneSyncControlCenter`）作為快速入口；兩者共用 `SyncNowIntent`，僅在已配對且滿足執行先決條件時觸發。
 
 ## Flow
 
