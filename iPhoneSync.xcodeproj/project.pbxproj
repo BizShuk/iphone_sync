@@ -11,11 +11,13 @@
 		08161D9947C25166CBF36E8C /* DestinationBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */; };
 		14705E941321BCC7439B7176 /* IOSAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54637942FB37B30D6DDA037 /* IOSAppModel.swift */; };
 		1BABAB49069C8C3C1FF91D73 /* SyncCore in Frameworks */ = {isa = PBXBuildFile; productRef = 13221DB4E57B0C6301671B83 /* SyncCore */; };
+		1D8973C4CF7EFAF2A79BD7AC /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B193A0E20AF47EAF17D0517 /* Tokens.swift */; };
 		25F605BD28B200F1A931C970 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9D0BFB486918D0032F13FA /* SetupView.swift */; };
 		38745007609AEDF246BC83FB /* SyncCore in Frameworks */ = {isa = PBXBuildFile; productRef = 970CD9C2774E45204C8E7339 /* SyncCore */; };
 		3C1680049DBCCAFBDA6A4430 /* AutomaticSyncPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 237EA4FA3FEB0CECFBB3E8F5 /* AutomaticSyncPolicyTests.swift */; };
 		3EA07E89F3264C9D0332D839 /* AlbumSelectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C4EBFD847D2226B8B254240 /* AlbumSelectionStore.swift */; };
 		4F62451120455FD67595D8AF /* IOSOperationLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D06ECD013467FA51D89888 /* IOSOperationLogView.swift */; };
+		5A0EB0CDF8B6F72106CF0E30 /* PairingCodeDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 656BFC12A670542F52AB9D08 /* PairingCodeDisplay.swift */; };
 		5B06FEF2913E50C4D253974D /* IOSAutomaticSyncStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A376E673659A68BD224DD1 /* IOSAutomaticSyncStoreTests.swift */; };
 		5B4E87CB6727F1B7C0A06BB9 /* iPhoneSyncApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01BC6E01E23B24D585277779 /* iPhoneSyncApp.swift */; };
 		5E3641F4297CCD3CBF2C9101 /* iPhoneSyncMacApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = EAE9F6A757DFC89BB7C3BBB8 /* iPhoneSyncMacApp.swift */; };
@@ -25,12 +27,15 @@
 		9402BF3D0336124B12229D5F /* ReceiverController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05A2E759012EE230E42C709D /* ReceiverController.swift */; };
 		9A4C90240FBD422EDDA41183 /* IOSSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AB713F064A734FE6F70198F /* IOSSyncCoordinator.swift */; };
 		9B1A6DBEBD34C3F28D5897E2 /* MacReceiverKit in Frameworks */ = {isa = PBXBuildFile; productRef = 9F0AAA22218B401A50B17E95 /* MacReceiverKit */; };
+		9D03C6F03A482A71D9A779BB /* PairingCodeInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = D08E05E73A89D35CFD22FB09 /* PairingCodeInput.swift */; };
 		A7A7FB6B15891217039ED6BB /* AutomaticSyncScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D4AB8D4ADD9F14E1807BDB2 /* AutomaticSyncScheduler.swift */; };
 		AF3E0FC4102E74B4C1888833 /* AlbumPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D13572CE33715446B79AC919 /* AlbumPickerView.swift */; };
 		B279E6D0768C03AE351F11AC /* AutomaticSyncPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01C39935889724CC33603A6D /* AutomaticSyncPolicy.swift */; };
+		B3461D4D8B65A5E9CB469F65 /* MenuBarIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 202B91CBF48641FF84544432 /* MenuBarIcon.swift */; };
 		B887F340F534794EFA293C79 /* MacAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 723C77020AAFB4E5160889CB /* MacAppModel.swift */; };
 		B89B1EDE37F831DC948B52BE /* MacSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B8C0398DC86B9A009C4162D /* MacSettingsStore.swift */; };
 		C9D817F199F603C35A8DABC9 /* IOSSyncRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F10BDF2F8A63B4323F0ADB /* IOSSyncRuntime.swift */; };
+		E315624B911FDB1C5D2051D3 /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D32600BF6280F2B1C4015D /* Tokens.swift */; };
 		F67B0D6C0E0E6F653CC19C78 /* PairingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9D313C3F72A25EB84A76400 /* PairingView.swift */; };
 		FB7D12302B2D408E6477E785 /* PhotoLibrarySource.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3D654D27AB26AF92F3EEC49 /* PhotoLibrarySource.swift */; };
 /* End PBXBuildFile section */
@@ -52,23 +57,28 @@
 		06D06ECD013467FA51D89888 /* IOSOperationLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSOperationLogView.swift; sourceTree = "<group>"; };
 		0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iPhoneSyncMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D4AB8D4ADD9F14E1807BDB2 /* AutomaticSyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticSyncScheduler.swift; sourceTree = "<group>"; };
+		202B91CBF48641FF84544432 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
 		237EA4FA3FEB0CECFBB3E8F5 /* AutomaticSyncPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticSyncPolicyTests.swift; sourceTree = "<group>"; };
 		25F10BDF2F8A63B4323F0ADB /* IOSSyncRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSyncRuntime.swift; sourceTree = "<group>"; };
 		2AB713F064A734FE6F70198F /* IOSSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSyncCoordinator.swift; sourceTree = "<group>"; };
+		2B193A0E20AF47EAF17D0517 /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
 		2B8C0398DC86B9A009C4162D /* MacSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacSettingsStore.swift; sourceTree = "<group>"; };
 		2C9D0BFB486918D0032F13FA /* SetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupView.swift; sourceTree = "<group>"; };
 		2EFDBA133C2F09397AA1A795 /* IOSAutomaticSyncStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAutomaticSyncStore.swift; sourceTree = "<group>"; };
 		30A376E673659A68BD224DD1 /* IOSAutomaticSyncStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAutomaticSyncStoreTests.swift; sourceTree = "<group>"; };
 		4194643AC417E74D1E967C1A /* iPhoneSyncIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = iPhoneSyncIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationBookmarkStore.swift; sourceTree = "<group>"; };
+		656BFC12A670542F52AB9D08 /* PairingCodeDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCodeDisplay.swift; sourceTree = "<group>"; };
 		723C77020AAFB4E5160889CB /* MacAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppModel.swift; sourceTree = "<group>"; };
 		9C4EBFD847D2226B8B254240 /* AlbumSelectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumSelectionStore.swift; sourceTree = "<group>"; };
+		A0D32600BF6280F2B1C4015D /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
 		A31F3933762C43A71D86AD82 /* iPhoneSyncIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iPhoneSyncIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3D654D27AB26AF92F3EEC49 /* PhotoLibrarySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibrarySource.swift; sourceTree = "<group>"; };
 		A4A163BE7F95677C11347DCA /* IOSSyncRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSyncRuntimeTests.swift; sourceTree = "<group>"; };
 		B33A27ED9057A6F22B2262FB /* SyncCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SyncCore; path = packages/SyncCore; sourceTree = SOURCE_ROOT; };
 		C6D9EA22ACD0C4C1DC119661 /* AutomaticSyncSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticSyncSchedulerTests.swift; sourceTree = "<group>"; };
 		D083B54921E71E6F14F50FF2 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		D08E05E73A89D35CFD22FB09 /* PairingCodeInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCodeInput.swift; sourceTree = "<group>"; };
 		D13572CE33715446B79AC919 /* AlbumPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumPickerView.swift; sourceTree = "<group>"; };
 		E54637942FB37B30D6DDA037 /* IOSAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSAppModel.swift; sourceTree = "<group>"; };
 		E9D313C3F72A25EB84A76400 /* PairingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingView.swift; sourceTree = "<group>"; };
@@ -112,9 +122,19 @@
 				01BC6E01E23B24D585277779 /* iPhoneSyncApp.swift */,
 				E9D313C3F72A25EB84A76400 /* PairingView.swift */,
 				A3D654D27AB26AF92F3EEC49 /* PhotoLibrarySource.swift */,
+				2826641687506B24BD93727F /* Theme */,
 			);
 			name = Sources;
 			path = apps/ios/Sources;
+			sourceTree = "<group>";
+		};
+		2826641687506B24BD93727F /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				D08E05E73A89D35CFD22FB09 /* PairingCodeInput.swift */,
+				A0D32600BF6280F2B1C4015D /* Tokens.swift */,
+			);
+			path = Theme;
 			sourceTree = "<group>";
 		};
 		2A3CFCF5B4EEC4BC1195B067 /* Products */ = {
@@ -144,9 +164,20 @@
 				2B8C0398DC86B9A009C4162D /* MacSettingsStore.swift */,
 				05A2E759012EE230E42C709D /* ReceiverController.swift */,
 				2C9D0BFB486918D0032F13FA /* SetupView.swift */,
+				C1700A7995AD372C44ADC8DE /* Theme */,
 			);
 			name = Sources;
 			path = apps/macos/Sources;
+			sourceTree = "<group>";
+		};
+		C1700A7995AD372C44ADC8DE /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				202B91CBF48641FF84544432 /* MenuBarIcon.swift */,
+				656BFC12A670542F52AB9D08 /* PairingCodeDisplay.swift */,
+				2B193A0E20AF47EAF17D0517 /* Tokens.swift */,
+			);
+			path = Theme;
 			sourceTree = "<group>";
 		};
 		D0451B2409C0DA24B81E3305 /* Tests */ = {
@@ -284,8 +315,11 @@
 				08161D9947C25166CBF36E8C /* DestinationBookmarkStore.swift in Sources */,
 				B887F340F534794EFA293C79 /* MacAppModel.swift in Sources */,
 				B89B1EDE37F831DC948B52BE /* MacSettingsStore.swift in Sources */,
+				B3461D4D8B65A5E9CB469F65 /* MenuBarIcon.swift in Sources */,
+				5A0EB0CDF8B6F72106CF0E30 /* PairingCodeDisplay.swift in Sources */,
 				9402BF3D0336124B12229D5F /* ReceiverController.swift in Sources */,
 				25F605BD28B200F1A931C970 /* SetupView.swift in Sources */,
+				1D8973C4CF7EFAF2A79BD7AC /* Tokens.swift in Sources */,
 				5E3641F4297CCD3CBF2C9101 /* iPhoneSyncMacApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -304,8 +338,10 @@
 				4F62451120455FD67595D8AF /* IOSOperationLogView.swift in Sources */,
 				9A4C90240FBD422EDDA41183 /* IOSSyncCoordinator.swift in Sources */,
 				C9D817F199F603C35A8DABC9 /* IOSSyncRuntime.swift in Sources */,
+				9D03C6F03A482A71D9A779BB /* PairingCodeInput.swift in Sources */,
 				F67B0D6C0E0E6F653CC19C78 /* PairingView.swift in Sources */,
 				FB7D12302B2D408E6477E785 /* PhotoLibrarySource.swift in Sources */,
+				E315624B911FDB1C5D2051D3 /* Tokens.swift in Sources */,
 				5B4E87CB6727F1B7C0A06BB9 /* iPhoneSyncApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

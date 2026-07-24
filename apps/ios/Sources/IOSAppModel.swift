@@ -17,6 +17,11 @@ final class IOSAppModel {
         case error(String)
     }
 
+    enum AutomaticSyncMode {
+        case debug
+        case production
+    }
+
     var state: State = .setup
     var authorizationStatus: PHAuthorizationStatus
     var albums: [PhotoAlbum] = []
@@ -29,15 +34,17 @@ final class IOSAppModel {
     var pairingIsPending = false
     var progress: IOSSyncProgress?
     var lastSummary: SyncSummary?
-    var automaticSync: IOSAutomaticSyncSnapshot
-    var automaticRunIsActive = false
-    var automaticSchedulerRegistered = false
+    var automaticDebugSync: IOSAutomaticSyncSnapshot
+    var automaticProductionSync: IOSAutomaticSyncSnapshot
+    var automaticDebugRunIsActive = false
+    var automaticProductionRunIsActive = false
     var operationLog: [OperationLogEntry] = []
 
     @ObservationIgnored private let photoSource: PhotoLibrarySource
     @ObservationIgnored private let albumStore: AlbumSelectionStore
-    @ObservationIgnored private let automaticStore: IOSAutomaticSyncStore
-    @ObservationIgnored private let automaticPolicy: AutomaticSyncPolicy
+    @ObservationIgnored private let automaticDebugStore: IOSAutomaticSyncStore
+    @ObservationIgnored private let automaticProductionStore: IOSAutomaticSyncStore
+    @ObservationIgnored private let debugPolicy: AutomaticSyncPolicy
     @ObservationIgnored private let logger = Logger(
         subsystem: "com.bizshuk.iphonesync.ios",
         category: "operations"
@@ -45,23 +52,45 @@ final class IOSAppModel {
     @ObservationIgnored private var operationLogBuffer = OperationLogBuffer()
     @ObservationIgnored private var coordinator: IOSSyncCoordinator!
     @ObservationIgnored private var runtime: IOSSyncRuntime!
-    @ObservationIgnored private var automaticScheduler: AutomaticSyncScheduler!
+    @ObservationIgnored private var automaticDebugScheduler: AutomaticSyncScheduler!
+    @ObservationIgnored private var automaticProductionScheduler: AutomaticSyncScheduler!
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
-    @ObservationIgnored private var foregroundAutomaticTask: Task<Void, Never>?
+    @ObservationIgnored private var debugForegroundAutomaticTask: Task<Void, Never>?
     @ObservationIgnored private var activeForegroundRunID: UUID?
     @ObservationIgnored private var isSceneActive = false
+    @ObservationIgnored private var automaticDebugSchedulerRegistered = false
+    @ObservationIgnored private var automaticProductionSchedulerRegistered = false
+    @ObservationIgnored private let automaticCalendar = Calendar.autoupdatingCurrent
+
+    var automaticSchedulerRegistered: Bool {
+        automaticDebugSchedulerRegistered && automaticProductionSchedulerRegistered
+    }
+
+    var automaticRunIsActive: Bool {
+        automaticDebugRunIsActive || automaticProductionRunIsActive
+    }
 
     init() {
         let photoSource = PhotoLibrarySource()
         let albumStore = AlbumSelectionStore()
-        let automaticStore = IOSAutomaticSyncStore()
-        let automaticPolicy = AutomaticSyncPolicy.current
+        let automaticDebugStore = IOSAutomaticSyncStore(prefix: "automaticSyncDebug")
+        let automaticProductionStore = IOSAutomaticSyncStore(prefix: "automaticSyncProduction")
+        let debugPolicy = AutomaticSyncPolicy(cadence: .tenMinutes)
+        let productionPolicy = AutomaticSyncPolicy(
+            cadence: .dailyAtLocalTime(
+                hour: automaticProductionStore.dailyHour,
+                minute: automaticProductionStore.dailyMinute
+            )
+        )
         self.photoSource = photoSource
         self.albumStore = albumStore
-        self.automaticStore = automaticStore
-        self.automaticPolicy = automaticPolicy
-        automaticSync = automaticStore.snapshot
+        self.automaticDebugStore = automaticDebugStore
+        self.automaticProductionStore = automaticProductionStore
+        self.debugPolicy = debugPolicy
+        automaticDebugSync = automaticDebugStore.snapshot
+        automaticProductionSync = automaticProductionStore.snapshot
         authorizationStatus = photoSource.authorizationStatus()
+
         let defaults = UserDefaults.standard
         let deviceID: String
         if let existing = defaults.string(forKey: "deviceID") {
@@ -85,15 +114,33 @@ final class IOSAppModel {
             albumStore: albumStore,
             coordinator: coordinator
         )
-        automaticScheduler = AutomaticSyncScheduler(
+        automaticDebugScheduler = AutomaticSyncScheduler(
             runtime: runtime,
-            store: automaticStore,
-            policy: automaticPolicy,
+            store: automaticDebugStore,
+            policy: debugPolicy,
+            taskIdentifier: AutomaticSyncScheduler.debugTaskIdentifier,
+            isPaired: { [weak self] in self?.pairedPeer != nil },
             onSnapshotChange: { [weak self] snapshot in
-                self?.automaticSync = snapshot
+                self?.automaticDebugSync = snapshot
             },
             onRunStateChange: { [weak self] isRunning in
-                self?.automaticRunIsActive = isRunning
+                self?.automaticDebugRunIsActive = isRunning
+            },
+            onOperation: { [weak self] event in
+                self?.recordOperation(event)
+            }
+        )
+        automaticProductionScheduler = AutomaticSyncScheduler(
+            runtime: runtime,
+            store: automaticProductionStore,
+            policy: productionPolicy,
+            taskIdentifier: AutomaticSyncScheduler.dailyTaskIdentifier,
+            isPaired: { [weak self] in self?.pairedPeer != nil },
+            onSnapshotChange: { [weak self] snapshot in
+                self?.automaticProductionSync = snapshot
+            },
+            onRunStateChange: { [weak self] isRunning in
+                self?.automaticProductionRunIsActive = isRunning
             },
             onOperation: { [weak self] event in
                 self?.recordOperation(event)
@@ -103,7 +150,8 @@ final class IOSAppModel {
 
     @discardableResult
     func registerAutomaticSyncScheduler() -> Bool {
-        automaticSchedulerRegistered = automaticScheduler.register()
+        automaticDebugSchedulerRegistered = automaticDebugScheduler.register()
+        automaticProductionSchedulerRegistered = automaticProductionScheduler.register()
         return automaticSchedulerRegistered
     }
 
@@ -120,7 +168,7 @@ final class IOSAppModel {
     }
 
     var canEnableAutomaticSync: Bool {
-        hasFullPhotoAccess && !selectedAlbums.isEmpty && pairedPeer != nil
+        hasFullPhotoAccess && !selectedAlbums.isEmpty
     }
 
     var isAnySyncRunning: Bool {
@@ -137,25 +185,17 @@ final class IOSAppModel {
         }
     }
 
-    var automaticCadenceText: String {
-        switch automaticPolicy.cadence {
-        case .tenMinutes:
-            "Debug: eligible every 10 minutes"
-        case .dailyAtLocalMidnight:
-            "Eligible after local midnight"
-        }
-    }
-
-    var automaticOutcomeText: String {
-        automaticSync.lastMessage ?? "No automatic attempt yet"
-    }
-
     var selectedAlbumsText: String {
         switch selectedAlbums.count {
         case 0: "Not selected"
         case 1: selectedAlbums[0].title
         default: "\(selectedAlbums.count) selected"
         }
+    }
+
+    var automaticProductionSyncDate: Date {
+        get { productionSyncDateFromStoredValues }
+        set { setAutomaticProductionSyncTime(newValue) }
     }
 
     func bootstrap() async {
@@ -172,8 +212,9 @@ final class IOSAppModel {
             state = hasFullPhotoAccess && !selectedAlbums.isEmpty && pairedPeer != nil
                 ? .ready
                 : .setup
-            automaticSync = automaticStore.snapshot
-            await automaticScheduler.ensureScheduled()
+            automaticDebugSync = automaticDebugStore.snapshot
+            automaticProductionSync = automaticProductionStore.snapshot
+            await ensureAutomaticSchedulersScheduled()
             recordOperation(
                 .success,
                 category: "App",
@@ -209,9 +250,7 @@ final class IOSAppModel {
             do {
                 try loadAlbums()
                 state = selectedAlbums.isEmpty || pairedPeer == nil ? .setup : .ready
-                if automaticSync.isEnabled {
-                    await automaticScheduler.ensureScheduled()
-                }
+                refreshAutomaticSchedulers()
             } catch {
                 recordFailure(error.localizedDescription, category: "Photos")
             }
@@ -231,9 +270,7 @@ final class IOSAppModel {
                 : "Selected \(albums.count) album(s): \(albumNames)."
         )
         state = albums.isEmpty || pairedPeer == nil ? .setup : .ready
-        if automaticSync.isEnabled {
-            Task { await automaticScheduler.ensureScheduled() }
-        }
+        refreshAutomaticSchedulers()
     }
 
     func findMac() {
@@ -297,9 +334,7 @@ final class IOSAppModel {
                 pairingError = nil
                 pairingExpiresAt = nil
                 state = selectedAlbums.isEmpty ? .setup : .ready
-                if automaticSync.isEnabled {
-                    await automaticScheduler.ensureScheduled()
-                }
+                refreshAutomaticSchedulers()
             } catch let error as PairingClientError {
                 pairingError = error.localizedDescription
                 if case let .codeMismatch(remainingAttempts) = error,
@@ -370,16 +405,45 @@ final class IOSAppModel {
         }
     }
 
-    func setAutomaticSyncEnabled(_ enabled: Bool) {
-        guard !enabled || canEnableAutomaticSync else { return }
-        automaticScheduler.setEnabled(enabled)
-        automaticSync = automaticStore.snapshot
-        if enabled {
-            startForegroundAutomaticTestingIfNeeded()
-        } else {
-            foregroundAutomaticTask?.cancel()
-            foregroundAutomaticTask = nil
+    func setAutomaticSyncEnabled(_ enabled: Bool, mode: AutomaticSyncMode) {
+        switch mode {
+        case .debug:
+            setAutomaticDebugSyncEnabled(enabled)
+        case .production:
+            setAutomaticProductionSyncEnabled(enabled)
         }
+    }
+
+    private func setAutomaticDebugSyncEnabled(_ enabled: Bool) {
+        automaticDebugScheduler.setEnabled(enabled)
+        automaticDebugSync = automaticDebugStore.snapshot
+        if enabled {
+            startDebugForegroundAutomaticTestingIfNeeded()
+        } else {
+            debugForegroundAutomaticTask?.cancel()
+            debugForegroundAutomaticTask = nil
+        }
+    }
+
+    private func setAutomaticProductionSyncEnabled(_ enabled: Bool) {
+        automaticProductionScheduler.setEnabled(enabled)
+        automaticProductionSync = automaticProductionStore.snapshot
+        refreshAutomaticSchedulers()
+    }
+
+    func setAutomaticProductionSyncTime(_ date: Date) {
+        let components = automaticCalendar.dateComponents([.hour, .minute], from: date)
+        let hour = max(0, min(23, components.hour ?? 0))
+        let minute = max(0, min(59, components.minute ?? 0))
+        automaticProductionStore.setDailySyncTime(hour: hour, minute: minute)
+        automaticProductionScheduler.updatePolicy(
+            AutomaticSyncPolicy(
+                cadence: .dailyAtLocalTime(hour: hour, minute: minute),
+                calendar: automaticCalendar
+            )
+        )
+        automaticProductionSync = automaticProductionStore.snapshot
+        refreshAutomaticSchedulers()
     }
 
     func enteredForeground() {
@@ -401,10 +465,11 @@ final class IOSAppModel {
                 recordFailure(error.localizedDescription, category: "Photos")
             }
         }
-        automaticSync = automaticStore.snapshot
+        automaticDebugSync = automaticDebugStore.snapshot
+        automaticProductionSync = automaticProductionStore.snapshot
         Task {
-            await automaticScheduler.ensureScheduled()
-            startForegroundAutomaticTestingIfNeeded()
+            await ensureAutomaticSchedulersScheduled()
+            startDebugForegroundAutomaticTestingIfNeeded()
         }
     }
 
@@ -416,8 +481,8 @@ final class IOSAppModel {
             category: "App",
             message: "Entered the background."
         )
-        foregroundAutomaticTask?.cancel()
-        foregroundAutomaticTask = nil
+        debugForegroundAutomaticTask?.cancel()
+        debugForegroundAutomaticTask = nil
         if let activeForegroundRunID {
             Task {
                 await runtime.cancel(
@@ -429,22 +494,21 @@ final class IOSAppModel {
         if pairingIsPending {
             cancelPairing()
         }
-        Task { await automaticScheduler.ensureScheduled() }
+        Task { await ensureAutomaticSchedulersScheduled() }
     }
 
-    private func startForegroundAutomaticTestingIfNeeded() {
+    private func startDebugForegroundAutomaticTestingIfNeeded() {
         guard isSceneActive,
-              automaticSync.isEnabled,
-              foregroundAutomaticTask == nil,
-              automaticPolicy.cadence == .tenMinutes else {
+              automaticDebugSync.isEnabled,
+              debugForegroundAutomaticTask == nil else {
             return
         }
-        foregroundAutomaticTask = Task { @MainActor [weak self] in
+        debugForegroundAutomaticTask = Task { @MainActor [weak self] in
             guard let self else { return }
             while !Task.isCancelled {
-                guard let delay = self.automaticPolicy.foregroundTestDelay(
+                guard let delay = debugPolicy.foregroundTestDelay(
                     after: Date(),
-                    nextEligibleAt: self.automaticSync.nextEligibleAt
+                    nextEligibleAt: self.automaticDebugSync.nextEligibleAt
                 ) else {
                     return
                 }
@@ -454,7 +518,7 @@ final class IOSAppModel {
                     return
                 }
                 guard !Task.isCancelled, self.isSceneActive else { return }
-                let outcome = await self.automaticScheduler.runForegroundAutomatic()
+                let outcome = await self.automaticDebugScheduler.runForegroundAutomatic()
                 if let summary = outcome.summary {
                     self.lastSummary = summary
                 }
@@ -478,10 +542,12 @@ final class IOSAppModel {
             do {
                 try await coordinator.forgetPeer()
                 pairedPeer = nil
-                automaticScheduler.setEnabled(false)
-                automaticSync = automaticStore.snapshot
-                foregroundAutomaticTask?.cancel()
-                foregroundAutomaticTask = nil
+                automaticDebugScheduler.setEnabled(false)
+                automaticProductionScheduler.setEnabled(false)
+                automaticDebugSync = automaticDebugStore.snapshot
+                automaticProductionSync = automaticProductionStore.snapshot
+                debugForegroundAutomaticTask?.cancel()
+                debugForegroundAutomaticTask = nil
                 state = .setup
                 recordOperation(
                     .success,
@@ -521,6 +587,24 @@ final class IOSAppModel {
                 "\(event.category, privacy: .public): \(event.message, privacy: .private)"
             )
         }
+    }
+
+    private func refreshAutomaticSchedulers() {
+        Task { await ensureAutomaticSchedulersScheduled() }
+    }
+
+    private func ensureAutomaticSchedulersScheduled() async {
+        await automaticDebugScheduler.ensureScheduled()
+        await automaticProductionScheduler.ensureScheduled()
+    }
+
+    private var productionSyncDateFromStoredValues: Date {
+        automaticCalendar.date(
+            bySettingHour: automaticProductionStore.dailyHour,
+            minute: automaticProductionStore.dailyMinute,
+            second: 0,
+            of: automaticCalendar.startOfDay(for: Date())
+        ) ?? Date()
     }
 
     private func loadAlbums() throws {

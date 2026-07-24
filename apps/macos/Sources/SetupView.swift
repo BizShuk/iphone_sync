@@ -6,105 +6,117 @@ struct SetupView: View {
 
     var body: some View {
         Form {
-            Section("Status") {
-                LabeledContent("Receiver", value: model.statusText)
-                if case let .error(message) = model.state {
-                    Text(message).foregroundStyle(.red)
-                }
-                if case let .pairing(code, expiresAt) = model.state {
-                    LabeledContent("Pairing code") {
-                        Text(code).font(.system(.title2, design: .monospaced))
-                    }
-                    LabeledContent("Expires") {
-                        Text(expiresAt, style: .relative)
-                    }
-                }
-            }
-
-            Section("Backup") {
-                LabeledContent("Destination") {
-                    Text(model.destinationURL?.path(percentEncoded: false) ?? "Not selected")
-                        .lineLimit(2)
-                        .multilineTextAlignment(.trailing)
-                }
-                if model.destinationURL == nil {
-                    Text("The first destination chooser opens in Downloads.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Button("Choose Destination") { model.chooseDestination() }
-                    Button("Pair iPhone") { model.openPairingWindow() }
-                    Button("Reset Source") { model.resetSource() }
-                }
-            }
-
-            Section("Paired iPhone") {
-                if let peer = model.pairedPeer {
-                    LabeledContent("Name", value: peer.displayName)
-                    LabeledContent("Device ID") {
-                        Text(peer.id)
-                            .font(.system(.body, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-                    Text(
-                        "iOS does not expose the hardware serial number to apps. "
-                            + "Device ID is the app-specific identifier exchanged during pairing."
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } else {
-                    Text("Not paired")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
+            statusSection
             if let summary = model.lastSummary {
-                Section("Last Sync") {
-                    LabeledContent("Added", value: String(summary.added))
-                    LabeledContent("Already present", value: String(summary.existing))
-                    LabeledContent("Not on iPhone", value: String(summary.notLocal))
-                    LabeledContent("Failed", value: String(summary.failed))
-                }
+                lastSyncSection(summary: summary)
             }
+            operationLogSection
+        }
+        .formStyle(.grouped)
+        .frame(minWidth: 580, minHeight: 620)
+        .task { await model.bootstrap() }
+    }
 
-            Section("Operation Log") {
-                HStack {
-                    Text(
-                        model.operationLog.isEmpty
-                            ? "No operations recorded"
-                            : "\(model.operationLog.count) recorded"
-                    )
-                    .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Copy All") { model.copyOperationLog() }
-                        .disabled(model.operationLog.isEmpty)
-                    Button("Clear") { model.clearOperationLog() }
-                        .disabled(model.operationLog.isEmpty)
-                }
+    // MARK: Status
 
-                Text(
-                    "Keeps the latest \(OperationLogBuffer.defaultCapacity) semantic "
-                        + "operations for this app run. Secrets, pairing codes, and "
-                        + "full destination paths are not recorded."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-                if !model.operationLog.isEmpty {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(model.operationLog) { entry in
-                                MacOperationLogRow(entry: entry)
-                                Divider()
+    private var statusSection: some View {
+        Section {
+            HStack(spacing: 12) {
+                Image(systemName: "desktopcomputer")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Tokens.Palette.wire)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    if let peer = model.pairedPeer {
+                        HStack(alignment: .center, spacing: 10) {
+                            Image(systemName: "iphone")
+                                .font(.system(size: 22))
+                                .foregroundStyle(Tokens.Palette.wire)
+                                .accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 8) {
+                                    Text("iPhone \(peer.displayName)")
+                                        .font(Tokens.Typography.body.weight(.semibold))
+                                    Image(systemName: pairedIPhoneConnectionIcon)
+                                        .foregroundStyle(pairedIPhoneConnectionTint)
+                                        .font(.system(size: 11))
+                                }
+                                Text(peer.id)
+                                    .font(Tokens.Typography.caption)
+                                    .foregroundStyle(.secondary)
+                                    .textSelection(.enabled)
+                                    .monospaced()
+                                if let statusText = pairedIPhoneStatusText {
+                                    Text(statusText)
+                                        .font(Tokens.Typography.caption)
+                                        .foregroundStyle(pairedIPhoneConnectionTint)
+                                }
+                            }
+                            Spacer()
+                            if model.pairedPeer != nil {
+                                Button("Forget iPhone") {
+                                    model.forgetPhone()
+                                }
+                                .buttonStyle(.bordered)
+                                .tint(Tokens.Palette.alert)
+                                .controlSize(.small)
+                                .help("Forget paired iPhone")
+                                .padding(.leading, 8)
                             }
                         }
+                    } else {
+                        Text("Not paired")
+                            .font(Tokens.Typography.body.weight(.semibold))
+                        Text("Choose a Mac on the same Wi-Fi to begin.")
+                            .font(Tokens.Typography.callout)
+                            .foregroundStyle(.secondary)
                     }
-                    .frame(minHeight: 120, maxHeight: 240)
+                }
+                if model.pairedPeer == nil {
+                    Spacer()
                 }
             }
 
-            Section("System") {
+            HStack {
+                Spacer()
+                Button("Pair iPhone", action: model.openPairingWindow)
+                    .disabled(model.destinationURL == nil)
+                    .buttonStyle(.borderless)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+
+            if let info = pairingInfo {
+                PairingCodeDisplay(
+                    code: info.code,
+                    expiresAt: info.expiresAt,
+                    remainingAttempts: 5,
+                    totalAttempts: 5
+                )
+                .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: Tokens.Layout.cardCornerRadius)
+                        .fill(Tokens.Palette.paper)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Tokens.Layout.cardCornerRadius)
+                        .stroke(Tokens.Palette.signal, lineWidth: 1.5)
+                )
+                .padding(.vertical, 8)
+            }
+
+            if case let .error(message) = model.state {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(Tokens.Palette.alert)
+                    Text(message)
+                        .font(Tokens.Typography.callout)
+                        .foregroundStyle(Tokens.Palette.alert)
+                }
+            }
+        } header: {
+            HStack(spacing: 8) {
+                sectionHeader("Status")
+                Spacer(minLength: 8)
                 Toggle(
                     "Launch at Login",
                     isOn: Binding(
@@ -112,23 +124,129 @@ struct SetupView: View {
                         set: { model.setLaunchAtLogin($0) }
                     )
                 )
-                Button("Forget Paired iPhone", role: .destructive) {
-                    model.forgetPhone()
-                }
-                .disabled(model.pairedPeer == nil)
-                Text(
-                    "If the icon is missing, the menu bar has no free space. "
-                        + "Hide one menu bar item, then hold Command and drag "
-                        + "iPhone Sync closer to the right."
-                )
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .toggleStyle(.switch)
+                .scaleEffect(0.8)
             }
+            .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .formStyle(.grouped)
-        .padding()
-        .frame(minWidth: 580, minHeight: 620)
-        .task { await model.bootstrap() }
+    }
+
+    private var pairingInfo: (code: String, expiresAt: Date)? {
+        if case let .pairing(code, expiresAt) = model.state {
+            return (code, expiresAt)
+        }
+        return nil
+    }
+
+    private var pairedIPhoneConnectionIcon: String {
+        isPairedIPhoneReady ? "circle.fill" : "xmark.circle.fill"
+    }
+
+    private var pairedIPhoneConnectionTint: Color {
+        isPairedIPhoneReady ? Tokens.Palette.verified : Tokens.Palette.alert
+    }
+
+    private var isPairedIPhoneReady: Bool {
+        model.pairedPeer != nil && (model.state == .ready || model.state == .receiving)
+    }
+
+    private var pairedIPhoneStatusText: String? {
+        isPairedIPhoneReady ? nil : "Not connected"
+    }
+
+    // MARK: Last Sync
+
+    private func lastSyncSection(summary: SyncSummary) -> some View {
+        Section {
+            HStack(spacing: 16) {
+                summaryStat(label: "Added", value: summary.added)
+                summaryStat(label: "Already", value: summary.existing)
+                summaryStat(label: "Not local", value: summary.notLocal)
+                summaryStat(label: "Failed", value: summary.failed)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(lastSyncAccessibilityLabel(summary: summary))
+        } header: {
+            sectionHeader("Last Sync")
+        }
+    }
+
+    private func summaryStat(label: String, value: Int) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(value)")
+                .font(Tokens.Typography.numericData)
+                .foregroundStyle(Tokens.Palette.wire)
+            Text(label)
+                .font(Tokens.Typography.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func lastSyncAccessibilityLabel(summary: SyncSummary) -> String {
+        "Last sync: \(summary.added) added, "
+            + "\(summary.existing) already present, "
+            + "\(summary.notLocal) not on iPhone, "
+            + "\(summary.failed) failed."
+    }
+
+    // MARK: Operation Log
+
+    private var operationLogSection: some View {
+        Section {
+            HStack {
+                Text(
+                    model.operationLog.isEmpty
+                        ? "No operations recorded"
+                        : "\(model.operationLog.count) recorded"
+                )
+                .font(Tokens.Typography.caption)
+                .foregroundStyle(.secondary)
+                Spacer()
+                Button("Copy All") { model.copyOperationLog() }
+                    .disabled(model.operationLog.isEmpty)
+                    .buttonStyle(.borderless)
+                    .font(Tokens.Typography.caption)
+                Button("Clear") { model.clearOperationLog() }
+                    .disabled(model.operationLog.isEmpty)
+                    .buttonStyle(.borderless)
+                    .font(Tokens.Typography.caption)
+            }
+
+            Text(
+                "Keeps the latest \(OperationLogBuffer.defaultCapacity) semantic "
+                    + "operations for this app run. Secrets, pairing codes, and "
+                    + "full destination paths are not recorded."
+            )
+            .font(Tokens.Typography.caption)
+            .foregroundStyle(.secondary)
+
+            if !model.operationLog.isEmpty {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(model.operationLog) { entry in
+                            MacOperationLogRow(entry: entry)
+                            Rectangle()
+                                .fill(Tokens.Palette.frame)
+                                .frame(height: Tokens.Layout.hairline)
+                        }
+                    }
+                }
+                .frame(minHeight: 120, maxHeight: 280)
+            }
+        } header: {
+            sectionHeader("Operation Log")
+        }
+    }
+
+    // MARK: Helpers
+
+    private func sectionHeader(_ text: String) -> some View {
+        Text(text)
+            .font(Tokens.Typography.sectionHeader)
+            .tracking(0.5)
+            .textCase(.uppercase)
+            .foregroundStyle(.secondary)
     }
 }
 
@@ -136,46 +254,59 @@ private struct MacOperationLogRow: View {
     let entry: OperationLogEntry
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: symbolName)
-                .foregroundStyle(tint)
-                .frame(width: 18)
-                .accessibilityLabel(entry.level.rawValue)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(entry.category)
-                    Spacer()
-                    Text(
-                        entry.occurredAt.formatted(
-                            date: .abbreviated,
-                            time: .standard
-                        )
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
+        HStack(alignment: .top, spacing: 10) {
+            Text(
+                entry.occurredAt.formatted(date: .omitted, time: .standard)
+            )
+            .font(Tokens.Typography.numericData)
+            .foregroundStyle(.secondary)
+            .frame(width: 60, alignment: .leading)
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.category)
+                    .font(Tokens.Typography.callout.weight(.medium))
+                    .foregroundStyle(Tokens.Palette.wire)
                 Text(entry.message)
-                    .font(.callout)
+                    .font(Tokens.Typography.callout)
+                    .foregroundStyle(.secondary)
                     .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+
+            Spacer(minLength: 8)
+
+            Image(systemName: symbolName)
+                .font(.system(size: 12))
+                .foregroundStyle(tint)
+                .frame(width: 18, height: 18)
+                .overlay(
+                    Circle()
+                        .stroke(tint.opacity(0.4), lineWidth: 1)
+                )
+                .accessibilityLabel(entry.level.rawValue)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(entry.category). \(entry.message)"
+        )
     }
 
     private var symbolName: String {
         switch entry.level {
-        case .info: "info.circle.fill"
-        case .success: "checkmark.circle.fill"
-        case .warning: "exclamationmark.triangle.fill"
-        case .error: "xmark.octagon.fill"
+        case .info: "circle.fill"
+        case .success: "checkmark"
+        case .warning: "exclamationmark"
+        case .error: "xmark"
         }
     }
 
     private var tint: Color {
         switch entry.level {
-        case .info: .blue
-        case .success: .green
-        case .warning: .orange
-        case .error: .red
+        case .info: Tokens.Palette.frame
+        case .success: Tokens.Palette.verified
+        case .warning: Tokens.Palette.alert
+        case .error: Tokens.Palette.alert
         }
     }
 }

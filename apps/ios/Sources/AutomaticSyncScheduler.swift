@@ -47,16 +47,20 @@ private final class LiveAutomaticSyncRequestScheduler: AutomaticSyncRequestSched
 @MainActor
 final class AutomaticSyncScheduler {
     static let taskIdentifier = "com.bizshuk.iphonesync.ios.scheduled-sync"
+    static let dailyTaskIdentifier = "com.bizshuk.iphonesync.ios.scheduled-sync.daily"
+    static let debugTaskIdentifier = "com.bizshuk.iphonesync.ios.scheduled-sync.debug"
 
     private let runtime: IOSSyncRuntime
     private let store: IOSAutomaticSyncStore
-    private let policy: AutomaticSyncPolicy
+    private var policy: AutomaticSyncPolicy
     private let scheduler: BGTaskScheduler
     private let requestScheduler: any AutomaticSyncRequestScheduling
     private let now: () -> Date
+    private let isPaired: () -> Bool
     private let onSnapshotChange: (IOSAutomaticSyncSnapshot) -> Void
     private let onRunStateChange: (Bool) -> Void
     private let onOperation: (OperationLogEvent) -> Void
+    private let taskIdentifier: String
     private var isRegistered = false
     private var backgroundExecution: BackgroundExecution?
     private var foregroundRunID: UUID?
@@ -83,7 +87,9 @@ final class AutomaticSyncScheduler {
         policy: AutomaticSyncPolicy,
         scheduler: BGTaskScheduler = .shared,
         requestScheduler: (any AutomaticSyncRequestScheduling)? = nil,
+        taskIdentifier: String = AutomaticSyncScheduler.taskIdentifier,
         now: @escaping () -> Date = Date.init,
+        isPaired: @escaping () -> Bool = { true },
         onSnapshotChange: @escaping (IOSAutomaticSyncSnapshot) -> Void,
         onRunStateChange: @escaping (Bool) -> Void,
         onOperation: @escaping (OperationLogEvent) -> Void = { _ in }
@@ -92,6 +98,8 @@ final class AutomaticSyncScheduler {
         self.store = store
         self.policy = policy
         self.scheduler = scheduler
+        self.taskIdentifier = taskIdentifier
+        self.isPaired = isPaired
         if let requestScheduler {
             self.requestScheduler = requestScheduler
         } else {
@@ -105,11 +113,18 @@ final class AutomaticSyncScheduler {
         self.onOperation = onOperation
     }
 
+    func updatePolicy(_ policy: AutomaticSyncPolicy) {
+        self.policy = policy
+        if isRegistered, store.snapshot.isEnabled {
+            replaceSchedule(reason: .restore)
+        }
+    }
+
     @discardableResult
     func register() -> Bool {
         guard !isRegistered else { return true }
         isRegistered = scheduler.register(
-            forTaskWithIdentifier: Self.taskIdentifier,
+            forTaskWithIdentifier: taskIdentifier,
             using: .main
         ) { @MainActor [weak self] task in
             guard let processingTask = task as? BGProcessingTask else {
@@ -138,9 +153,14 @@ final class AutomaticSyncScheduler {
             enabled ? "Automatic Sync enabled." : "Automatic Sync disabled."
         )
         if enabled {
-            replaceSchedule(reason: .enabled)
+            if !replaceSchedule(reason: .enabled), !store.snapshot.isEnabled {
+                emit(
+                    .warning,
+                    "Automatic Sync could not be scheduled and has been disabled."
+                )
+            }
         } else {
-            requestScheduler.cancel(identifier: Self.taskIdentifier)
+            requestScheduler.cancel(identifier: taskIdentifier)
             store.recordNextEligibleAt(nil)
             if let execution = backgroundExecution,
                !execution.isCompleted {
@@ -163,7 +183,7 @@ final class AutomaticSyncScheduler {
         defer { scheduleReconcileIsActive = false }
 
         guard store.snapshot.isEnabled else {
-            requestScheduler.cancel(identifier: Self.taskIdentifier)
+            requestScheduler.cancel(identifier: taskIdentifier)
             store.recordNextEligibleAt(nil)
             publishSnapshot()
             return
@@ -176,7 +196,7 @@ final class AutomaticSyncScheduler {
             persistedDate: snapshot.nextEligibleAt
         )
         let pendingRequest = await requestScheduler.pendingRequests().first {
-            $0.identifier == Self.taskIdentifier
+            $0.identifier == taskIdentifier
         }
         guard store.snapshot.isEnabled else {
             publishSnapshot()
@@ -188,14 +208,14 @@ final class AutomaticSyncScheduler {
                 pendingRequest,
                 with: restoredDate
             ) {
-                submitSchedule(earliestBeginDate: restoredDate)
+                _ = submitSchedule(earliestBeginDate: restoredDate)
             } else {
                 store.recordNextEligibleAt(
                     pendingRequest.earliestBeginDate ?? referenceDate
                 )
             }
         } else {
-            submitSchedule(earliestBeginDate: restoredDate)
+            _ = submitSchedule(earliestBeginDate: restoredDate)
         }
         publishSnapshot()
     }
@@ -222,6 +242,16 @@ final class AutomaticSyncScheduler {
         let attemptDate = now()
         emit(.info, "Starting a foreground automatic sync attempt.")
         store.recordAttempt(at: attemptDate)
+        guard isPaired() else {
+            let outcome = SyncRunOutcome.deferred(.pairingRequired)
+            emit(.warning, "No iPhone paired; foreground automatic sync was skipped.")
+            record(outcome, at: attemptDate)
+            emitOutcome(outcome, trigger: "Foreground automatic sync")
+            _ = replaceSchedule(reason: scheduleReason(after: outcome))
+            publishSnapshot()
+            foregroundRunID = nil
+            return outcome
+        }
         beginRun(runID)
         publishSnapshot()
         let outcome: SyncRunOutcome
@@ -250,7 +280,7 @@ final class AutomaticSyncScheduler {
         endRun(runID)
         record(outcome, at: now())
         emitOutcome(outcome, trigger: "Foreground automatic sync")
-        replaceSchedule(reason: scheduleReason(after: outcome))
+        _ = replaceSchedule(reason: scheduleReason(after: outcome))
         publishSnapshot()
         return outcome
     }
@@ -292,8 +322,20 @@ final class AutomaticSyncScheduler {
         }
         let attemptDate = now()
 
-        replaceSchedule(reason: .retry)
         store.recordAttempt(at: attemptDate)
+        guard isPaired() else {
+            emit(
+                .warning,
+                "No iPhone paired; scheduled automatic sync was skipped."
+            )
+            finishBackgroundExecution(
+                runID: runID,
+                outcome: .deferred(.pairingRequired)
+            )
+            return
+        }
+
+        _ = replaceSchedule(reason: .retry)
         beginRun(runID)
         emit(.info, "Starting a scheduled background sync attempt.")
         publishSnapshot()
@@ -349,7 +391,7 @@ final class AutomaticSyncScheduler {
         endRun(runID)
         record(outcome, at: now())
         emitOutcome(outcome, trigger: "Scheduled background sync")
-        replaceSchedule(reason: scheduleReason(after: outcome))
+        _ = replaceSchedule(reason: scheduleReason(after: outcome))
         publishSnapshot()
         execution.task.setTaskCompleted(success: outcome.backgroundTaskSucceeded)
         backgroundExecution = nil
@@ -366,7 +408,7 @@ final class AutomaticSyncScheduler {
     }
 
     private func automaticRunAlreadyCompletedToday(at date: Date) -> Bool {
-        guard policy.cadence == .dailyAtLocalMidnight else { return false }
+        guard policy.isDailyCadence else { return false }
         return policy.hasSuccessfulRunToday(store.snapshot.lastSuccessAt, now: date)
     }
 
@@ -379,21 +421,21 @@ final class AutomaticSyncScheduler {
         )
     }
 
-    private func replaceSchedule(reason: AutomaticSyncScheduleReason) {
+    private func replaceSchedule(reason: AutomaticSyncScheduleReason) -> Bool {
         guard store.snapshot.isEnabled, isRegistered else {
             store.recordNextEligibleAt(nil)
-            return
+            return false
         }
         let date = policy.nextRequestDate(
             after: now(),
             lastSuccess: store.snapshot.lastSuccessAt,
             reason: reason
         )
-        submitSchedule(earliestBeginDate: date)
+        return submitSchedule(earliestBeginDate: date)
     }
 
-    private func submitSchedule(earliestBeginDate date: Date) {
-        let request = BGProcessingTaskRequest(identifier: Self.taskIdentifier)
+    private func submitSchedule(earliestBeginDate date: Date) -> Bool {
+        let request = BGProcessingTaskRequest(identifier: taskIdentifier)
         request.earliestBeginDate = date
         request.requiresNetworkConnectivity = true
         request.requiresExternalPower = false
@@ -406,19 +448,36 @@ final class AutomaticSyncScheduler {
                     + date.formatted(date: .abbreviated, time: .standard)
                     + "."
             )
+            return true
         } catch {
+            let failureMessage = isBGTaskSchedulerDomainError3(error)
+                ? "Could not schedule automatic sync: "
+                    + "The operation couldn't be completed. "
+                    + "BGTaskSchedulerErrorDomain error 3. "
+                    + "\(error.localizedDescription)"
+                : "Could not schedule automatic sync: \(error.localizedDescription)"
             store.recordOutcome(
                 .failed,
-                message: "Could not schedule automatic sync: \(error.localizedDescription)",
+                message: failureMessage,
                 at: now(),
                 successful: false
             )
             store.recordNextEligibleAt(nil)
+            if isBGTaskSchedulerDomainError3(error) {
+                store.setEnabled(false)
+                requestScheduler.cancel(identifier: taskIdentifier)
+            }
             emit(
                 .error,
-                "Could not schedule automatic sync: \(error.localizedDescription)"
+                failureMessage
             )
+            return false
         }
+    }
+
+    private func isBGTaskSchedulerDomainError3(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == "BGTaskSchedulerErrorDomain" && nsError.code == 3
     }
 
     private func beginRun(_ runID: UUID) {

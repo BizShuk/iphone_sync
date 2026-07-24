@@ -21,10 +21,8 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     private struct MenuSnapshot {
         let state: MacAppModel.State
         let statusText: String
-        let statusSymbol: String
         let pairedPhoneName: String?
-        let pairedPhoneID: String?
-        let hasPairedPhone: Bool
+        let pairedIPhoneReady: Bool
     }
 
     private let logger = Logger(
@@ -109,10 +107,9 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
             MenuSnapshot(
                 state: model.state,
                 statusText: model.statusText,
-                statusSymbol: model.statusSymbol,
                 pairedPhoneName: model.pairedPeer?.displayName,
-                pairedPhoneID: model.pairedPeer?.id,
-                hasPairedPhone: model.pairedPeer != nil
+                pairedIPhoneReady: model.pairedPeer != nil
+                    && (model.state == .ready || model.state == .receiving)
             )
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
@@ -127,14 +124,11 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusItem(using snapshot: MenuSnapshot) {
         guard let statusItem, let button = statusItem.button else { return }
 
-        let image = NSImage(
-            systemSymbolName: snapshot.statusSymbol,
-            accessibilityDescription: "iPhone Sync"
-        ) ?? NSImage(
-            systemSymbolName: "iphone",
-            accessibilityDescription: "iPhone Sync"
-        )
-        image?.isTemplate = true
+        let iconState: MenuBarIcon.State = switch snapshot.state {
+        case .receiving, .pairing: .receiving
+        case .ready, .needsDestination, .needsPairing, .error: .idle
+        }
+        let image = MenuBarIcon.image(state: iconState)
         button.image = image
         button.imagePosition = .imageOnly
         button.toolTip = "iPhone Sync — \(snapshot.statusText)"
@@ -145,18 +139,18 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     private func rebuildMenu(using snapshot: MenuSnapshot) {
         statusMenu.removeAllItems()
 
-        let status = NSMenuItem(
-            title: snapshot.statusText,
-            action: nil,
-            keyEquivalent: ""
-        )
-        status.isEnabled = false
-        statusMenu.addItem(status)
+        if snapshot.pairedPhoneName == nil {
+            let status = NSMenuItem(
+                title: snapshot.statusText,
+                action: nil,
+                keyEquivalent: ""
+            )
+            status.isEnabled = false
+            statusMenu.addItem(status)
+        }
 
-        if let name = snapshot.pairedPhoneName,
-           let deviceID = snapshot.pairedPhoneID {
-            addInfoItem("iPhone: \(name)")
-            addInfoItem("Device ID: \(deviceID)")
+        if let name = snapshot.pairedPhoneName {
+            addPairedIPhoneInfoItem(name: name, isReady: snapshot.pairedIPhoneReady)
         }
 
         if case let .pairing(code, _) = snapshot.state {
@@ -173,19 +167,63 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
         addMenuItem("Open Setup", action: #selector(openSetup))
         addMenuItem("Pair New iPhone", action: #selector(pairNewIPhone))
         addMenuItem("Choose Destination", action: #selector(chooseDestination))
-        addMenuItem(
-            "Forget iPhone",
-            action: #selector(forgetIPhone),
-            isEnabled: snapshot.hasPairedPhone
-        )
         statusMenu.addItem(.separator())
         addMenuItem("Quit", action: #selector(quit))
     }
 
-    private func addInfoItem(_ title: String) {
-        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+    private func addPairedIPhoneInfoItem(name: String, isReady: Bool) {
+        let item = NSMenuItem()
         item.isEnabled = false
+
+        let container = NSView()
+        container.translatesAutoresizingMaskIntoConstraints = false
+        container.setFrameSize(.init(width: 260, height: 24))
+
+        let title = NSTextField(labelWithString: "iPhone \(name)")
+        title.translatesAutoresizingMaskIntoConstraints = false
+        title.isEditable = false
+        title.isBordered = false
+        title.backgroundColor = .clear
+        title.font = .systemFont(ofSize: NSFont.systemFontSize)
+        title.textColor = NSColor.secondaryLabelColor
+        title.lineBreakMode = .byTruncatingTail
+
+        let icon = NSImageView()
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.image = statusIcon(isReady: isReady)
+        icon.contentTintColor = isReady ? .systemGreen : .systemRed
+        icon.imageScaling = .scaleProportionallyDown
+
+        container.addSubview(title)
+        container.addSubview(icon)
+
+        NSLayoutConstraint.activate([
+            title.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            title.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            title.trailingAnchor.constraint(
+                lessThanOrEqualTo: icon.leadingAnchor,
+                constant: -8
+            ),
+
+            icon.trailingAnchor.constraint(
+                equalTo: container.trailingAnchor,
+                constant: -8
+            ),
+            icon.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 12),
+            icon.heightAnchor.constraint(equalToConstant: 12),
+
+            container.heightAnchor.constraint(equalToConstant: 22)
+        ])
         statusMenu.addItem(item)
+        item.view = container
+    }
+
+    private func statusIcon(isReady: Bool) -> NSImage {
+        let symbolName = isReady ? "circle.fill" : "xmark.circle.fill"
+        return NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)
+            ?? NSImage(systemSymbolName: "circle.fill", accessibilityDescription: nil)
+            ?? NSImage()
     }
 
     private func addMenuItem(
@@ -211,10 +249,6 @@ final class MacAppDelegate: NSObject, NSApplicationDelegate {
     @objc private func chooseDestination() {
         showSetupWindow()
         model.chooseDestination()
-    }
-
-    @objc private func forgetIPhone() {
-        model.forgetPhone()
     }
 
     @objc private func quit() {

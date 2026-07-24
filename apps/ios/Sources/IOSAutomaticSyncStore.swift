@@ -28,42 +28,50 @@ struct IOSAutomaticSyncSnapshot: Equatable, Sendable {
 
 struct IOSAutomaticSyncStore: @unchecked Sendable {
     private enum Key {
-        static let enabled = "automaticSync.enabled"
-        static let lastAttemptAt = "automaticSync.lastAttemptAt"
-        static let lastSuccessAt = "automaticSync.lastSuccessAt"
-        static let lastOutcome = "automaticSync.lastOutcome"
-        static let lastMessage = "automaticSync.lastMessage"
-        static let nextEligibleAt = "automaticSync.nextEligibleAt"
+        static let enabled = "enabled"
+        static let lastAttemptAt = "lastAttemptAt"
+        static let lastSuccessAt = "lastSuccessAt"
+        static let lastOutcome = "lastOutcome"
+        static let lastMessage = "lastMessage"
+        static let nextEligibleAt = "nextEligibleAt"
+        static let dailyHour = "daily.hour"
+        static let dailyMinute = "daily.minute"
     }
 
     private let defaults: UserDefaults
+    private let prefix: String
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        prefix: String = "automaticSync",
+        defaults: UserDefaults = .standard
+    ) {
         self.defaults = defaults
+        self.prefix = prefix
     }
 
     var snapshot: IOSAutomaticSyncSnapshot {
-        IOSAutomaticSyncSnapshot(
-            isEnabled: defaults.bool(forKey: Key.enabled),
-            lastAttemptAt: defaults.object(forKey: Key.lastAttemptAt) as? Date,
-            lastSuccessAt: defaults.object(forKey: Key.lastSuccessAt) as? Date,
-            lastOutcome: defaults.string(forKey: Key.lastOutcome)
+        let keyPrefix = "\(prefix)."
+        return IOSAutomaticSyncSnapshot(
+            isEnabled: defaults.bool(forKey: keyPrefix + Key.enabled),
+            lastAttemptAt: defaults.object(forKey: keyPrefix + Key.lastAttemptAt) as? Date,
+            lastSuccessAt: defaults.object(forKey: keyPrefix + Key.lastSuccessAt) as? Date,
+            lastOutcome: defaults.string(forKey: keyPrefix + Key.lastOutcome)
                 .flatMap(AutomaticSyncOutcomeCode.init(rawValue:))
                 ?? .neverRun,
-            lastMessage: defaults.string(forKey: Key.lastMessage),
-            nextEligibleAt: defaults.object(forKey: Key.nextEligibleAt) as? Date
+            lastMessage: defaults.string(forKey: keyPrefix + Key.lastMessage),
+            nextEligibleAt: defaults.object(forKey: keyPrefix + Key.nextEligibleAt) as? Date
         )
     }
 
     func setEnabled(_ enabled: Bool) {
-        defaults.set(enabled, forKey: Key.enabled)
+        defaults.set(enabled, forKey: "\(prefix).\(Key.enabled)")
         if !enabled {
-            defaults.removeObject(forKey: Key.nextEligibleAt)
+            defaults.removeObject(forKey: "\(prefix).\(Key.nextEligibleAt)")
         }
     }
 
     func recordAttempt(at date: Date) {
-        defaults.set(date, forKey: Key.lastAttemptAt)
+        defaults.set(date, forKey: "\(prefix).\(Key.lastAttemptAt)")
     }
 
     func recordOutcome(
@@ -72,22 +80,37 @@ struct IOSAutomaticSyncStore: @unchecked Sendable {
         at date: Date,
         successful: Bool
     ) {
-        defaults.set(outcome.rawValue, forKey: Key.lastOutcome)
+        defaults.set(outcome.rawValue, forKey: "\(prefix).\(Key.lastOutcome)")
         if let message, !message.isEmpty {
-            defaults.set(message, forKey: Key.lastMessage)
+            defaults.set(message, forKey: "\(prefix).\(Key.lastMessage)")
         } else {
-            defaults.removeObject(forKey: Key.lastMessage)
+            defaults.removeObject(forKey: "\(prefix).\(Key.lastMessage)")
         }
         if successful {
-            defaults.set(date, forKey: Key.lastSuccessAt)
+            defaults.set(date, forKey: "\(prefix).\(Key.lastSuccessAt)")
         }
     }
 
     func recordNextEligibleAt(_ date: Date?) {
         if let date {
-            defaults.set(date, forKey: Key.nextEligibleAt)
+            defaults.set(date, forKey: "\(prefix).\(Key.nextEligibleAt)")
         } else {
-            defaults.removeObject(forKey: Key.nextEligibleAt)
+            defaults.removeObject(forKey: "\(prefix).\(Key.nextEligibleAt)")
         }
+    }
+
+    func setDailySyncTime(hour: Int, minute: Int) {
+        let normalizedHour = max(0, min(23, hour))
+        let normalizedMinute = max(0, min(59, minute))
+        defaults.set(normalizedHour, forKey: "\(prefix).\(Key.dailyHour)")
+        defaults.set(normalizedMinute, forKey: "\(prefix).\(Key.dailyMinute)")
+    }
+
+    var dailyHour: Int {
+        defaults.integer(forKey: "\(prefix).\(Key.dailyHour)")
+    }
+
+    var dailyMinute: Int {
+        defaults.integer(forKey: "\(prefix).\(Key.dailyMinute)")
     }
 }

@@ -3,6 +3,7 @@ import Foundation
 enum AutomaticSyncCadence: Equatable, Sendable {
     case tenMinutes
     case dailyAtLocalMidnight
+    case dailyAtLocalTime(hour: Int, minute: Int)
 }
 
 enum AutomaticSyncScheduleReason: Equatable, Sendable {
@@ -17,6 +18,8 @@ struct AutomaticSyncPolicy: Sendable {
     static let debugInterval: TimeInterval = 10 * 60
     static let productionRetryInterval: TimeInterval = 60 * 60
     static let scheduledRunMaximumDuration: Duration = .seconds(8 * 60)
+    static let productionDefaultHour = 0
+    static let productionDefaultMinute = 0
 
     let cadence: AutomaticSyncCadence
     var calendar: Calendar
@@ -33,7 +36,10 @@ struct AutomaticSyncPolicy: Sendable {
 #if DEBUG
         AutomaticSyncPolicy(cadence: .tenMinutes)
 #else
-        AutomaticSyncPolicy(cadence: .dailyAtLocalMidnight)
+        AutomaticSyncPolicy(cadence: .dailyAtLocalTime(
+            hour: productionDefaultHour,
+            minute: productionDefaultMinute
+        ))
 #endif
     }
 
@@ -60,14 +66,15 @@ struct AutomaticSyncPolicy: Sendable {
         switch cadence {
         case .tenMinutes:
             return now.addingTimeInterval(Self.debugInterval)
-        case .dailyAtLocalMidnight:
+        case .dailyAtLocalMidnight, .dailyAtLocalTime:
             if reason == .retry, !hasSuccessfulRunToday(lastSuccess, now: now) {
                 return now.addingTimeInterval(Self.productionRetryInterval)
             }
             if reason == .restore, !hasSuccessfulRunToday(lastSuccess, now: now) {
                 return now
             }
-            return nextLocalMidnight(after: now)
+            let components = dailyTimeComponents
+            return nextDailyRun(after: now, hour: components.hour, minute: components.minute)
         }
     }
 
@@ -86,7 +93,7 @@ struct AutomaticSyncPolicy: Sendable {
                 lastSuccess: lastSuccess,
                 reason: .restore
             )
-        case .dailyAtLocalMidnight:
+        case .dailyAtLocalMidnight, .dailyAtLocalTime:
             // A persisted absolute date was calculated in the previous local
             // timezone. Recompute daily scheduling whenever the app wakes.
             return nextRequestDate(
@@ -97,9 +104,45 @@ struct AutomaticSyncPolicy: Sendable {
         }
     }
 
-    private func nextLocalMidnight(after now: Date) -> Date {
-        let today = calendar.startOfDay(for: now)
-        return calendar.date(byAdding: .day, value: 1, to: today)
-            ?? now.addingTimeInterval(24 * 60 * 60)
+    var isDailyCadence: Bool {
+        switch cadence {
+        case .dailyAtLocalMidnight, .dailyAtLocalTime:
+            return true
+        case .tenMinutes:
+            return false
+        }
+    }
+
+    var dailyTimeComponents: (hour: Int, minute: Int) {
+        switch cadence {
+        case .tenMinutes:
+            return (0, 0)
+        case .dailyAtLocalMidnight:
+            return (0, 0)
+        case let .dailyAtLocalTime(hour, minute):
+            return (
+                max(0, min(23, hour)),
+                max(0, min(59, minute))
+            )
+        }
+    }
+
+    private func nextDailyRun(after now: Date, hour: Int, minute: Int) -> Date {
+        let calendar = self.calendar
+        let todayStart = calendar.startOfDay(for: now)
+        let todayRun = calendar.date(
+            bySettingHour: hour,
+            minute: minute,
+            second: 0,
+            of: todayStart
+        ) ?? now
+        if todayRun <= now {
+            return calendar.date(
+                byAdding: .day,
+                value: 1,
+                to: todayRun
+            ) ?? now.addingTimeInterval(24 * 60 * 60)
+        }
+        return todayRun
     }
 }
