@@ -175,3 +175,12 @@ while IFS= read -r -d '' untracked_file; do
         exit 1
     fi
 done < <(git ls-files --others --exclude-standard -z)
+
+# === Windows 11 receiver (Electron + Node.js port) ===
+# Skipped if the Windows port scaffolding is not present yet (pre-Phase 1
+# state) or if node/npm is unavailable. The script is cross-platform; the
+# electron-builder packaging step only runs on Windows MSYS shells.
+if [[ -d "packages/SyncCore.Windows" && -d "apps/windows" ]]; then
+    bash scripts/verify_windows.sh
+fi
+

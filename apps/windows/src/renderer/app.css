@@ -1,0 +1,353 @@
+/* iPhone Sync setup UI — Fluent-inspired design tokens.
+ *
+ * Mirrors the macOS receiver's `apps/macos/Sources/Theme/Tokens.swift`
+ * palette (paper / wire / signal / alert / verified / frame) so the visual
+ * language is consistent across Mac and Windows 11 receivers.
+ */
+
+:root {
+  --paper: #fafafa;
+  --paper-2: #f4f4f4;
+  --wire: #202020;
+  --signal: #4f46e5;
+  --verified: #16a34a;
+  --alert: #dc2626;
+  --frame: #d4d4d8;
+  --frame-2: #e4e4e7;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+  --font-body: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Mono', 'Cascadia Code', 'Consolas', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #18181b;
+    --paper-2: #27272a;
+    --wire: #fafafa;
+    --signal: #818cf8;
+    --verified: #4ade80;
+    --alert: #f87171;
+    --frame: #3f3f46;
+    --frame-2: #52525b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 14px;
+  background: var(--paper);
+  color: var(--wire);
+}
+
+#root {
+  max-width: 580px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.status-title {
+  margin: 0;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--frame);
+  font-weight: 600;
+}
+
+.launch-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--frame);
+}
+
+.status-card,
+.last-sync-card,
+.operation-log-card {
+  background: var(--paper-2);
+  border: 1px solid var(--frame-2);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--frame);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--frame);
+}
+
+.status-text {
+  flex: 1;
+}
+
+.status-primary {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.status-secondary {
+  font-size: 12px;
+  color: var(--frame);
+}
+
+.storage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--frame-2);
+}
+
+.storage-label {
+  font-size: 12px;
+  color: var(--frame);
+}
+
+select,
+button {
+  font-family: inherit;
+  font-size: 13px;
+}
+
+select {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--frame);
+  background: var(--paper);
+  color: var(--wire);
+}
+
+.action-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+button {
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+button.primary {
+  background: var(--signal);
+  color: white;
+  border-color: var(--signal);
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--signal);
+  border-color: var(--signal);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pairing-card {
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--paper);
+  border: 1.5px solid var(--signal);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.pairing-card.hidden {
+  display: none;
+}
+
+.pairing-code {
+  font-family: var(--font-mono);
+  font-size: 36px;
+  letter-spacing: 4px;
+  margin: 0;
+  color: var(--wire);
+}
+
+.pairing-meta {
+  font-size: 12px;
+  color: var(--frame);
+  margin-top: 4px;
+}
+
+.error-banner {
+  margin-top: 12px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--alert);
+  border: 1px solid var(--alert);
+  font-size: 12px;
+}
+
+.error-banner.hidden {
+  display: none;
+}
+
+.section-header {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--frame);
+  font-weight: 600;
+}
+
+.last-sync-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--wire);
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--frame);
+}
+
+.operation-log-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.operation-log-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.operation-log-actions button {
+  padding: 2px 6px;
+  font-size: 12px;
+}
+
+.operation-log-meta {
+  margin: 0 0 8px;
+  font-size: 11px;
+  color: var(--frame);
+}
+
+.operation-log-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.operation-log-list li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--frame-2);
+  font-size: 12px;
+}
+
+.operation-log-list li:last-child {
+  border-bottom: none;
+}
+
+.operation-log-time {
+  font-family: var(--font-mono);
+  color: var(--frame);
+  align-self: start;
+}
+
+.operation-log-body .category {
+  color: var(--wire);
+  font-weight: 600;
+}
+
+.operation-log-body .message {
+  color: var(--frame);
+}
+
+.operation-log-level {
+  font-weight: 600;
+  align-self: start;
+}
+
+.level-info { color: var(--frame); }
+.level-success { color: var(--verified); }
+.level-warning { color: var(--alert); }
+.level-error { color: var(--alert); }
+
+/* Pairing window */
+.pairing-body {
+  background: var(--paper);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pairing-root {
+  text-align: center;
+  padding: 24px;
+  max-width: 320px;
+}
+
+.pairing-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--frame);
+  font-weight: 600;
+}
+
+.pairing-hint {
+  margin-top: 16px;
+  font-size: 11px;
+  color: var(--frame);
+}

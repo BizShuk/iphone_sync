@@ -26,6 +26,18 @@
 - 不要求 iCloud Photos、background `URLSession` 或 PhotoKit Background Resource Upload；`isNetworkAccessAllowed = false`。Automatic sync 使用既有 local-only transport，並只在 iOS 實際啟動 `BGProcessingTask` 且同網路 gate 通過時傳輸。
 - `UIRequiredDeviceCapabilities` 的 `wifi` / `arm64` 是安裝相容性條件，不是 privacy permission；`LSUIElement` 是 menu-bar App 行為，也不是 permission。
 
+## Windows 11 對應 (Windows 11 Receiver)
+
+| Name | 說明 | 對應實作 |
+|---|---|---|
+| Windows Local Network | Windows 對 LAN 連入需手動允許 `New-NetFirewallRule -Direction Inbound -Protocol TCP -Action Allow` | Electron `app.setLoginItemSettings` + 手動 firewall 提示 |
+| Windows Firewall | 首次啟動時須放行入站 TCP；NSIS installer 可附 `netsh advfirewall firewall add rule` 步驟 | `apps/windows/electron-builder.yml` |
+| Windows DPAPI | 透過 Electron `safeStorage` 內部走 Windows DPAPI 加密 paired peer PSK | `safeStorage.encryptString` / `decryptString` |
+| Windows Launch at Login | `app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })` 註冊於 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` | Electron `app` API |
+| Windows Open Folder | `dialog.showOpenDialog({ properties: ['openDirectory'] })` 取代 `NSOpenPanel`；不需 sandbox 等價物 | Electron `dialog` API |
+| Windows Menu Bar | `Tray` + `Menu` 取代 `NSStatusItem`；維持 system tray 行為 | Electron `Tray` API |
+| Windows Bonjour | `multicast-dns` 透過 RFC 6762/6763 over `_local.` | `packages/SyncCore.Windows/src/discovery/bonjour-*.ts` |
+
 ## 驗證
 
 ```bash
@@ -34,6 +46,8 @@ bash scripts/verify.sh
 ```
 
 Unsigned build 只能驗證 plist、entitlements 與編譯，不會授予或證明 Photos、Local Network、Finder destination 或 Login Item 權限，也不證明 iOS 會啟動 `BGProcessingTask`。這些項目必須用 signed 實體 iPhone 與 signed macOS App 驗收。
+
+Windows 11 端的 `scripts/verify_windows.sh` 跑 vitest + source invariant grep + electron-builder `npm run dist`；NSIS installer 需在 Windows 11 22H2+ 開發機執行，後續 signed 走 `electron-builder` signtool 流程。
 
 ## Apple 官方參考
 

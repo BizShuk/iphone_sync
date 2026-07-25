@@ -41,15 +41,32 @@ iphone_sync/
 │   │   ├── Tests/               # automatic schedule policy、persistent state、runtime tests
 │   │   ├── Info.plist           # generated from project.yml
 │   │   └── iPhoneSync.entitlements
-│   └── macos/
-│       ├── Sources/             # NSStatusItem receiver、pairing、Finder writes、operation panel
-│       ├── Info.plist           # generated from project.yml
-│       └── iPhoneSyncMac.entitlements
+│   ├── macos/
+│   │   ├── Sources/             # NSStatusItem receiver、pairing、Finder writes、operation panel
+│   │   ├── Info.plist           # generated from project.yml
+│   │   └── iPhoneSyncMac.entitlements
+│   └── windows/                 # Windows 11 receiver (Electron + Node.js)
+│       ├── src/main/            # main.ts, model-root.ts, tray.ts, setup-window.ts, pairing-window.ts, auto-launch.ts, recovery.ts, ipc.ts
+│       ├── src/preload/         # preload.ts (contextBridge)
+│       ├── src/renderer/        # setup.html, pairing.html, app.css, setup.ts, pairing.ts
+│       ├── assets/icons/        # tray.ico
+│       ├── package.json
+│       ├── tsconfig.json
+│       └── electron-builder.yml
 ├── packages/
-│   └── SyncCore/
-│       ├── Sources/SyncCore/    # contracts、crypto、framing、Bonjour、TLS、client、operation buffer
-│       ├── Sources/MacReceiverKit/ # SwiftData manifest、safe writer、server + operation events
-│       └── Tests/
+│   ├── SyncCore/
+│   │   ├── Sources/SyncCore/    # contracts、crypto、framing、Bonjour、TLS、client、operation buffer
+│   │   ├── Sources/MacReceiverKit/ # SwiftData manifest、safe writer、server + operation events
+│   │   └── Tests/
+│   └── SyncCore.Windows/        # TypeScript port of SyncCore + MacReceiverKit
+│       ├── src/protocol/        # constants, frame-codec, framed-connection, messages, resource, filename-policy
+│       ├── src/crypto/          # pairing-crypto, file-hasher, tls-psk-server
+│       ├── src/discovery/       # bonjour-browse, bonjour-advertise
+│       ├── src/pairing/         # pairing-server, pairing-protocol
+│       ├── src/receiver/        # sync-server-session, manifest-store, destination-writer, album-folder-policy, receiver-controller, destination-storage-mode
+│       ├── src/persistence/     # settings-store, destination-store, secret-store
+│       ├── src/logging/         # operation-log, operation-logger
+│       └── tests/               # vitest specs covering all Swift tests
 ├── docs/
 │   ├── memory/
 │   └── specs/
@@ -76,9 +93,9 @@ MacReceiverKit ─────────→ SyncCore
 
 | Concern | Choice |
 |---|---|
-| Platforms | iOS 18+、macOS 14+、Swift 6（App targets 與 `SyncCore` package floors 一致） |
-| Discovery | Bonjour `_iphonesync._tcp` |
-| Transport | Network.framework TCP + TLS 1.2 PSK (`TLS_PSK_WITH_AES_128_GCM_SHA256`) |
+| Platforms | iOS 18+、macOS 14+、Windows 11 22H2+（Swift 6 for Apple、Node.js 22 LTS + TypeScript 5 + Electron 32 for Windows） |
+| Discovery | Bonjour `_iphonesync._tcp`（macOS `NWBrowser`、Windows `multicast-dns`） |
+| Transport | Network.framework TCP + TLS 1.2 PSK (`TLS_PSK_WITH_AES_128_GCM_SHA256`) on Apple; Node `tls.createServer` PSK on Windows |
 | Pairing | Temporary TCP + ephemeral Curve25519 + six-digit SAS |
 | Source | PhotoKit `PHAssetResourceManager.requestData` with network access disabled and cancellable staging |
 | Framing | Fixed binary header、JSON control payload、raw chunk payload |

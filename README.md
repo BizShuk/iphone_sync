@@ -12,6 +12,8 @@
 
 ## 1. 這是什麼 (What It Is For)
 
+`iPhone Sync` 提供兩種對等的接收端：macOS menu-bar receiver（原 MVP）與 Windows 11 desktop receiver（Electron + Node.js port）。iPhone sender 透過 Bonjour 自動看見所有 `_iphonesync._tcp` 服務，由使用者在 iPhone 端挑選要同步到哪台電腦；Mac 與 Windows 共用同一份 wire protocol（`protocolVersion = 1`），iOS App 不需區分平台。
+
 ### 解決的問題 (Problem)
 
 | 情境 | 既有做法的痛點 | `iPhone Sync` |
@@ -46,25 +48,16 @@ flowchart LR
 
 ### 影片示範腳本 (Video Demo Transcript)
 
-目標長度 `3:10`，一鏡到底可分段錄。`畫面` 為錄影內容，`旁白` 為配音逐字稿。
+目標長度 `0:30`，六個鏡頭。`畫面` 為錄影內容，`旁白` 為配音逐字稿；配對與目的地選擇在開拍前完成，只錄操作結果。
 
 | 時間 | 畫面 (Screen) | 旁白 (Narration) |
 |---|---|---|
-| `0:00` | Mac 桌面，游標移到 menu bar 的 `iPhone Sync` 圖示 | 「這是 iPhone Sync。它只做一件事：把 iPhone 相簿的原始檔，透過區域網路，備份到我自己的 Mac 資料夾。沒有帳號，沒有雲端。」 |
-| `0:12` | 點開 menu，顯示 `Ready`、`Open Setup`、`Pair New iPhone`、`Choose Destination`、`Quit` | 「Mac 這端是一個常駐選單列 App。它平常安靜地等待，只有在 iPhone 送東西過來時才動作。」 |
-| `0:22` | 點 `Choose Destination`，開啟面板預設落在 `Downloads`，改選 `~/Pictures/Backup` | 「第一步，選一個 Finder 資料夾當備份目的地。第一次會預設開在 Downloads。這個授權會被保存，重開機也不用再選一次。」 |
-| `0:38` | Setup 視窗，`Storage Mode` 下拉展開三個選項 | 「接著決定檔案怎麼排：依相簿分年月、只依相簿、或全部放同一個資料匣。我選預設的 Album / Year / Month。」 |
-| `0:52` | 點 `Pair iPhone`，畫面出現大字的六位數配對碼與兩分鐘倒數 | 「按下配對，Mac 會顯示一組六位數字，兩分鐘有效。這組數字不會走網路，它只是用來確認我眼前這台 Mac 就是我要連的那台。」 |
-| `1:08` | 切到 iPhone 畫面（畫中畫）：授予 Photos Full Access，選 `Camera Roll` 與 `Trip 2026` 兩個相簿 | 「換到 iPhone。授予完整照片權限，然後挑要備份的相簿，可以多選。」 |
-| `1:24` | 按 `Find Mac`，出現 Mac 候選清單，點選後輸入六位數 | 「按 Find Mac，它用 Bonjour 找同一個 Wi-Fi 上開著配對視窗的 Mac，輸入剛剛那組數字。」 |
-| `1:38` | iPhone 顯示已配對；Mac Setup 同步顯示 iPhone 名稱與裝置 ID | 「配對完成。兩邊都記住了對方，之後就不需要再輸入任何東西。」 |
-| `1:48` | iPhone 按 `Sync Now`，進度列顯示目前相簿、目前檔案與已傳位元組 | 「按 Sync Now 立刻同步。它一個相簿接一個相簿地送，每個檔案都會先在 Mac 寫成暫存、驗完 SHA-256 才正式落地。」 |
-| `2:05` | Mac 端 Finder 視窗即時出現 `iPhoneSync/Trip 2026/2026/07/` 與檔案 | 「Mac 這邊就是一般的 Finder 資料夾，沒有專有格式，沒有資料庫綁架。你隨時可以直接搬走。」 |
-| `2:18` | iPhone 中斷 Wi-Fi 幾秒後恢復，再按一次 `Sync Now`，摘要顯示 `Added` 少、`Already` 多 | 「中斷了也沒關係。Mac 記得每個檔案傳到哪個 offset，下一次接著傳，已經備份過的直接跳過。」 |
-| `2:32` | iPhone 打開 `Automatic Sync` toggle，設定 `Schedule time` 為 `02:00` | 「如果不想每天記得，打開 Automatic Sync，設定一個時間。要強調的是：這是最早可執行時間，實際何時跑由 iOS 決定，可能會晚。」 |
-| `2:48` | 從螢幕右上角下拉 Control Center，點 `Sync Now` 控制項 | 「也可以把 Sync Now 放進控制中心或 Siri 捷徑，一鍵觸發。」 |
-| `2:58` | iPhone 與 Mac 的 `Operation Log` 面板並排捲動 | 「兩端都有操作紀錄，配對、探索、連線、每個檔案的生命週期都看得到。密鑰、配對碼與 hash 不會出現在這裡。」 |
-| `3:05` | 回到 Mac menu bar 圖示，畫面淡出 | 「iPhone Sync。你的照片，你的網路，你的硬碟。」 |
+| `0:00` | Mac menu bar 圖示，Setup 顯示已選好的目的地資料夾 | 「把 iPhone 相簿的原始檔，走區域網路備份到自己的 Mac。」 |
+| `0:05` | 點 `Pair iPhone`，大字六位數配對碼與兩分鐘倒數 | 「Mac 顯示六位數字，這組數字不走網路，只用來確認是這台。」 |
+| `0:11` | iPhone 選兩個相簿，按 `Find Mac`，輸入六位數，顯示已配對 | 「iPhone 挑相簿，輸入數字，配對一次就好。」 |
+| `0:17` | 按 `Sync Now`，進度列跑動；Mac Finder 同時長出 `iPhoneSync/Trip 2026/2026/07/` | 「按下同步，檔案驗完 SHA-256 才落地，就是一般的 Finder 資料夾。」 |
+| `0:24` | 再按一次 `Sync Now`，摘要 `Added 0` / `Already 812`；帶到 `Automatic Sync` toggle | 「重跑只補新的。打開自動同步，之後不用再記得。」 |
+| `0:29` | 回到 Mac menu bar 圖示，淡出 | 「你的照片，你的硬碟。」 |
 
 錄影前置檢查 (pre-flight)：Mac 與 iPhone 同一 Wi-Fi、iPhone 已關閉勿擾以外的通知、備份目的地先清空、`Operation Log` 先 clear、Debug 卡片在 Release build 不會出現。
 
@@ -265,8 +258,11 @@ MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、Mac
 | [README.todo](README.todo) | 待辦與實機驗收清單 |
 | [apps/ios/README.md](apps/ios/README.md) | iPhone sender 的 flow 與邊界 |
 | [apps/macos/README.md](apps/macos/README.md) | Mac receiver 的 flow 與邊界 |
+| [apps/windows/README.md](apps/windows/README.md) | Windows 11 receiver 的 flow 與邊界 |
 | [packages/SyncCore/README.md](packages/SyncCore/README.md) | 傳輸協定、crypto、manifest 與 writer |
 | [docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md) | 原始 MVP 設計 |
 | [docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md) | Automatic LAN sync 規格 |
 | [docs/specs/2026-07-24-ui-redesign.md](docs/specs/2026-07-24-ui-redesign.md) | UI design tokens 與版面規格 |
+| [docs/specs/2026-07-25-windows-11-desktop-receiver.md](docs/specs/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 desktop receiver 設計 |
 | [plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md) | Operation timeline contract |
+| [plans/2026-07-25-windows-11-desktop-receiver.md](plans/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 port 實作計畫 |

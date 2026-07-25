@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>iPhone Sync Setup</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <main id="root">
+    <header class="status-header">
+      <h1 class="status-title">Status</h1>
+      <label class="launch-toggle">
+        <input type="checkbox" id="launch-at-login" />
+        <span>Launch at Login</span>
+      </label>
+    </header>
+
+    <section class="status-card">
+      <div class="status-row">
+        <div class="status-icon" id="status-icon">·</div>
+        <div class="status-text">
+          <div class="status-primary" id="status-primary">Loading…</div>
+          <div class="status-secondary" id="status-secondary">Restoring saved settings.</div>
+        </div>
+      </div>
+      <div class="storage-row">
+        <span class="storage-label">Storage Mode</span>
+        <select id="storage-mode">
+          <option value="albumDate">Album / Year / Month</option>
+          <option value="albumOnly">Album</option>
+          <option value="flat">Single Folder</option>
+        </select>
+      </div>
+      <div class="action-row">
+        <button id="choose-destination" class="ghost">Choose Destination</button>
+        <button id="pair-iphone" class="primary">Pair iPhone</button>
+      </div>
+      <div id="pairing-card" class="pairing-card hidden">
+        <div class="pairing-code" id="pairing-code">------</div>
+        <div class="pairing-meta" id="pairing-meta">2:00 remaining</div>
+      </div>
+      <div id="error-banner" class="error-banner hidden"></div>
+    </section>
+
+    <section class="last-sync-card">
+      <h2 class="section-header">Last Sync</h2>
+      <div class="last-sync-stats">
+        <div class="stat"><div class="stat-value" id="stat-added">0</div><div class="stat-label">Added</div></div>
+        <div class="stat"><div class="stat-value" id="stat-existing">0</div><div class="stat-label">Already</div></div>
+        <div class="stat"><div class="stat-value" id="stat-notlocal">0</div><div class="stat-label">Not local</div></div>
+        <div class="stat"><div class="stat-value" id="stat-failed">0</div><div class="stat-label">Failed</div></div>
+      </div>
+    </section>
+
+    <section class="operation-log-card">
+      <header class="operation-log-header">
+        <h2 class="section-header">Operation Log</h2>
+        <div class="operation-log-actions">
+          <button id="copy-all" class="ghost">Copy All</button>
+          <button id="clear-log" class="ghost">Clear</button>
+        </div>
+      </header>
+      <p class="operation-log-meta" id="operation-log-meta">No operations recorded. Secrets and pairing codes are not recorded.</p>
+      <ul id="operation-log-list" class="operation-log-list"></ul>
+    </section>
+  </main>
+
+  <script src="setup.js" type="module"></script>
+  <script type="module" src="./setup.ts"></script>
+</body>
+</html>
+</body>
+</html>

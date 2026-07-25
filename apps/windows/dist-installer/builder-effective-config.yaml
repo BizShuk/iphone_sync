@@ -1,0 +1,41 @@
+directories:
+  output: dist-installer
+  buildResources: assets
+appId: com.shuk.iphonesync.windows
+productName: iPhone Sync
+copyright: Copyright © 2026 shuk
+asar: true
+asarUnpack:
+  - '**/node_modules/better-sqlite3/**'
+  - '**/packages/SyncCore.Windows/dist/**/*'
+files:
+  - filter:
+      - dist/**/*
+      - assets/**/*
+      - package.json
+      - '!**/*.map'
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: assets/icons/tray.ico
+  artifactName: iPhoneSync-Setup-${version}.${ext}
+  publisherName: shuk
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: iPhone Sync
+  deleteAppDataOnUninstall: true
+portable:
+  artifactName: iPhoneSync-Portable-${version}.${ext}
+mac:
+  category: public.app-category.utilities
+  target: null
+electronVersion: 32.3.3

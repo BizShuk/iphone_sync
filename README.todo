@@ -16,6 +16,23 @@
 
 - [ ] 在 signed 實體 iPhone / Mac 驗證 simulated launch/expiration、same/different LAN、sleep/wake、resume 與 overnight delay
 
+## Windows 11 Receiver
+
+- [x] 建立專案骨架（apps/windows/ + packages/SyncCore.Windows/ + Electron + vitest + TypeScript） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [x] 設計 wire protocol 對齊既有 Swift 端（protocolVersion 維持 1，不 bump） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [x] Phase 2: SyncCore.Windows protocol + crypto + resource 實作（FrameCodec, PairingCrypto, ResourceIdentity, FilenamePolicy, FileHasher, OperationLog） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [x] Phase 3: Receiver 核心（BonjourBrowse, BonjourAdvertise, PairingServer, TlsPskServer, ReceiverController, SecretStore） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [x] Phase 4: Manifest + DestinationWriter + SyncServerSession（SQLite + SHA-256 + atomic rename + albumFolderPolicy） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [x] Phase 5: Electron main process 串接 SyncCore.Windows（ModelRoot + IPC） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [x] Phase 6: Setup UI skeleton（setup.html + pairing.html + app.css + renderer） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [x] Phase 7: Canonical docs 同步（README + plan + spec） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
+- [ ] Phase 8: 在 Windows 11 22H2+ 開發機執行 `npm run dist` 產 NSIS + portable（macOS 不可行：electron-builder 會嘗試跑 Windows signtool） @2026-07-25_18:55:00
+- [ ] Phase 8: iPhone 端驗證 iOS → Windows 互通（配對、SAS、Sync Now、Automatic LAN 場景）
+- [ ] Phase 8: Listener retry 完整行為（powerMonitor + network change 注入測試）
+- [ ] Phase 8: 中斷續傳、partial 磁碟、調整 storage mode、launch at login 驗證
+- [ ] Backlog: MSIX 封裝 + SmartScreen 信任
+- [ ] Backlog: 公證 / Store 發佈
+
 ## Archive
 
 - [x] 修正 Automatic Sync lifecycle 重複提交、Debug eligibility 被 re-entry 往後推與前景 timer 重置；pending request 改為 idempotent reconcile @2026-07-23_16:13:46 @Completed @Automatic_LAN_Sync
