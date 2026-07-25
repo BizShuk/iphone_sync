@@ -16,12 +16,12 @@
 
 ### 解決的問題 (Problem)
 
-| 情境 | 既有做法的痛點 | `iPhone Sync` |
-|---|---|---|
-| 想把 iPhone 相簿原始檔留在自己的硬碟 | iCloud 需付費且是雲端副本 | LAN 直傳到你選的 Finder 資料夾 |
-| 想保留 RAW、影片、Live Photo、adjustment | AirDrop 逐張手動、易漏 | 依相簿整批增量，只補未備份的 |
-| 想要固定備份而不用每天記得 | 手動流程一定會忘 | opt-in `Automatic Sync`，由 iOS 於背景擇機執行 |
-| 不想把照片交給第三方服務 | 多數工具需要帳號或雲端 | 無帳號、無伺服器、無 Internet relay |
+| 情境                                     | 既有做法的痛點            | `iPhone Sync`                                  |
+| ---------------------------------------- | ------------------------- | ---------------------------------------------- |
+| 想把 iPhone 相簿原始檔留在自己的硬碟     | iCloud 需付費且是雲端副本 | LAN 直傳到你選的 Finder 資料夾                 |
+| 想保留 RAW、影片、Live Photo、adjustment | AirDrop 逐張手動、易漏    | 依相簿整批增量，只補未備份的                   |
+| 想要固定備份而不用每天記得               | 手動流程一定會忘          | opt-in `Automatic Sync`，由 iOS 於背景擇機執行 |
+| 不想把照片交給第三方服務                 | 多數工具需要帳號或雲端    | 無帳號、無伺服器、無 Internet relay            |
 
 ### 業務定義 (Business Definition)
 
@@ -50,14 +50,14 @@ flowchart LR
 
 目標長度 `0:30`，六個鏡頭。`畫面` 為錄影內容，`旁白` 為配音逐字稿；配對與目的地選擇在開拍前完成，只錄操作結果。
 
-| 時間 | 畫面 (Screen) | 旁白 (Narration) |
-|---|---|---|
-| `0:00` | Mac menu bar 圖示，Setup 顯示已選好的目的地資料夾 | 「把 iPhone 相簿的原始檔，走區域網路備份到自己的 Mac。」 |
-| `0:05` | 點 `Pair iPhone`，大字六位數配對碼與兩分鐘倒數 | 「Mac 顯示六位數字，這組數字不走網路，只用來確認是這台。」 |
-| `0:11` | iPhone 選兩個相簿，按 `Find Mac`，輸入六位數，顯示已配對 | 「iPhone 挑相簿，輸入數字，配對一次就好。」 |
-| `0:17` | 按 `Sync Now`，進度列跑動；Mac Finder 同時長出 `iPhoneSync/Trip 2026/2026/07/` | 「按下同步，檔案驗完 SHA-256 才落地，就是一般的 Finder 資料夾。」 |
-| `0:24` | 再按一次 `Sync Now`，摘要 `Added 0` / `Already 812`；帶到 `Automatic Sync` toggle | 「重跑只補新的。打開自動同步，之後不用再記得。」 |
-| `0:29` | 回到 Mac menu bar 圖示，淡出 | 「你的照片，你的硬碟。」 |
+| 時間   | 畫面 (Screen)                                                                     | 旁白 (Narration)                                                  |
+| ------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `0:00` | Mac menu bar 圖示，Setup 顯示已選好的目的地資料夾                                 | 「把 iPhone 相簿的原始檔，走區域網路備份到自己的 Mac。」          |
+| `0:05` | 點 `Pair iPhone`，大字六位數配對碼與兩分鐘倒數                                    | 「Mac 顯示六位數字，這組數字不走網路，只用來確認是這台。」        |
+| `0:11` | iPhone 選兩個相簿，按 `Find Mac`，輸入六位數，顯示已配對                          | 「iPhone 挑相簿，輸入數字，配對一次就好。」                       |
+| `0:17` | 按 `Sync Now`，進度列跑動；Mac Finder 同時長出 `iPhoneSync/Trip 2026/2026/07/`    | 「按下同步，檔案驗完 SHA-256 才落地，就是一般的 Finder 資料夾。」 |
+| `0:24` | 再按一次 `Sync Now`，摘要 `Added 0` / `Already 812`；帶到 `Automatic Sync` toggle | 「重跑只補新的。打開自動同步，之後不用再記得。」                  |
+| `0:29` | 回到 Mac menu bar 圖示，淡出                                                      | 「你的照片，你的硬碟。」                                          |
 
 錄影前置檢查 (pre-flight)：Mac 與 iPhone 同一 Wi-Fi、iPhone 已關閉勿擾以外的通知、備份目的地先清空、`Operation Log` 先 clear、Debug 卡片在 Release build 不會出現。
 
@@ -68,12 +68,12 @@ flowchart LR
 1. Mac 保持登入即可，menu-bar receiver 會自動恢復 destination、配對與 manifest。
 2. iPhone 端有四種觸發同步的入口：
 
-| 入口 | 位置 | 行為 |
-|---|---|---|
-| `Sync Now` | iPhone 主畫面 Mac 卡片 | 立即前景同步，永遠可用的 fallback |
-| Control widget | 控制中心自訂項目 `Sync Now` | 不開啟 App，透過 `SyncNowIntent` 觸發既有 sync 入口 |
-| 1x1 shortcut | Shortcuts / Siri：`Sync now in iPhone Sync` | 同上，走同一個 `handleIncomingURL` 路徑 |
-| `Automatic Sync` | 主畫面 `AUTOMATIC SYNC` 區 | opt-in 後由 iOS `BGProcessingTask` best-effort 啟動 |
+| 入口             | 位置                                        | 行為                                                |
+| ---------------- | ------------------------------------------- | --------------------------------------------------- |
+| `Sync Now`       | iPhone 主畫面 Mac 卡片                      | 立即前景同步，永遠可用的 fallback                   |
+| Control widget   | 控制中心自訂項目 `Sync Now`                 | 不開啟 App，透過 `SyncNowIntent` 觸發既有 sync 入口 |
+| 1x1 shortcut     | Shortcuts / Siri：`Sync now in iPhone Sync` | 同上，走同一個 `handleIncomingURL` 路徑             |
+| `Automatic Sync` | 主畫面 `AUTOMATIC SYNC` 區                  | opt-in 後由 iOS `BGProcessingTask` best-effort 啟動 |
 
 3. 同步中可按 `Cancel`；同一時間只允許一個 run（single-flight）。
 4. 完成後 `LAST SYNC` 顯示 `Added` / `Already` / `Not local` / `Failed` 四項摘要。
@@ -82,11 +82,11 @@ flowchart LR
 
 Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容器本身不可變更：
 
-| 模式 | 實際路徑 | 適用 |
-|---|---|---|
-| `Album / Year / Month`（預設） | `<destination>/iPhoneSync/<album>/<year>/<month>/<file>` | 相簿多、時間跨度長 |
-| `Album` | `<destination>/iPhoneSync/<album>/<file>` | 相簿即分類，不需日期層 |
-| `Single Folder` | `<destination>/iPhoneSync/<file>` | 之後交給其他工具再分類 |
+| 模式                           | 實際路徑                                                 | 適用                   |
+| ------------------------------ | -------------------------------------------------------- | ---------------------- |
+| `Album / Year / Month`（預設） | `<destination>/iPhoneSync/<album>/<year>/<month>/<file>` | 相簿多、時間跨度長     |
+| `Album`                        | `<destination>/iPhoneSync/<album>/<file>`                | 相簿即分類，不需日期層 |
+| `Single Folder`                | `<destination>/iPhoneSync/<file>`                        | 之後交給其他工具再分類 |
 
 若 `iPhoneSync` 或相簿資料夾已是安全的真實資料夾，Mac 直接重用並保留全部既有內容；若同名項目是檔案、symlink 或不安全路徑，session 會拒絕並顯示於 Mac `Operation Log`。切換模式不會搬動或刪除既有 committed 檔案。
 
@@ -112,17 +112,17 @@ iPhone 主畫面與 Mac Setup 都有 `Operation Log` panel，以 `info`、`succe
 
 技術脈絡與版本決策的單一來源為 [CLAUDE.md](CLAUDE.md)。
 
-| 依賴 | 版本 / 來源 | 用途 |
-|---|---|---|
-| macOS | `14.0+`（receiver 部署目標） | 執行 Mac menu-bar receiver |
-| iOS | `18.0+`（sender 部署目標） | 執行 iPhone sender 與 Control Center 控制項 |
-| Xcode | `26.0`（`project.yml` `xcodeVersion`） | 建置兩個 App target |
-| Swift | `6.0` | `SyncCore` / `MacReceiverKit` 與兩個 App |
-| XcodeGen | `brew install xcodegen` | 由 `project.yml` 產生 project、Info.plist、entitlements |
-| jq | `brew install jq` | `scripts/verify.sh` 解析 simulator 清單 |
-| plutil | macOS 內建 | 驗證產生的 plist 與挑選實體裝置 |
-| xcrun devicectl | Xcode 內建 | 安裝、啟動實體 iPhone 與附掛 console |
-| Apple Development 簽署 | Apple ID + development team | 實機安裝、sandbox 授權、launch at login |
+| 依賴                   | 版本 / 來源                            | 用途                                                    |
+| ---------------------- | -------------------------------------- | ------------------------------------------------------- |
+| macOS                  | `14.0+`（receiver 部署目標）           | 執行 Mac menu-bar receiver                              |
+| iOS                    | `18.0+`（sender 部署目標）             | 執行 iPhone sender 與 Control Center 控制項             |
+| Xcode                  | `26.0`（`project.yml` `xcodeVersion`） | 建置兩個 App target                                     |
+| Swift                  | `6.0`                                  | `SyncCore` / `MacReceiverKit` 與兩個 App                |
+| XcodeGen               | `brew install xcodegen`                | 由 `project.yml` 產生 project、Info.plist、entitlements |
+| jq                     | `brew install jq`                      | `scripts/verify.sh` 解析 simulator 清單                 |
+| plutil                 | macOS 內建                             | 驗證產生的 plist 與挑選實體裝置                         |
+| xcrun devicectl        | Xcode 內建                             | 安裝、啟動實體 iPhone 與附掛 console                    |
+| Apple Development 簽署 | Apple ID + development team            | 實機安裝、sandbox 授權、launch at login                 |
 
 `project.yml` 是 Xcode target、Info.plist 與 entitlements 的唯一來源；不要直接修改產生後的 `apps/*/Info.plist` 或 `*.entitlements`。權限逐項說明見 [README.permission.md](README.permission.md)。
 
@@ -195,13 +195,13 @@ iPhone sender：
 
 常見狀況：
 
-| 症狀 | 檢查點 |
-|---|---|
+| 症狀                  | 檢查點                                                                                                |
+| --------------------- | ----------------------------------------------------------------------------------------------------- |
 | `Find Mac` 找不到 Mac | 兩端同一 Wi-Fi、Mac 配對視窗仍在兩分鐘內、非 guest network / VLAN / VPN、router 未開 client isolation |
-| 配對碼輸入失敗 | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone` |
-| 大量 `Not local` | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機 |
-| Automatic 從未執行 | `earliestBeginDate` 不是保證；先用 Debug 卡片驗證路徑，再用 `Sync Now` 作為 fallback |
-| Mac 寫入被拒 | 目的地同名項目是檔案或 symlink，`Operation Log` 會標示；換一個 destination 或移除該項目 |
+| 配對碼輸入失敗        | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone`                                           |
+| 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                |
+| Automatic 從未執行    | `earliestBeginDate` 不是保證；先用 Debug 卡片驗證路徑，再用 `Sync Now` 作為 fallback                  |
+| Mac 寫入被拒          | 目的地同名項目是檔案或 symlink，`Operation Log` 會標示；換一個 destination 或移除該項目               |
 
 ## 4. 驗證、設定與邊界 (Verification, Settings, Boundaries)
 
@@ -227,10 +227,12 @@ Windows 11 receiver 端會額外跑 `scripts/verify_windows.sh`：51 個 vitest�
 3. 上傳 artifact `iPhoneSync-Windows-x64` 與自動發佈到 GitHub Release
 
 Trigger：
+
 - `v*` tag push → 自動建立 Public Release
 - `workflow_dispatch` → Manual 建立 Draft Release
 
 本地預覽（macOS 開發機驗證）：
+
 ```bash
 bash scripts/verify_windows.sh      # 51 tests + 2 builds + invariants pass
 ```
@@ -239,16 +241,16 @@ bash scripts/verify_windows.sh      # 51 tests + 2 builds + invariants pass
 
 App 設定依資料敏感度使用 Apple 原生持久層，不集中到單一可讀檔案：
 
-| Data | Persistent Store |
-|---|---|
-| automatic sync enablement、last attempt/success/outcome、next eligible time、schedule time | iOS sandbox `UserDefaults`，由 `IOSAutomaticSyncStore` 管理 |
-| receiver ID、source binding、storage mode、launch-at-login intent | sandbox `UserDefaults`，由 `MacSettingsStore` 管理 |
-| Finder destination permission | security-scoped bookmark in sandbox preferences |
-| paired iPhone PSK、opaque identity | login Keychain |
-| album mappings、完成狀態、續傳 checkpoint | SwiftData in App container `Application Support` |
-| 開機自動執行 | `SMAppService.mainApp` login item registration |
-| Setup window size/position、menu-bar item position | AppKit autosave |
-| iOS / macOS operation timeline | 各 App process 的 bounded in-memory buffer（最新 500 筆）+ Apple Unified Logging |
+| Data                                                                                       | Persistent Store                                                                 |
+| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
+| automatic sync enablement、last attempt/success/outcome、next eligible time、schedule time | iOS sandbox `UserDefaults`，由 `IOSAutomaticSyncStore` 管理                      |
+| receiver ID、source binding、storage mode、launch-at-login intent                          | sandbox `UserDefaults`，由 `MacSettingsStore` 管理                               |
+| Finder destination permission                                                              | security-scoped bookmark in sandbox preferences                                  |
+| paired iPhone PSK、opaque identity                                                         | login Keychain                                                                   |
+| album mappings、完成狀態、續傳 checkpoint                                                  | SwiftData in App container `Application Support`                                 |
+| 開機自動執行                                                                               | `SMAppService.mainApp` login item registration                                   |
+| Setup window size/position、menu-bar item position                                         | AppKit autosave                                                                  |
+| iOS / macOS operation timeline                                                             | 各 App process 的 bounded in-memory buffer（最新 500 筆）+ Apple Unified Logging |
 
 `Automatic Sync` 預設關閉；關閉時取消 pending request 與 active automatic run，不刪除 pairing、相簿選擇、partial 或 manifest。`Launch at Login` 首次預設啟用，使用者關閉後保存該選擇。六位數 pairing code、active connection 與 panel 中的 operation timeline 是 transient runtime state，不跨重啟保存。
 
@@ -270,18 +272,18 @@ MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、Mac
 
 ### 文件索引 (Documentation Index)
 
-| 文件 | 內容 |
-|---|---|
-| [CLAUDE.md](CLAUDE.md) | 技術脈絡、架構、依賴方向、已核准技術選擇 |
-| [README.permission.md](README.permission.md) | iOS / macOS 權限與能力逐項說明 |
-| [README.todo](README.todo) | 待辦與實機驗收清單 |
-| [apps/ios/README.md](apps/ios/README.md) | iPhone sender 的 flow 與邊界 |
-| [apps/macos/README.md](apps/macos/README.md) | Mac receiver 的 flow 與邊界 |
-| [apps/windows/README.md](apps/windows/README.md) | Windows 11 receiver 的 flow 與邊界 |
-| [packages/SyncCore/README.md](packages/SyncCore/README.md) | 傳輸協定、crypto、manifest 與 writer |
-| [docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md) | 原始 MVP 設計 |
-| [docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md) | Automatic LAN sync 規格 |
-| [docs/specs/2026-07-24-ui-redesign.md](docs/specs/2026-07-24-ui-redesign.md) | UI design tokens 與版面規格 |
-| [docs/specs/2026-07-25-windows-11-desktop-receiver.md](docs/specs/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 desktop receiver 設計 |
-| [plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md) | Operation timeline contract |
-| [plans/2026-07-25-windows-11-desktop-receiver.md](plans/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 port 實作計畫 |
+| 文件                                                                                                         | 內容                                     |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
+| [CLAUDE.md](CLAUDE.md)                                                                                       | 技術脈絡、架構、依賴方向、已核准技術選擇 |
+| [README.permission.md](README.permission.md)                                                                 | iOS / macOS 權限與能力逐項說明           |
+| [README.todo](README.todo)                                                                                   | 待辦與實機驗收清單                       |
+| [apps/ios/README.md](apps/ios/README.md)                                                                     | iPhone sender 的 flow 與邊界             |
+| [apps/macos/README.md](apps/macos/README.md)                                                                 | Mac receiver 的 flow 與邊界              |
+| [apps/windows/README.md](apps/windows/README.md)                                                             | Windows 11 receiver 的 flow 與邊界       |
+| [packages/SyncCore/README.md](packages/SyncCore/README.md)                                                   | 傳輸協定、crypto、manifest 與 writer     |
+| [docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md)         | 原始 MVP 設計                            |
+| [docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md)                   | Automatic LAN sync 規格                  |
+| [docs/specs/2026-07-24-ui-redesign.md](docs/specs/2026-07-24-ui-redesign.md)                                 | UI design tokens 與版面規格              |
+| [docs/specs/2026-07-25-windows-11-desktop-receiver.md](docs/specs/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 desktop receiver 設計         |
+| [plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)                         | Operation timeline contract              |
+| [plans/2026-07-25-windows-11-desktop-receiver.md](plans/2026-07-25-windows-11-desktop-receiver.md)           | Windows 11 port 實作計畫                 |
