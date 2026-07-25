@@ -32,20 +32,13 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
-      - name: Install dependencies (root)
-        run: npm ci --no-audit --no-fund
-
       - name: Install + test + build SyncCore.Windows
+        shell: pwsh
         run: |
           cd packages/SyncCore.Windows
           npm ci --no-audit --no-fund
           npm test
           npm run build
-
-      - name: Copy SyncCore.Windows dist into apps/windows/node_modules
-        shell: pwsh
-        run: |
-          node scripts/copy-sync-core.js
 
       - name: Install + build apps/windows
         shell: pwsh
@@ -53,6 +46,12 @@ jobs:
           cd apps/windows
           npm ci --no-audit --no-fund
           npm run build
+
+      - name: Copy SyncCore.Windows dist into apps/windows/node_modules
+        shell: pwsh
+        run: |
+          cd apps/windows
+          node scripts/copy-sync-core.js
 
       - name: Produce NSIS installer + portable .exe
         shell: pwsh
