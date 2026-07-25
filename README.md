@@ -25,7 +25,7 @@
 
 ### 業務定義 (Business Definition)
 
-- 來源固定為一部 iPhone 上由使用者選取的一個或多個 Photos 相簿。
+- 來源固定為一部 iPhone 上由使用者選取的一個或 多個 Photos 相簿。
 - 目的地固定為一部已配對 Mac 上的 Finder folder；實際寫入位置固定在 `<selected-folder>/iPhoneSync/` 之下，版面由 `Storage Mode` 決定。
 - 同步只新增；iPhone 刪除不會傳播至 Mac，也不覆寫 Mac 既有的不同內容。
 - 傳輸只使用同一區域網路，不使用 AirDrop、Bluetooth、Internet relay 或雲端服務。
