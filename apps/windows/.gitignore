@@ -1,3 +1,9 @@
 node_modules/
 dist/
 dist-installer/
+
+# Re-include the hand-written ambient declaration for `window.iphoneSync`.
+# The user's global ~/.gitignore excludes `*.d.ts` (intended for tsc-emitted
+# files), but this `.d.ts` is a tracked source file consumed by the renderer
+# scripts via the tsconfig `include` glob, not a build artifact.
+!src/renderer/global.d.ts

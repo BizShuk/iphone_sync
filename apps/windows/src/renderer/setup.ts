@@ -1,6 +1,6 @@
 // Setup renderer — wires the Setup DOM to the preload `window.iphoneSync` API.
-
-/// <reference path="./global.d.ts" />
+// `window.iphoneSync` ambient declaration is contributed by `./global.d.ts`,
+// which is auto-included via the root tsconfig `include: ["src/**/*"]` glob.
 
 const api = window.iphoneSync;
 
