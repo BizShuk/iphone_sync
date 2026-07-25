@@ -9,8 +9,12 @@
 
 import { EventEmitter } from 'node:events';
 import { createSocket, type Socket as UdpSocket } from 'node:dgram';
-import { packet, stringDecoder } from 'dns-packet';
-import type { DecodedWithoutName } from 'dns-packet';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import Packet from 'dns-packet';
+// Re-import the namespace under a different name to avoid clashing with
+// the default class export.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { Answer } from 'dns-packet';
 import { SyncConstants } from '../protocol/constants.js';
 
 export interface DiscoveredReceiver {
@@ -35,7 +39,11 @@ export class BonjourBrowse extends EventEmitter {
     const socket = createSocket({ type: 'udp4', reuseAddr: true });
     socket.on('message', (msg) => {
       try {
-        const decoded = packet.decode(msg) as DecodedWithoutName;
+        // The runtime `dns-packet` default export is a class; we use a
+        // structural decode without taking a hard dependency on its
+        // specific TS shape (the @types/dns-packet types intentionally
+        // omit the runtime helpers).
+        const decoded = this.decode(msg);
         this.handlePacket(decoded);
       } catch {
         // ignore malformed packets
@@ -62,31 +70,46 @@ export class BonjourBrowse extends EventEmitter {
     this.known.clear();
   }
 
-  private sendQuery(socket: UdpSocket): void {
-    const query = packet.encode({
+  private decode(buf: Buffer): { answers: Array<Answer>; additionals: Array<Answer> } {
+    // We delegate to the runtime class' static decode. Casting to `any`
+    // is intentional: @types/dns-packet does not declare the runtime
+    // helper `decode`, only the static-side type aliases.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const PacketClass: any = require('dns-packet');
+    return PacketClass.decode(buf) as { answers: Array<Answer>; additionals: Array<Answer> };
+  }
+
+  private encodeQuery(): Buffer {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const PacketClass: any = require('dns-packet');
+    return PacketClass.encode({
       type: 'query',
       id: 0,
-      flags: packet.RECURSION_DESIRED,
+      flags: PacketClass.RECURSION_DESIRED,
       questions: [{ name: this.serviceType, type: 'PTR', class: 'IN' }],
-    });
+    }) as Buffer;
+  }
+
+  private sendQuery(socket: UdpSocket): void {
+    const query = this.encodeQuery();
     socket.send(query, 0, query.length, 5353, '224.0.0.251');
   }
 
-  private handlePacket(decoded: DecodedWithoutName): void {
-    const answers = (decoded.answers ?? []) as Array<Record<string, unknown>>;
-    const additionals = (decoded.additionals ?? []) as Array<Record<string, unknown>>;
+  private handlePacket(decoded: { answers?: Array<Answer>; additionals?: Array<Answer> }): void {
+    const answers = (decoded.answers ?? []) as Array<Answer>;
+    const additionals = (decoded.additionals ?? []) as Array<Answer>;
     const all = [...answers, ...additionals];
 
     const txtByName = new Map<string, Record<string, string>>();
     let ptrName: string | null = null;
     for (const record of all) {
-      if (record.type === 'PTR' && record.name === this.serviceType) {
-        ptrName = String(record.data ?? '');
+      if (record.type === 'PTR' && (record as { name?: string }).name === this.serviceType) {
+        ptrName = String((record as { data?: unknown }).data ?? '');
       }
       if (record.type === 'TXT') {
-        const decoder = stringDecoder as unknown as (buf: Buffer) => string[];
-        const txt = parseTxt(record.data as Buffer, decoder);
-        txtByName.set(String(record.name ?? ''), txt);
+        const data = (record as { data?: Buffer }).data;
+        const txt = parseTxt(data);
+        txtByName.set(String((record as { name?: string }).name ?? ''), txt);
       }
     }
     if (!ptrName) ptrName = this.serviceType;
@@ -120,12 +143,17 @@ export class BonjourBrowse extends EventEmitter {
 
 function parseTxt(
   data: Buffer | undefined,
-  decoder: (buf: Buffer) => string[],
 ): Record<string, string> {
   if (!data) return {};
-  const parts = decoder(data);
+  // TXT records concatenate length-prefixed strings.
   const out: Record<string, string> = {};
-  for (const part of parts) {
+  let offset = 0;
+  while (offset < data.length) {
+    const len = data[offset]!;
+    offset += 1;
+    if (offset + len > data.length) break;
+    const part = data.slice(offset, offset + len).toString('utf-8');
+    offset += len;
     const eq = part.indexOf('=');
     if (eq <= 0) continue;
     out[part.slice(0, eq)] = part.slice(eq + 1);

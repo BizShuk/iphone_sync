@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ManifestStore } from '../src/receiver/manifest-store';
@@ -92,9 +92,5 @@ describe('ManifestStore', () => {
     };
     expect(store.decisionFor(changed).kind).toBe('start');
     store.close();
-  });
-
-  it('cleanup', () => {
-    rmSync(dir, { recursive: true, force: true });
   });
 });

@@ -4,7 +4,6 @@
 // `startNormalListener(...)`.
 
 import { createSocket, type Socket as UdpSocket } from 'node:dgram';
-import { packet, stringEncoder } from 'dns-packet';
 
 export interface AdvertiseOptions {
   serviceType: string;
@@ -14,16 +13,31 @@ export interface AdvertiseOptions {
   pairing: boolean;
 }
 
+interface DnsPacketClass {
+  encode(obj: Record<string, unknown>): Buffer;
+  decode(buf: Buffer): Record<string, unknown>;
+  RECURSION_DESIRED: number;
+  AUTHORITATIVE_ANSWER: number;
+}
+
+function loadPacket(): DnsPacketClass {
+  // The runtime dns-packet default export is a class with static helpers;
+  // @types/dns-packet does not declare these to keep the surface typed.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+  return require('dns-packet');
+}
+
 export class BonjourAdvertise {
   private socket: UdpSocket | null = null;
+  private readonly PacketClass = loadPacket();
 
   constructor(private readonly options: AdvertiseOptions) {}
 
   start(): void {
     const socket = createSocket({ type: 'udp4', reuseAddr: true });
-    socket.on('message', (msg, rinfo) => {
+    socket.on('message', (msg) => {
       try {
-        const decoded = packet.decode(msg) as { questions?: Array<{ name: string; type: string }> };
+        const decoded = this.PacketClass.decode(msg) as { questions?: Array<{ name: string }> };
         if (decoded.questions && decoded.questions.length > 0) {
           const want = decoded.questions.some((q) => q.name === this.options.serviceType);
           if (want) this.sendResponse(socket);
@@ -31,7 +45,6 @@ export class BonjourAdvertise {
       } catch {
         // ignore
       }
-      void rinfo;
     });
     socket.bind(5353, () => {
       socket.addMembership('224.0.0.251');
@@ -48,16 +61,16 @@ export class BonjourAdvertise {
   }
 
   private sendResponse(socket: UdpSocket): void {
-    const txtData = encodeTxt({
+    const txtBuffer = encodeTxt({
       id: this.options.id,
       name: this.options.name,
       version: '1',
       pairing: this.options.pairing ? '1' : '0',
     });
-    const response = packet.encode({
+    const response = this.PacketClass.encode({
       type: 'response',
       id: 0,
-      flags: packet.AUTHORITATIVE_ANSWER,
+      flags: this.PacketClass.AUTHORITATIVE_ANSWER,
       answers: [
         {
           name: this.options.serviceType,
@@ -71,7 +84,7 @@ export class BonjourAdvertise {
           type: 'TXT',
           class: 'IN',
           ttl: 4500,
-          data: txtData,
+          data: txtBuffer,
         },
         {
           name: this.options.serviceType,
@@ -87,7 +100,13 @@ export class BonjourAdvertise {
 }
 
 function encodeTxt(parts: Record<string, string>): Buffer {
-  const entries = Object.entries(parts).map(([k, v]) => `${k}=${v}`);
-  const encoder = stringEncoder as unknown as (strs: string[]) => Buffer;
-  return encoder(entries);
+  const chunks: Buffer[] = [];
+  for (const [k, v] of Object.entries(parts)) {
+    const text = `${k}=${v}`;
+    const buf = Buffer.from(text, 'utf-8');
+    if (buf.length > 255) continue; // TXT labels are max 255 bytes
+    chunks.push(Buffer.from([buf.length]));
+    chunks.push(buf);
+  }
+  return Buffer.concat(chunks);
 }

@@ -7,5 +7,9 @@ export default defineConfig({
     globals: false,
     testTimeout: 10_000,
     pool: 'forks',
+    fileParallelism: false,
+    // Windows: enable consistent cleanup so SQLite WAL/journal locks
+    // close before the temp dir is removed.
+    isolate: true,
   },
 });
