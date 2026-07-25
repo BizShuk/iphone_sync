@@ -30,7 +30,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache-dependency-path: |
+            packages/SyncCore.Windows/package-lock.json
+            apps/windows/package-lock.json
 
       - name: Install + test + build SyncCore.Windows
         shell: pwsh
