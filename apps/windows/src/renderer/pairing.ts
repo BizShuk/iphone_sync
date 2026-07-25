@@ -1,6 +1,6 @@
 // Pairing renderer — updates the six-digit code and the countdown every second.
 
-import './global.js';
+/// <reference path="./global.d.ts" />
 
 const api = window.iphoneSync;
 

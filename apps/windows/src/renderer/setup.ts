@@ -1,6 +1,6 @@
 // Setup renderer — wires the Setup DOM to the preload `window.iphoneSync` API.
 
-import './global.js';
+/// <reference path="./global.d.ts" />
 
 const api = window.iphoneSync;
 
