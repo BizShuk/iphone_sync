@@ -30,6 +30,8 @@ iphone_sync/
 │   └── iphone-mac-permission/ # permission audit and synchronization workflow
 │       ├── SKILL.md
 │       └── references/permissions.md
+├── .github/workflows/
+│   └── release-windows.yml      # Windows 11 NSIS + portable .exe build → GitHub Release
 ├── project.yml                  # XcodeGen canonical target/plist configuration
 ├── iPhoneSync.xcodeproj/        # committed generated project
 ├── apps/
@@ -144,14 +146,25 @@ xcodegen generate
 完整非破壞性驗證：
 
 ```bash
-bash scripts/verify.sh
+bash scripts/verify.sh           # macOS + iOS + Windows 端 SyncCore.Windows tests + invariants
 ```
 
 個別 package 驗證：
 
 ```bash
 swift test --package-path packages/SyncCore
+bash scripts/verify_windows.sh   # SyncCore.Windows 51 vitest + 兩 build + source invariants
 ```
+
+Windows 11 開發機：
+
+```bash
+(cd packages/SyncCore.Windows && npm ci && npm run build)
+(cd apps/windows && npm ci && npm run build && npm run dist)
+```
+
+GitHub Actions 自動 release：
+- `.github/workflows/release-windows.yml` 在 `windows-latest` 跑 `npm run dist`，產 NSIS + portable 上傳到 GitHub Release（`v*` tag = public、workflow_dispatch = draft）。
 
 驗證腳本使用 `CODE_SIGNING_ALLOWED=NO` 建置 `iPhoneSyncMac`、generic iOS Simulator 與 `Release` generic iOS device；Release build 必須編譯 production cadence 分支。腳本也檢查 `BGTaskSchedulerPermittedIdentifiers`、`UIBackgroundModes = processing`、hard-cancellation、Mac recovery 與兩端 Operation Log source invariants。這些 Mac/BG checks 證明 source contract 與 platform compilation，不是 listener recovery、OS launch/expiration 或 signed network behavior tests。
 

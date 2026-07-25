@@ -208,13 +208,32 @@ iPhone sender：
 ### 驗證 (Verification)
 
 ```bash
-bash scripts/verify.sh                          # canonical 全量驗證
-swift test --package-path packages/SyncCore     # 只跑 package tests
+bash scripts/verify.sh                          # canonical 全量驗證（含 SyncCore.Windows 51 tests + 兩 build + source invariants）
+swift test --package-path packages/SyncCore     # 只跑 Swift package tests
 ```
 
 驗證入口會執行 Swift package tests、重新產生 Xcode project、建置 macOS、iOS Simulator 與 `Release` generic iOS device targets、檢查 plist / entitlements / local-only source invariants，以及 tracked、staged、untracked whitespace checks。`Release` device build 會實際編譯 `#if DEBUG` 之外的 production cadence 分支。建置使用 `CODE_SIGNING_ALLOWED=NO`。
 
+Windows 11 receiver 端會額外跑 `scripts/verify_windows.sh`：51 個 vitest、SyncCore.Windows 與 apps/windows 兩個 TypeScript build、source-string invariants（HKDF labels、`IPS1` magic、`iPhoneSync` 容器、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`powerMonitor` 等）。`npm run dist`（NSIS + portable）只在 Windows MSYS shell 觸發。
+
 最近一次 canonical 通過紀錄為 `51` 個 Swift package tests、`30` 個 iOS unit tests 與三個 build。Mac half-open deadline 有 package behavior test；其餘 receiver recovery 與 `BGProcessingTask` lifecycle 主要是編譯與 source-invariant 證據，不等同完整行為測試或實機驗收。
+
+### Windows 11 Release (GitHub Actions)
+
+`.github/workflows/release-windows.yml` 自動在 `windows-latest` 跑：
+
+1. `npm ci` + `npm run build`（SyncCore.Windows 與 apps/windows）
+2. `npm run dist`（electron-builder 產 NSIS installer + portable .exe）
+3. 上傳 artifact `iPhoneSync-Windows-x64` 與自動發佈到 GitHub Release
+
+Trigger：
+- `v*` tag push → 自動建立 Public Release
+- `workflow_dispatch` → Manual 建立 Draft Release
+
+本地預覽（macOS 開發機驗證）：
+```bash
+bash scripts/verify_windows.sh      # 51 tests + 2 builds + invariants pass
+```
 
 ### 持久化設定 (Persistent Settings)
 

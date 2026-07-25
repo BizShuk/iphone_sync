@@ -26,10 +26,11 @@
 - [x] Phase 5: Electron main process 串接 SyncCore.Windows（ModelRoot + IPC） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
 - [x] Phase 6: Setup UI skeleton（setup.html + pairing.html + app.css + renderer） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
 - [x] Phase 7: Canonical docs 同步（README + plan + spec） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [ ] Phase 8: 在 Windows 11 22H2+ 開發機執行 `npm run dist` 產 NSIS + portable（macOS 不可行：electron-builder 會嘗試跑 Windows signtool） @2026-07-25_18:55:00
+- [ ] Phase 8: GitHub Actions `windows-latest` runner 自動 release（`v*` tag → Public Release, `workflow_dispatch` → Draft） @2026-07-25_19:00:00 @Completed
 - [ ] Phase 8: iPhone 端驗證 iOS → Windows 互通（配對、SAS、Sync Now、Automatic LAN 場景）
 - [ ] Phase 8: Listener retry 完整行為（powerMonitor + network change 注入測試）
 - [ ] Phase 8: 中斷續傳、partial 磁碟、調整 storage mode、launch at login 驗證
+- [ ] Backlog: 在 Windows 11 22H2+ 開發機本地執行 `npm run dist` 驗證手動 packaging
 - [ ] Backlog: MSIX 封裝 + SmartScreen 信任
 - [ ] Backlog: 公證 / Store 發佈
 
