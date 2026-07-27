@@ -46,7 +46,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Find your Mac and transfer original photo resources on this local network.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Select one or more albums and back up their original resources to your paired Mac.</string>
+	<string>Select albums, back up their original resources, and optionally delete fully backed-up photos after confirmation.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>processing</string>

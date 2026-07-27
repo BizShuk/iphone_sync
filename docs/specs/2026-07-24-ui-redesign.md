@@ -6,6 +6,8 @@ Date: `2026-07-24`
 
 Scope: `Visual + interaction redesign of iPhoneSyncIOS and iPhoneSyncMac SwiftUI surfaces, without changing SyncCore / MacReceiverKit contracts or the wire protocol.`
 
+Later extension: `2026-07-27` 的 [Delete After Sync 規格](2026-07-27-delete-after-sync.md) 在 iOS main view 新增獨立 `AFTER SYNC` destructive card；仍不改 wire protocol、receiver contract 或 entitlement，但 foreground deletion 會使用既有 Photos `.readWrite` authorization 的 system change confirmation。
+
 ## 1. Design Thesis
 
 A wire-quiet signal.

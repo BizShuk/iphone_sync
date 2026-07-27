@@ -9,6 +9,9 @@
 ## 實機驗收 (Live-device Acceptance)
 
 - [ ] 驗證 iCloud-only resource 跳過、RAW+JPEG、Live Photo、adjustment data 與大型影片
+- [ ] 在 signed 實體 iPhone 驗證 `Delete After Sync` 預設關閉、enable warning、Photos allow / cancel、disable 清 pending 與 App relaunch persistence
+- [ ] 驗證 mixed-resource asset（Live Photo / RAW+JPEG / adjustment / iCloud-only）只有全部 resource confirmed 才刪除，且 `iCloud Photos` 跨裝置與 `Recently Deleted` 行為符合警告
+- [ ] 驗證 background sync 只保存 pending IDs，App relaunch 後由 foreground `Delete N Synced Photos` confirmation 完成或安全取消
 - [ ] 驗證中斷續傳、iPhone 進入背景、Mac sleep、VPN、router isolation 與磁碟空間不足
 - [ ] 決定簽署、公證 (notarization) 與安裝/發佈方式
 
@@ -36,6 +39,7 @@
 
 ## Archive
 
+- [x] 加入預設關閉的 `Delete After Sync`、跨相簿 all-resource asset eligibility、foreground PhotoKit confirmation、background pending queue、disable/forget 清 pending 與權限/文件/測試 invariants @2026-07-27_12:03:00 @Completed @Delete_After_Sync
 - [x] 修正 Automatic Sync lifecycle 重複提交、Debug eligibility 被 re-entry 往後推與前景 timer 重置；pending request 改為 idempotent reconcile @2026-07-23_16:13:46 @Completed @Automatic_LAN_Sync
 - [x] 將 Mac `Error Log` 擴充為 iOS / Mac 兩端 `Operation Log` panels，涵蓋 App、設定、配對、discovery、scheduler、listener、session、album 與 resource lifecycle，並保留最新 500 筆 @2026-07-23_15:25:06 @Completed @Operation_Log_Panels
 - [x] 加入 Debug 最早 10 分鐘與 Release 最早 local midnight 的 `BGProcessingTask` schedule、typed state 與 iPhone UI @2026-07-23_13:23:11 @Completed @Automatic_LAN_Sync

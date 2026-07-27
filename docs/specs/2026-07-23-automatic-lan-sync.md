@@ -16,6 +16,8 @@
 
 iPhone UI 顯示 opt-in、cadence、`Background App Refresh`、last attempt/success/outcome 與 `Eligible after`。`Eligible after` 只呈現 submitted request 的 earliest date，不得解讀為 guaranteed next run。iPhone `Operation Log` 另記錄 background handler registration、request submission、actual launch、expiration、outcome 與 reschedule operation，屬本次 process 的 bounded diagnostics，不是 durable execution guarantee。
 
+若使用者另行啟用 default-off `Delete After Sync`，system-launched background run 成功後只能保存 fully backed-up pending asset IDs，不得在背景嘗試 Photos library change confirmation。使用者回到 App 後由 foreground destructive action 處理；完整安全條件見 [Delete After Sync 規格](2026-07-27-delete-after-sync.md)。
+
 ## 排程契約 (Scheduling Contract)
 
 | Build / trigger | Policy | Contract |

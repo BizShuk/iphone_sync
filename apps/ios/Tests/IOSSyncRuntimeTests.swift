@@ -48,7 +48,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
     func testBudgetCancellationWaitsForExecutorCleanup() async {
         let executor = BlockingSyncExecutor()
         let runtime = IOSSyncRuntime(environment: environment(
-            sync: { _, _ in try await executor.run() },
+            sync: { _, _, _ in try await executor.run() },
             cancel: { await executor.cancel() }
         ))
         let runRequest = request()
@@ -66,7 +66,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
     func testCallerCancellationClosesExecutor() async {
         let executor = BlockingSyncExecutor()
         let runtime = IOSSyncRuntime(environment: environment(
-            sync: { _, _ in try await executor.run() },
+            sync: { _, _, _ in try await executor.run() },
             cancel: { await executor.cancel() }
         ))
         let run = Task { await runtime.run(request()) }
@@ -95,7 +95,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
                 probe.record()
                 return true
             },
-            sync: { _, _ in
+            sync: { _, _, _ in
                 probe.record()
                 return .zero
             },
@@ -114,7 +114,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
     func testManualCancellationWinsOverNWECancelled() async {
         let executor = TransportFailureOnCancelExecutor(failure: .nwCancelled)
         let runtime = IOSSyncRuntime(environment: environment(
-            sync: { _, _ in try await executor.run() },
+            sync: { _, _, _ in try await executor.run() },
             cancel: { await executor.cancel() }
         ))
         let runRequest = request(trigger: .manualForeground)
@@ -130,7 +130,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
     func testExpirationWinsOverTruncatedTransportError() async {
         let executor = TransportFailureOnCancelExecutor(failure: .truncatedFrame)
         let runtime = IOSSyncRuntime(environment: environment(
-            sync: { _, _ in try await executor.run() },
+            sync: { _, _, _ in try await executor.run() },
             cancel: { await executor.cancel() }
         ))
         let runRequest = request()
@@ -148,7 +148,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
     func testCancellationWinsOverGenericCleanupError() async {
         let executor = TransportFailureOnCancelExecutor(failure: .generic)
         let runtime = IOSSyncRuntime(environment: environment(
-            sync: { _, _ in try await executor.run() },
+            sync: { _, _, _ in try await executor.run() },
             cancel: { await executor.cancel() }
         ))
         let runRequest = request(trigger: .manualForeground)
@@ -163,7 +163,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
 
     func testTLSFailureRequiresUserActionWithoutShortRetry() async {
         let runtime = IOSSyncRuntime(environment: environment(
-            sync: { _, _ in throw NWError.tls(-9807) }
+            sync: { _, _, _ in throw NWError.tls(-9807) }
         ))
 
         let outcome = await runtime.run(request())
@@ -197,7 +197,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
         for testCase in cases {
             let message = "\(testCase.code)-\(testCase.retryable)"
             let runtime = IOSSyncRuntime(environment: environment(
-                sync: { _, _ in
+                sync: { _, _, _ in
                     throw IOSSyncCoordinatorError.resourceFailed(
                         code: testCase.code,
                         message: message,
@@ -279,8 +279,9 @@ final class IOSSyncRuntimeTests: XCTestCase {
         hasPairedPeer: @escaping @Sendable () async throws -> Bool = { true },
         sync: @escaping @Sendable (
             [PhotoAlbum],
-            IOSSyncDiscoveryStrategy
-        ) async throws -> SyncSummary = { _, _ in .zero },
+            IOSSyncDiscoveryStrategy,
+            SyncTrigger
+        ) async throws -> SyncSummary = { _, _, _ in .zero },
         cancel: @escaping @Sendable () async -> Void = {}
     ) -> IOSSyncRuntimeEnvironment {
         IOSSyncRuntimeEnvironment(

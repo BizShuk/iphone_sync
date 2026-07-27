@@ -205,7 +205,7 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
             hasFullPhotoAccess: { true },
             loadSelectedAlbums: { [] },
             hasPairedPeer: { true },
-            sync: { _, _ in .zero },
+            sync: { _, _, _ in .zero },
             cancel: {}
         ))
         let scheduler = AutomaticSyncScheduler(

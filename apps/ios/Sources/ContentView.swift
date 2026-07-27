@@ -7,6 +7,7 @@ struct ContentView: View {
     @Bindable var model: IOSAppModel
     @State private var showsAlbumPicker = false
     @State private var showForgetConfirmation = false
+    @State private var showEnableDeleteAfterSyncConfirmation = false
     @Environment(\.openURL) private var openURL
 
     var body: some View {
@@ -14,6 +15,7 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: Tokens.Layout.sectionSpacing) {
                     sourceZone
+                    deleteAfterSyncZone
                     automaticZone
                     if let summary = model.lastSummary {
                         lastSyncCard(summary: summary)
@@ -55,6 +57,24 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("If you continue, Automatic Sync will be disabled and you will need to pair again.")
+            }
+            .alert(
+                "Enable Delete After Sync?",
+                isPresented: $showEnableDeleteAfterSyncConfirmation
+            ) {
+                Button("Enable", role: .destructive) {
+                    model.setDeleteAfterSyncEnabled(true)
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(
+                    "After a complete backup, this can delete a photo from the "
+                        + "entire Photos library, not only the selected album. "
+                        + "With iCloud Photos, deletion also applies to your "
+                        + "other signed-in devices. Photos asks you to confirm "
+                        + "each deletion batch. Photos changed after backup stay "
+                        + "on this iPhone until they sync again."
+                )
             }
             .task {
                 await model.bootstrap()
@@ -329,6 +349,99 @@ struct ContentView: View {
             Button("Cancel", role: .cancel) { model.cancel() }
                 .buttonStyle(.bordered)
         }
+    }
+
+    // MARK: Delete After Sync Zone
+
+    private var deleteAfterSyncZone: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            zoneHeader("After Sync")
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .center, spacing: 12) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 21))
+                        .foregroundStyle(
+                            model.deleteAfterSync.isEnabled
+                                ? Tokens.Palette.alert
+                                : Tokens.Palette.wire
+                        )
+                        .frame(width: 28)
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Delete After Sync")
+                            .font(Tokens.Typography.body.weight(.semibold))
+                            .foregroundStyle(Tokens.Palette.wire)
+                        Text(deleteAfterSyncDescription)
+                            .font(Tokens.Typography.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Toggle(
+                        "Delete photos after sync",
+                        isOn: Binding(
+                            get: { model.deleteAfterSync.isEnabled },
+                            set: { enabled in
+                                if enabled {
+                                    showEnableDeleteAfterSyncConfirmation = true
+                                } else {
+                                    model.setDeleteAfterSyncEnabled(false)
+                                }
+                            }
+                        )
+                    )
+                    .labelsHidden()
+                    .tint(Tokens.Palette.alert)
+                    .disabled(model.isAnySyncRunning)
+                }
+
+                if model.deleteAfterSync.pendingAssetCount > 0 {
+                    Button(
+                        "Delete \(model.deleteAfterSync.pendingAssetCount) "
+                            + "Synced Photo"
+                            + (model.deleteAfterSync.pendingAssetCount == 1 ? "" : "s"),
+                        role: .destructive
+                    ) {
+                        model.deletePendingSyncedPhotos()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(model.isAnySyncRunning)
+                }
+
+                if model.deleteAfterSync.isDeleting {
+                    Label {
+                        Text("Waiting for Photos confirmation")
+                    } icon: {
+                        ProgressView()
+                            .tint(Tokens.Palette.alert)
+                    }
+                    .font(Tokens.Typography.callout)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .padding(Tokens.Layout.cardPadding)
+            .background(Tokens.Palette.paper)
+            .overlay(
+                RoundedRectangle(cornerRadius: Tokens.Layout.cardCornerRadius)
+                    .stroke(Tokens.Palette.frame, lineWidth: Tokens.Layout.hairline)
+            )
+        }
+    }
+
+    private var deleteAfterSyncDescription: String {
+        guard model.deleteAfterSync.isEnabled else {
+            return "Off. Synced photos stay in your Photos library."
+        }
+        if model.deleteAfterSync.pendingAssetCount > 0 {
+            return "\(model.deleteAfterSync.pendingAssetCount) fully backed-up "
+                + "photo(s) are waiting for foreground confirmation."
+        }
+        return "Only photos whose every local original resource is confirmed "
+            + "on the computer are eligible; changed photos stay."
     }
 
     // MARK: Automatic Zone

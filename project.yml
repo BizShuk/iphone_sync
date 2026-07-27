@@ -40,7 +40,7 @@ targets:
           - _iphonesync._tcp
           - _iphonesync-pair._tcp
         NSLocalNetworkUsageDescription: Find your Mac and transfer original photo resources on this local network.
-        NSPhotoLibraryUsageDescription: Select one or more albums and back up their original resources to your paired Mac.
+        NSPhotoLibraryUsageDescription: Select albums, back up their original resources, and optionally delete fully backed-up photos after confirmation.
         UILaunchScreen: {}
         UIBackgroundModes:
           - processing

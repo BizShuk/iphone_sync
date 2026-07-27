@@ -164,7 +164,7 @@ fi
 
 ## Contract verification (Node 端 ↔ Swift 端)
 
-51 個 SyncCore.Windows tests 對應既有 Swift 51 個 package tests + 30 個 iOS unit tests + 30 個 MacReceiverKit tests。Curve25519 transcript hash、HKDF labels、frame header、PSK cipher 等 wire-format 細節雙側通過即視為互通。
+目前 canonical gate 執行 49 個 SyncCore.Windows tests、54 個 Swift package tests 與 41 個 iOS unit tests；其中 receiver / protocol / crypto 的對應案例持續驗證 Curve25519 transcript hash、HKDF labels、frame header、PSK cipher 等 wire-format 細節。這些 automated parity tests 不是 iOS → Windows signed live-device 互通驗收。
 
 ## Risks
 

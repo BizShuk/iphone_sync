@@ -2,7 +2,7 @@
 
 `iPhone Sync` v1.0 — 一套原生 iPhone 與 Mac 的個人媒體備份工具 (personal media backup)，只走同一區域網路 (LAN)，不經雲端。
 
-配對一次之後，iPhone 指定相簿中尚未備份、且已存在本機的完整原始資源 (original resource)，會單向增量傳送到 Mac 的 Finder 資料夾。
+配對一次之後，iPhone 指定相簿中尚未備份、且已存在本機的完整原始資源 (original resource)，會單向增量傳送到自己的電腦。Optional `Delete After Sync` 預設關閉；只有明確啟用並完成全部資源驗證的 photos 才會進入 foreground deletion confirmation。
 
 - 目錄 (Contents)
     - [1. 這是什麼 (What It Is For)](#1-這是什麼-what-it-is-for)
@@ -21,6 +21,7 @@
 | 想把 iPhone 相簿原始檔留在自己的硬碟     | iCloud 需付費且是雲端副本 | LAN 直傳到你選的 Finder 資料夾                 |
 | 想保留 RAW、影片、Live Photo、adjustment | AirDrop 逐張手動、易漏    | 依相簿整批增量，只補未備份的                   |
 | 想要固定備份而不用每天記得               | 手動流程一定會忘          | opt-in `Automatic Sync`，由 iOS 於背景擇機執行 |
+| 備份完成後想釋放 iPhone 空間             | 逐張核對與刪除容易出錯    | opt-in `Delete After Sync`，只處理完整確認資產 |
 | 不想把照片交給第三方服務                 | 多數工具需要帳號或雲端    | 無帳號、無伺服器、無 Internet relay            |
 
 ### 業務定義 (Business Definition)
@@ -28,6 +29,8 @@
 - 來源固定為一部 iPhone 上由使用者選取的一個或 多個 Photos 相簿。
 - 目的地固定為一部已配對 Mac 上的 Finder folder；實際寫入位置固定在 `<selected-folder>/iPhoneSync/` 之下，版面由 `Storage Mode` 決定。
 - 同步只新增；iPhone 刪除不會傳播至 Mac，也不覆寫 Mac 既有的不同內容。
+- `Delete After Sync` 預設關閉；未啟用時 App 絕不刪除 Photos assets。啟用後也只刪除每個本機 original resource 都已由 receiver 確認完成的整個 asset。
+- 刪除是 Photos library-wide，不是只移出所選相簿；使用 `iCloud Photos` 時也可能同步影響同 Apple Account 的其他裝置。每個 foreground batch 仍由 Photos 顯示 system confirmation。
 - 傳輸只使用同一區域網路，不使用 AirDrop、Bluetooth、Internet relay 或雲端服務。
 - 備份保留 PhotoKit 提供的原始 resource bytes，包括 RAW、影片、Live Photo components 與 adjustment data。
 - 不在 iPhone 本機的 iCloud Photos resource 會被跳過，App 不會自動下載。
@@ -44,6 +47,8 @@ flowchart LR
     C -->|"1 MiB framed chunks"| D["macOS menu-bar receiver"]
     D -->|"partial + SHA-256 + atomic commit"| E["Finder / iPhoneSync / 依 Storage Mode"]
     D -->|"completed + 16 MiB checkpoint"| F["SwiftData manifest"]
+    A -->|"all resources confirmed + explicit opt-in"| G["Foreground Photos deletion confirmation"]
+    G -->|"approved"| P
 ```
 
 ### 影片示範腳本 (Video Demo Transcript)
@@ -77,6 +82,7 @@ flowchart LR
 
 3. 同步中可按 `Cancel`；同一時間只允許一個 run（single-flight）。
 4. 完成後 `LAST SYNC` 顯示 `Added` / `Already` / `Not local` / `Failed` 四項摘要。
+5. 若明確啟用 `Delete After Sync`，foreground sync 完成後 Photos 會要求確認刪除；background sync 只建立 pending list，回到 App 後按 `Delete N Synced Photos`。
 
 ### 檔案落點 (Storage Mode)
 
@@ -97,6 +103,16 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 - 兩者都只是 `earliestBeginDate`。iOS 不保證準時、不保證固定週期、不保證一定提供 runtime，實際執行可能晚很多。
 - App 啟動與 scene 切換會 reconcile 既有 pending request：同一 request 若不晚於目前目標便保留，不重複提交、不把 `Next attempt` 往後推。
 - Mac 不可達、系統未啟動 background task 或背景排程不可用時，請直接用 `Sync Now`。
+
+### Delete After Sync 的安全語意
+
+- `Delete After Sync` 是獨立、持久化且預設關閉的 toggle；關閉或按 `Forget` 時會清除 pending deletion IDs。
+- 刪除單位是整張 photo / video / Live Photo 對應的 `PHAsset`。每個 PhotoKit resource 都必須在每個已選相簿 session 收到 `committed` 或 `already present`；只要一個 resource 是 `Not local`、failed、cancelled 或尚未完成，整個 asset 都保留。
+- Foreground manual / Debug automatic run 完整成功後，App 以一個 PhotoKit change batch 請求刪除，iOS 仍顯示 system confirmation。使用者取消時不刪除，candidate 保留為 pending。
+- System-launched background run 無法安全顯示 foreground change confirmation，因此只保存 fully backed-up asset ID / `modificationDate` snapshots。回到 App 後，`AFTER SYNC` card 顯示數量與 `Delete N Synced Photos` button；刪除前版本已改變的 asset 會保留，必須等下一次完整同步。
+- Photos deletion 會從整個 library 移除 asset，不是只從所選相簿移除；若使用 `iCloud Photos`，也會影響同 Apple Account 的其他裝置。Receiver 已 committed 的 Finder / Windows files 永遠保留。
+
+完整 contract 見 [Delete After Sync 規格](docs/specs/2026-07-27-delete-after-sync.md)。
 
 ### 網路前提 (Network Gate)
 
@@ -167,6 +183,7 @@ xcodegen generate
 4. 從候選清單選擇 Mac，輸入 Mac 顯示的六位數配對碼。
 5. 按 `Sync Now` 完成第一次同步。
 6. 需要背景同步再打開 `Automatic Sync` 並設定 `Schedule time`；需要一鍵觸發則到控制中心加入 `Sync Now` 控制項。
+7. 只有確定要在完整備份後刪除來源時才打開 `Delete After Sync`；閱讀 library-wide / iCloud Photos 警告並確認。保持關閉時不會刪除任何 photos。
 
 ### 3.4 除錯 (Debugging)
 
@@ -190,6 +207,7 @@ iPhone sender：
 
 - 主畫面 `Operation Log` 展開後可看到 App、Photos、相簿、配對、discovery、scheduler、run、session 與每個 resource 的 levelled 事件。
 - Debug build 才有 `AUTOMATIC SYNC (DEBUG)` 卡片與 10 分鐘前景測試迴圈，用來驗證排程路徑而不必等到半夜。
+- `Delete After Sync` 的 pending count 與每次 request / success / cancel / skip 都記在 `Operation Log`；log 只記數量，不包含 Photos asset identifiers。
 - 背景排程被系統拒絕時，`Background App Refresh` 文字與 `Operation Log` 會標示原因。
 - Control Center 觸發若無反應，先確認已配對且 prerequisites 齊全；不符合時 `Operation Log` 會記一筆 `Widget trigger ignored`。
 
@@ -201,6 +219,7 @@ iPhone sender：
 | 配對碼輸入失敗        | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone`                                           |
 | 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                |
 | Automatic 從未執行    | `earliestBeginDate` 不是保證；先用 Debug 卡片驗證路徑，再用 `Sync Now` 作為 fallback                  |
+| 已同步但尚未刪除      | Background run 只建立 pending list；回到 App，在 `AFTER SYNC` 按 `Delete N Synced Photos` 並確認     |
 | Mac 寫入被拒          | 目的地同名項目是檔案或 symlink，`Operation Log` 會標示；換一個 destination 或移除該項目               |
 
 ## 4. 驗證、設定與邊界 (Verification, Settings, Boundaries)
@@ -208,15 +227,15 @@ iPhone sender：
 ### 驗證 (Verification)
 
 ```bash
-bash scripts/verify.sh                          # canonical 全量驗證（含 SyncCore.Windows 51 tests + 兩 build + source invariants）
+bash scripts/verify.sh                          # canonical 全量驗證（含 SyncCore.Windows 49 tests + 兩 build + source invariants）
 swift test --package-path packages/SyncCore     # 只跑 Swift package tests
 ```
 
 驗證入口會執行 Swift package tests、重新產生 Xcode project、建置 macOS、iOS Simulator 與 `Release` generic iOS device targets、檢查 plist / entitlements / local-only source invariants，以及 tracked、staged、untracked whitespace checks。`Release` device build 會實際編譯 `#if DEBUG` 之外的 production cadence 分支。建置使用 `CODE_SIGNING_ALLOWED=NO`。
 
-Windows 11 receiver 端會額外跑 `scripts/verify_windows.sh`：51 個 vitest、SyncCore.Windows 與 apps/windows 兩個 TypeScript build、source-string invariants（HKDF labels、`IPS1` magic、`iPhoneSync` 容器、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`powerMonitor` 等）。`npm run dist`（NSIS + portable）只在 Windows MSYS shell 觸發。
+Windows 11 receiver 端會額外跑 `scripts/verify_windows.sh`：49 個 vitest、SyncCore.Windows 與 apps/windows 兩個 TypeScript build、source-string invariants（HKDF labels、`IPS1` magic、`iPhoneSync` 容器、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`powerMonitor` 等）。`npm run dist`（NSIS + portable）只在 Windows MSYS shell 觸發。
 
-最近一次 canonical 通過紀錄為 `51` 個 Swift package tests、`30` 個 iOS unit tests 與三個 build。Mac half-open deadline 有 package behavior test；其餘 receiver recovery 與 `BGProcessingTask` lifecycle 主要是編譯與 source-invariant 證據，不等同完整行為測試或實機驗收。
+最近一次 canonical 通過紀錄為 `54` 個 Swift package tests、`41` 個 iOS unit tests、`49` 個 Windows vitest、三個 Apple builds 與兩個 TypeScript builds。Mac half-open deadline 有 package behavior test；其餘 receiver recovery、`BGProcessingTask` lifecycle 與 PhotoKit deletion 主要是編譯 / source-invariant / injected-service tests，不等同完整行為測試或實機驗收。
 
 ### Windows 11 Release (GitHub Actions)
 
@@ -234,7 +253,7 @@ Trigger：
 本地預覽（macOS 開發機驗證）：
 
 ```bash
-bash scripts/verify_windows.sh      # 51 tests + 2 builds + invariants pass
+bash scripts/verify_windows.sh      # 49 tests + 2 builds + invariants pass
 ```
 
 ### 持久化設定 (Persistent Settings)
@@ -244,6 +263,7 @@ App 設定依資料敏感度使用 Apple 原生持久層，不集中到單一可
 | Data                                                                                       | Persistent Store                                                                 |
 | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
 | automatic sync enablement、last attempt/success/outcome、next eligible time、schedule time | iOS sandbox `UserDefaults`，由 `IOSAutomaticSyncStore` 管理                      |
+| delete-after-sync enablement、pending Photos asset ID / `modificationDate` snapshots       | iOS sandbox `UserDefaults`，由 `IOSDeleteAfterSyncStore` 管理                    |
 | receiver ID、source binding、storage mode、launch-at-login intent                          | sandbox `UserDefaults`，由 `MacSettingsStore` 管理                               |
 | Finder destination permission                                                              | security-scoped bookmark in sandbox preferences                                  |
 | paired iPhone PSK、opaque identity                                                         | login Keychain                                                                   |
@@ -252,7 +272,7 @@ App 設定依資料敏感度使用 Apple 原生持久層，不集中到單一可
 | Setup window size/position、menu-bar item position                                         | AppKit autosave                                                                  |
 | iOS / macOS operation timeline                                                             | 各 App process 的 bounded in-memory buffer（最新 500 筆）+ Apple Unified Logging |
 
-`Automatic Sync` 預設關閉；關閉時取消 pending request 與 active automatic run，不刪除 pairing、相簿選擇、partial 或 manifest。`Launch at Login` 首次預設啟用，使用者關閉後保存該選擇。六位數 pairing code、active connection 與 panel 中的 operation timeline 是 transient runtime state，不跨重啟保存。
+`Automatic Sync` 預設關閉；關閉時取消 pending request 與 active automatic run，不刪除 pairing、相簿選擇、partial 或 manifest。`Delete After Sync` 也預設關閉；關閉時清除 pending deletion IDs 且不呼叫 PhotoKit deletion，receiver files 不受影響。`Launch at Login` 首次預設啟用，使用者關閉後保存該選擇。六位數 pairing code、active connection、active deletion request 與 panel 中的 operation timeline 是 transient runtime state，不跨重啟保存。
 
 ### 安全與資料邊界 (Security Boundaries)
 
@@ -261,14 +281,15 @@ App 設定依資料敏感度使用 Apple 原生持久層，不集中到單一可
 - iPhone discovery 與連線固定 `includePeerToPeer = false`，不走 Bluetooth / AWDL fallback。
 - Automatic run 每次重新 discovery 與 authentication，不保存 IP、port、`NWEndpoint`，也不維持常駐 socket 或 heartbeat。
 - PhotoKit request 固定 `isNetworkAccessAllowed = false`，不因同步而觸發 iCloud 下載。
+- Optional deletion 只在 asset 的所有 local resources 已由 receiver authoritative manifest 確認後提出；toggle off、not-local、partial、cancel 或 failed asset 永遠保留。Photos system confirmation 被拒絕時也不刪除。
 - Receiver 先驗證 frame、offset、expected size 與 SHA-256，完成後才以不覆寫方式 atomic commit；同一 resource 第二次 integrity mismatch 會終止 session。
 - Mac 不要求 Full Disk Access，只寫入使用者以 `NSOpenPanel` 選取的 destination。
 
 ### 專案狀態 (Project Status)
 
-MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、Mac listener recovery、三種 storage mode、Control Center / Shortcuts 觸發、兩端 `Operation Log` panels、typed persistent settings 與 UI design tokens 已完成，並通過 canonical `bash scripts/verify.sh`。
+MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、default-off `Delete After Sync`、Mac listener recovery、三種 storage mode、Control Center / Shortcuts 觸發、兩端 `Operation Log` panels、typed persistent settings 與 UI design tokens 已完成，並通過 canonical `bash scripts/verify.sh`。
 
-尚未完成、以 [README.todo](README.todo) 為準：signed 實機的 background launch / expiration 模擬、overnight 自然排程觀察、完整 LAN failure matrix，以及簽署、公證 (notarization) 與發佈方式的決定。
+尚未完成、以 [README.todo](README.todo) 為準：signed 實機的 Photos deletion confirmation / iCloud propagation、background launch / expiration 模擬、overnight 自然排程觀察、完整 LAN failure matrix，以及簽署、公證 (notarization) 與發佈方式的決定。
 
 ### 文件索引 (Documentation Index)
 
@@ -285,5 +306,6 @@ MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、Mac
 | [docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md)                   | Automatic LAN sync 規格                  |
 | [docs/specs/2026-07-24-ui-redesign.md](docs/specs/2026-07-24-ui-redesign.md)                                 | UI design tokens 與版面規格              |
 | [docs/specs/2026-07-25-windows-11-desktop-receiver.md](docs/specs/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 desktop receiver 設計         |
+| [docs/specs/2026-07-27-delete-after-sync.md](docs/specs/2026-07-27-delete-after-sync.md)                     | 同步後 optional Photos deletion contract |
 | [plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)                         | Operation timeline contract              |
 | [plans/2026-07-25-windows-11-desktop-receiver.md](plans/2026-07-25-windows-11-desktop-receiver.md)           | Windows 11 port 實作計畫                 |

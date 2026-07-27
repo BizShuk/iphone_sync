@@ -16,7 +16,7 @@ Feature name: `local-album-sync`
 |---|---|
 | Trigger | iPhone 前景手動觸發 |
 | Direction | iPhone → Mac 單向增量備份 |
-| Deletion | iPhone 刪除不影響 Mac |
+| Deletion | iPhone 刪除永不影響 receiver committed files；default-off post-sync source cleanup 另見 [Delete After Sync 規格](2026-07-27-delete-after-sync.md) |
 | Destination | Finder selected folder 下的 `iPhoneSync` + per-album folders，不匯入 macOS Photos |
 | Pairing | Mac 顯示六位數，iPhone 輸入 |
 | Media | 完整原始 resources，包括 RAW、影片與 Live Photo components |
@@ -26,7 +26,7 @@ Feature name: `local-album-sync`
 ### Out of Scope
 
 - 背景或自動同步。
-- 雙向同步及來源刪除傳播。
+- 雙向同步及來源刪除傳播；使用者明確 opt in 的 post-sync source cleanup 是獨立功能，不是 propagation。
 - 多部 Mac 或多部 iPhone。
 - Internet relay、AirDrop、Bluetooth 或 peer-to-peer fallback。
 - 匯入 macOS Photos。

@@ -10,6 +10,11 @@ struct IOSSyncProgress: Equatable, Sendable {
     let totalBytes: Int64
 }
 
+struct IOSSyncTransferResult: Equatable, Sendable {
+    let summary: SyncSummary
+    let deletionCandidates: Set<PhotoDeletionCandidate>
+}
+
 enum IOSSyncCoordinatorError: Error, LocalizedError, Sendable {
     case macNotFound
     case notPaired
@@ -158,18 +163,32 @@ actor IOSSyncCoordinator {
     }
 
     func sync(albums: [PhotoAlbum]) async throws -> SyncSummary {
-        try await sync(albums: albums, discoveryStrategy: .foregroundRetries)
+        try await syncTransfer(
+            albums: albums,
+            discoveryStrategy: .foregroundRetries
+        ).summary
     }
 
     func sync(
         albums: [PhotoAlbum],
         discoveryStrategy: IOSSyncDiscoveryStrategy
     ) async throws -> SyncSummary {
+        try await syncTransfer(
+            albums: albums,
+            discoveryStrategy: discoveryStrategy
+        ).summary
+    }
+
+    func syncTransfer(
+        albums: [PhotoAlbum],
+        discoveryStrategy: IOSSyncDiscoveryStrategy
+    ) async throws -> IOSSyncTransferResult {
         guard var peer = try loadPairedPeer() else {
             throw IOSSyncCoordinatorError.notPaired
         }
         cancelRequested = false
         var combinedSummary = SyncSummary.zero
+        var deletionCandidates = PhotoDeletionCandidateAccumulator()
 
         for album in albums {
             try Task.checkCancellation()
@@ -190,6 +209,7 @@ actor IOSSyncCoordinator {
             combinedSummary.existing += result.summary.existing
             combinedSummary.notLocal += result.summary.notLocal
             combinedSummary.failed += result.summary.failed
+            deletionCandidates.merge(result.deletionCandidates)
             await emit(
                 .success,
                 category: "Album",
@@ -199,14 +219,21 @@ actor IOSSyncCoordinator {
                     + "\(result.summary.failed) failed."
             )
         }
-        return combinedSummary
+        return IOSSyncTransferResult(
+            summary: combinedSummary,
+            deletionCandidates: deletionCandidates.eligibleCandidates
+        )
     }
 
     private func sync(
         album: PhotoAlbum,
         peer: PairedPeer,
         discoveryStrategy: IOSSyncDiscoveryStrategy
-    ) async throws -> (summary: SyncSummary, peer: PairedPeer) {
+    ) async throws -> (
+        summary: SyncSummary,
+        peer: PairedPeer,
+        deletionCandidates: PhotoDeletionCandidateAccumulator
+    ) {
         var peer = peer
         let receiver: DiscoveredReceiver
         do {
@@ -266,11 +293,12 @@ actor IOSSyncCoordinator {
             }
 
             var notLocal = 0
+            var deletionCandidates = PhotoDeletionCandidateAccumulator()
             for try await event in photoSource.resources(albumID: album.id) {
                 try Task.checkCancellation()
                 if cancelRequested { throw CancellationError() }
                 switch event {
-                case let .skippedNotLocal(resourceName):
+                case let .skippedNotLocal(_, resourceName):
                     notLocal += 1
                     await emit(
                         .warning,
@@ -293,13 +321,23 @@ actor IOSSyncCoordinator {
                     }
                     await staged.cleanup()
                     transferringResource = false
+                case let .assetFinished(
+                    assetLocalIdentifier,
+                    modificationDate,
+                    fullyBackedUp
+                ):
+                    deletionCandidates.record(
+                        assetLocalIdentifier: assetLocalIdentifier,
+                        modificationDate: modificationDate,
+                        fullyBackedUp: fullyBackedUp
+                    )
                 }
             }
             try Task.checkCancellation()
             if cancelRequested { throw CancellationError() }
             var summary = try await client.finish()
             summary.notLocal = notLocal
-            return (summary, peer)
+            return (summary, peer, deletionCandidates)
         } catch {
             await client.cancel()
             throw error

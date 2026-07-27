@@ -21,7 +21,15 @@ enum PhotoLibrarySourceError: Error, LocalizedError {
 
 enum PhotoResourceEvent: Sendable {
     case staged(StagedPhotoResource)
-    case skippedNotLocal(resourceName: String)
+    case skippedNotLocal(
+        assetLocalIdentifier: String,
+        resourceName: String
+    )
+    case assetFinished(
+        assetLocalIdentifier: String,
+        modificationDate: Date?,
+        fullyBackedUp: Bool
+    )
 }
 
 struct StagedPhotoResource: Sendable {
@@ -300,7 +308,9 @@ final class PhotoLibrarySource: @unchecked Sendable {
                         try Task.checkCancellation()
                         let asset = result.object(at: assetIndex)
                         var duplicateCounts: [String: Int] = [:]
-                        for resource in PHAssetResource.assetResources(for: asset) {
+                        var allResourcesAreLocal = true
+                        let resources = PHAssetResource.assetResources(for: asset)
+                        for resource in resources {
                             try Task.checkCancellation()
                             let key = "\(resource.type.rawValue)\u{0}\(resource.originalFilename)"
                             let duplicateOrdinal = duplicateCounts[key, default: 0]
@@ -316,11 +326,18 @@ final class PhotoLibrarySource: @unchecked Sendable {
                             } catch let error as NSError
                                 where error.domain == PHPhotosErrorDomain
                                     && error.code == PHPhotosError.networkAccessRequired.rawValue {
+                                allResourcesAreLocal = false
                                 continuation.yield(.skippedNotLocal(
+                                    assetLocalIdentifier: asset.localIdentifier,
                                     resourceName: resource.originalFilename
                                 ))
                             }
                         }
+                        continuation.yield(.assetFinished(
+                            assetLocalIdentifier: asset.localIdentifier,
+                            modificationDate: asset.modificationDate,
+                            fullyBackedUp: !resources.isEmpty && allResourcesAreLocal
+                        ))
                     }
                     continuation.finish()
                 } catch is CancellationError {
@@ -331,6 +348,70 @@ final class PhotoLibrarySource: @unchecked Sendable {
             }
             continuation.onTermination = { _ in task.cancel() }
         }
+    }
+
+    func deleteAssets(
+        candidates: Set<PhotoDeletionCandidate>
+    ) async throws -> PhotoAssetDeletionResult {
+        guard authorizationStatus() == .authorized else {
+            throw PhotoLibrarySourceError.fullAccessRequired
+        }
+        guard !candidates.isEmpty else {
+            return PhotoAssetDeletionResult(
+                deletedAssetIDs: [],
+                skippedAssetIDs: []
+            )
+        }
+
+        var candidatesByAssetID: [String: PhotoDeletionCandidate] = [:]
+        for candidate in candidates {
+            candidatesByAssetID[candidate.assetLocalIdentifier] = candidate
+        }
+        let localIdentifiers = Set(candidatesByAssetID.keys)
+        let assets = PHAsset.fetchAssets(
+            withLocalIdentifiers: localIdentifiers.sorted(),
+            options: nil
+        )
+        var deletableAssets: [PHAsset] = []
+        var deletableAssetIDs: Set<String> = []
+        assets.enumerateObjects { asset, _, _ in
+            guard let candidate = candidatesByAssetID[asset.localIdentifier],
+                  candidate.modificationDate == asset.modificationDate else {
+                return
+            }
+            guard asset.canPerform(.delete) else { return }
+            deletableAssets.append(asset)
+            deletableAssetIDs.insert(asset.localIdentifier)
+        }
+        let skippedAssetIDs = localIdentifiers.subtracting(deletableAssetIDs)
+
+        guard !deletableAssets.isEmpty else {
+            return PhotoAssetDeletionResult(
+                deletedAssetIDs: [],
+                skippedAssetIDs: skippedAssetIDs
+            )
+        }
+
+        try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<Void, any Error>) in
+            PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.deleteAssets(deletableAssets as NSArray)
+            } completionHandler: { success, error in
+                if success {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: error ?? NSError(
+                        domain: PHPhotosErrorDomain,
+                        code: PHPhotosError.userCancelled.rawValue
+                    ))
+                }
+            }
+        }
+
+        return PhotoAssetDeletionResult(
+            deletedAssetIDs: deletableAssetIDs,
+            skippedAssetIDs: skippedAssetIDs
+        )
     }
 
     private func stage(

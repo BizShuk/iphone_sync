@@ -4,7 +4,7 @@
 
 | Name | Description | What is it for in current project? |
 | --- | --- | --- |
-| `iPhone Photos Full Access` | iOS 使用者授權 (TCC)。App 以 `PHPhotoLibrary.requestAuthorization(for: .readWrite)` 請求，並以 `NSPhotoLibraryUsageDescription` 說明用途；目前只接受 `.authorized`，不接受 `.limited`。PhotoKit 的讀取 access level 名稱是 `.readWrite`，但本專案不會修改 Photos library。 | 列出使用者相簿並讀取所選相簿內全部本機 `PHAssetResource` 原始 bytes，確保完整備份。`isNetworkAccessAllowed = false`，不會為此下載 iCloud resource。 |
+| `iPhone Photos Full Access` | iOS 使用者授權 (TCC)。App 以 `PHPhotoLibrary.requestAuthorization(for: .readWrite)` 請求，並以 `NSPhotoLibraryUsageDescription` 說明備份與 optional deletion 用途；只接受 `.authorized`，不接受 `.limited`。啟用 `Delete After Sync` 後，PhotoKit 對每個 foreground deletion batch 另顯示 library change confirmation；不需額外 entitlement 或 usage key。 | 列出所選相簿內全部本機 `PHAssetResource` 原始 bytes。`isNetworkAccessAllowed = false`，不下載 iCloud resource。只有所有本機 resource 均被 receiver 確認 committed / already present 的 asset 才可送入 `PHAssetChangeRequest.deleteAssets`；toggle 預設關閉，background run 只保存待刪 ID / `modificationDate` snapshot，foreground 刪除前版本不符即保留。 |
 | `iPhone Local Network` | iOS 14+ 使用者授權 (TCC)。`NSLocalNetworkUsageDescription` 必須說明 LAN 存取目的；首次授權仍須在使用者可操作的前景流程完成。 | 讓前景手動同步或 system-granted automatic run 透過 Bonjour 尋找已配對 Mac，並以 Network.framework 建立 sync TCP/TLS 連線；pairing 只在前景執行。 |
 | `iPhone Bonjour Services` | 必要 Info.plist 宣告，不是另一個獨立 prompt。`NSBonjourServices` 必須列出 `_iphonesync._tcp` 與 `_iphonesync-pair._tcp`。 | 允許 iPhone 瀏覽一般同步 receiver 與 120 秒暫時配對 service。 |
 | `iPhone Background Processing` | `UIBackgroundModes = processing` 與 `BGTaskSchedulerPermittedIdentifiers` 是 Info.plist capability declarations，不是 privacy prompt，也不是 sandbox entitlement。 | 允許 iOS 以 `BGProcessingTask` 提供 automatic sync 的 best-effort 執行機會。Debug request 最早為 `+10 minutes`，Release request 最早為下一個 local midnight；實際啟動時間由系統決定。 |
@@ -24,6 +24,7 @@
 - 不要求 macOS Photos、Camera、Microphone、Contacts、Location、Bluetooth、Nearby Interaction 或 Network Extension。
 - 不要求 iOS custom multicast entitlement；目前只使用 Bonjour API，沒有自訂 multicast socket。
 - 不要求 iCloud Photos、background `URLSession` 或 PhotoKit Background Resource Upload；`isNetworkAccessAllowed = false`。Automatic sync 使用既有 local-only transport，並只在 iOS 實際啟動 `BGProcessingTask` 且同網路 gate 通過時傳輸。
+- 不要求 `NSPhotoLibraryAddUsageDescription`；目前使用完整 `.readWrite` access 讀取既有資產，optional deletion 仍由同一 `NSPhotoLibraryUsageDescription` 與 PhotoKit change confirmation 管理。
 - `UIRequiredDeviceCapabilities` 的 `wifi` / `arm64` 是安裝相容性條件，不是 privacy permission；`LSUIElement` 是 menu-bar App 行為，也不是 permission。
 
 ## Windows 11 對應 (Windows 11 Receiver)
@@ -55,6 +56,8 @@ Windows 11 端的 `scripts/verify_windows.sh` 跑 vitest + source invariant grep
 - [Choosing background strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)
 - [Background task earliest begin date](https://developer.apple.com/documentation/backgroundtasks/bgtaskrequest/earliestbegindate)
 - [PhotoKit privacy authorization](https://developer.apple.com/documentation/photokit/delivering-an-enhanced-privacy-experience-in-your-photos-app)
+- [Requesting changes to the photo library](https://developer.apple.com/documentation/photokit/requesting-changes-to-the-photo-library)
+- [Delete photos on iPhone or iPad](https://support.apple.com/104967)
 - [macOS App Sandbox](https://developer.apple.com/documentation/security/app-sandbox)
 - [User-selected file read/write entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.files.user-selected.read-write)
 - [Security-scoped bookmark access](https://developer.apple.com/documentation/professional-video-applications/enabling-security-scoped-bookmark-and-url-access)

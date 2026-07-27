@@ -148,7 +148,8 @@ struct IOSSyncRuntimeEnvironment: Sendable {
     let hasPairedPeer: @Sendable () async throws -> Bool
     let sync: @Sendable (
         _ albums: [PhotoAlbum],
-        _ discoveryStrategy: IOSSyncDiscoveryStrategy
+        _ discoveryStrategy: IOSSyncDiscoveryStrategy,
+        _ trigger: SyncTrigger
     ) async throws -> SyncSummary
     let cancel: @Sendable () async -> Void
 }
@@ -163,7 +164,8 @@ actor IOSSyncRuntime {
     init(
         photoSource: PhotoLibrarySource,
         albumStore: AlbumSelectionStore,
-        coordinator: IOSSyncCoordinator
+        coordinator: IOSSyncCoordinator,
+        postSyncDeletionController: IOSPostSyncDeletionController
     ) {
         environment = IOSSyncRuntimeEnvironment(
             hasFullPhotoAccess: {
@@ -177,11 +179,16 @@ actor IOSSyncRuntime {
             hasPairedPeer: {
                 try await coordinator.loadPairedPeer() != nil
             },
-            sync: { albums, discoveryStrategy in
-                try await coordinator.sync(
+            sync: { albums, discoveryStrategy, trigger in
+                let result = try await coordinator.syncTransfer(
                     albums: albums,
                     discoveryStrategy: discoveryStrategy
                 )
+                await postSyncDeletionController.handleSuccessfulSync(
+                    candidates: result.deletionCandidates,
+                    trigger: trigger
+                )
+                return result.summary
             },
             cancel: {
                 await coordinator.cancel()
@@ -245,7 +252,11 @@ actor IOSSyncRuntime {
             request.trigger == .manualForeground ? .foregroundRetries : .singleAttempt
         let environment = environment
         let operation = Task {
-            try await environment.sync(albums, discoveryStrategy)
+            try await environment.sync(
+                albums,
+                discoveryStrategy,
+                request.trigger
+            )
         }
         activeOperation = operation
 

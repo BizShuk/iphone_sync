@@ -1,6 +1,6 @@
 # iPhone Sender
 
-`iPhoneSyncIOS` 是 iOS 18+ local-only sender。它取得 Photos Full Access、保存多個相簿選擇、透過 Bonjour 發現 Mac，完成六位數 SAS pairing 後，可由 `Sync Now` 立即同步，或在使用者 opt in 後由 `BGProcessingTask` best-effort 觸發 automatic sync。另提供 1x1 `Sync Now` shortcut（Shortcuts / Siri，`SyncNowShortcuts`）與 Control Center control widget（`iPhoneSyncControlCenter`）作為快速入口；兩者共用 `SyncNowIntent`，僅在已配對且滿足執行先決條件時觸發。
+`iPhoneSyncIOS` 是 iOS 18+ local-only sender。它取得 Photos Full Access、保存多個相簿選擇、透過 Bonjour 發現 receiver，完成六位數 SAS pairing 後，可由 `Sync Now` 立即同步，或在使用者 opt in 後由 `BGProcessingTask` best-effort 觸發 automatic sync。另提供 default-off `Delete After Sync`：只有 fully backed-up assets 可進入 foreground PhotoKit deletion confirmation。1x1 `Sync Now` shortcut（Shortcuts / Siri，`SyncNowShortcuts`）與 Control Center control widget（`iPhoneSyncControlCenter`）共用 `SyncNowIntent`，僅在已配對且滿足執行先決條件時觸發。
 
 ## Flow
 
@@ -13,6 +13,7 @@ Photos authorization
                 └── single-flight runtime
                     └── paired Bonjour receiver → TLS-PSK
                         └── each album → local-only stage → hash → offer → chunk → cleanup
+                            └── optional all-resource eligibility → foreground deletion confirmation
 ```
 
 ## Boundaries
@@ -21,6 +22,9 @@ Photos authorization
 - `IOSSyncCoordinator` 只在 Wi-Fi 上尋找與連線，固定 `includePeerToPeer = false`，且只接受 exact paired `receiverID`；PSK handshake 才完成 authentication。
 - 一次只 staging 一個 resource；收到 committed/skipped/failed 後清理 temporary file。
 - 每個 album 使用獨立 sync session；摘要在 iPhone 合併顯示，進度同時顯示目前 album 與 resource。
+- `Delete After Sync` 預設關閉。只有 asset 的每個 resource 都在本機、每個 selected album occurrence 都收到 committed / skipped，且完整 multi-album run 成功時才產生 candidate；not-local、partial、failed、cancelled 或 expired asset 一律保留。
+- Foreground run 對 candidates 發出單一 `PHAssetChangeRequest.deleteAssets` batch 並等待 Photos system confirmation。Background run 把 candidate ID / `modificationDate` snapshots 存入 `IOSDeleteAfterSyncStore`；回到 App 後由 pending button 觸發，刪除前重新 fetch 的版本不符即保留。Disable 或 forget receiver 會清 pending candidates。
+- Photos deletion 是 library-wide，而非只移除 selected album；使用 iCloud Photos 時可能同步到其他裝置。Receiver committed files 永不刪除。
 - Manual 與 automatic run 共用 single-flight runtime；同一時間只允許一個 sync。Budget、scene cancellation 或 expiration 會取消 PhotoKit `requestData` staging、Bonjour discovery 與 active client，並清理未交付的 iPhone temporary file；後續 run 由 Mac checkpoint `resume`。
 - `Automatic Sync` 預設關閉。Debug background request 最早為 `now + 10 minutes`；Release request 最早為下一個 local midnight。`earliestBeginDate` 只限制不得更早，實際啟動由 iOS 決定，可能晚很多。
 - Startup 與 scene transition 只在實際 lifecycle 變化時 reconcile；scheduler 查詢同 identifier 的 pending request，保留相同或更早的 request，只在新目標更早時 replacement submit。Debug 已到期的 persisted eligibility 保持到期，不因重進 App 改成新的 `now + 10 minutes`。
@@ -31,7 +35,7 @@ Photos authorization
 - Operation timeline 不逐 chunk 記錄，避免大型媒體造成 log flood；相同事件會送入 Apple Unified Logging。Panel 可顯示 album / resource 名稱與 destination-relative path，但不包含 PSK、六位數 pairing code、cryptographic identity、source binding 或 content hash。
 - `Sync Now` 保留為 deterministic fallback；manual run 進入背景時會取消，system-launched automatic run 則由 `BGProcessingTask` lifecycle 管理。
 - Pairing sheet 顯示本地兩分鐘 timeout 與錯誤/剩餘嘗試；取消或進入背景會關閉 pending pairing channel。
-- Pairing PSK 與 source binding 存入 Keychain；多個相簿 local identifier，以及 automatic enablement、last attempt/success/outcome、next eligible time 存入 typed `UserDefaults` stores。Endpoint、active connection 與 resource offset 不會持久化。
+- Pairing PSK 與 source binding 存入 Keychain；多個相簿 local identifier、automatic state，以及 delete-after-sync enablement / pending ID / modification snapshots 存入 typed `UserDefaults` stores。Endpoint、active connection、active deletion request 與 resource offset 不會持久化。
 
 ## Build
 

@@ -97,6 +97,12 @@ xcodebuild -quiet \
 test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.0 raw -o - apps/ios/Info.plist)" = "com.shuk.iphonesync.ios.scheduled-sync"
 test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.1 raw -o - apps/ios/Info.plist)" = "com.shuk.iphonesync.ios.scheduled-sync.debug"
 test "$(plutil -extract UIBackgroundModes.0 raw -o - apps/ios/Info.plist)" = "processing"
+test "$(plutil -extract NSPhotoLibraryUsageDescription raw -o - apps/ios/Info.plist)" \
+    = "Select albums, back up their original resources, and optionally delete fully backed-up photos after confirmation."
+if plutil -extract NSPhotoLibraryAddUsageDescription raw -o - apps/ios/Info.plist \
+    >/dev/null 2>&1; then
+    exit 1
+fi
 test "$(plutil -extract NSBonjourServices.0 raw -o - apps/ios/Info.plist)" = "_iphonesync._tcp"
 test "$(plutil -extract NSBonjourServices.1 raw -o - apps/ios/Info.plist)" = "_iphonesync-pair._tcp"
 test "$(plutil -extract NSBonjourServices.0 raw -o - apps/macos/Info.plist)" = "_iphonesync._tcp"
@@ -109,6 +115,11 @@ test "$(plutil -extract 'com\.apple\.security\.files\.user-selected\.read-write'
 test "$(plutil -extract 'com\.apple\.security\.files\.bookmarks\.app-scope' raw -o - apps/macos/iPhoneSyncMac.entitlements)" = "true"
 
 rg -F 'options.isNetworkAccessAllowed = false' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
+rg -F 'PHAssetChangeRequest.deleteAssets' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
+rg -F 'candidate.modificationDate == asset.modificationDate' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
+rg -F 'case assetFinished(' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
+rg -F 'guard store.isEnabled else { return }' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
+rg -F 'trigger == .automaticBackground' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
 rg -F 'parameters.includePeerToPeer = false' packages/SyncCore/Sources/SyncCore >/dev/null
 rg -F 'TLS_PSK_WITH_AES_128_GCM_SHA256' packages/SyncCore/Sources/SyncCore/PSKTLSParameters.swift >/dev/null
 rg -F 'private static let receiverRetryDelays: [UInt64] = [0, 1, 2, 4]' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
@@ -183,4 +194,3 @@ done < <(git ls-files --others --exclude-standard -z)
 if [[ -d "packages/SyncCore.Windows" && -d "apps/windows" ]]; then
     bash scripts/verify_windows.sh
 fi
-
