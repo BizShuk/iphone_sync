@@ -1,0 +1,3 @@
+display_name: Cross-Platform Permissions
+short_description: Audit iPhone Sync iOS, macOS, and Windows permissions
+default_prompt: Use $os-permission to audit and synchronize every iOS / macOS / Windows permission, usage description, Bonjour declaration, sandbox entitlement, Windows capability, Firewall rule, persistent access grant, launch-at-login approval, AppX manifest, and signing certificate required by iPhone Sync. Reads CLAUDE.md, README.permission.md, project.yml, electron-builder.yml, generated Info.plist files, entitlements, AppX manifest, and the references/permissions.md catalog.
