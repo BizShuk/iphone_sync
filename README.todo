@@ -29,13 +29,20 @@
 - [x] Phase 5: Electron main process 串接 SyncCore.Windows（ModelRoot + IPC） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
 - [x] Phase 6: Setup UI skeleton（setup.html + pairing.html + app.css + renderer） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
 - [x] Phase 7: Canonical docs 同步（README + plan + spec） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [ ] Phase 8: GitHub Actions `windows-latest` runner 自動 release（`v*` tag → Public Release, `workflow_dispatch` → Draft） @2026-07-25_19:00:00 @Completed
+- [x] Phase 8: GitHub Actions `windows-latest` runner 自動 release（`v*` tag → Public Release, `workflow_dispatch` → Draft） @2026-07-25_19:00:00 @Completed
 - [ ] Phase 8: iPhone 端驗證 iOS → Windows 互通（配對、SAS、Sync Now、Automatic LAN 場景）
 - [ ] Phase 8: Listener retry 完整行為（powerMonitor + network change 注入測試）
 - [ ] Phase 8: 中斷續傳、partial 磁碟、調整 storage mode、launch at login 驗證
 - [ ] Backlog: 在 Windows 11 22H2+ 開發機本地執行 `npm run dist` 驗證手動 packaging
 - [ ] Backlog: MSIX 封裝 + SmartScreen 信任
 - [ ] Backlog: 公證 / Store 發佈
+
+## 打包與發佈 (Packaging & Release)
+
+- [x] 統一 release CI：`release.yml` 一個 `v*` tag 同時產 macOS universal DMG + PKG（`scripts/package_mac.sh`）與 Windows NSIS + portable，單一 publish job 掛同一個 GitHub Release @2026-08-04_01:30:00 @Completed @Packaging_Release
+- [ ] 設定 Apple Developer ID secrets（`MAC_SIGN_IDENTITY` + `MAC_NOTARY_*`）讓 CI 產出公證後的 DMG/PKG，移除 Gatekeeper bypass 步驟
+- [ ] Windows Authenticode / Azure Trusted Signing 簽章，消除 SmartScreen 警告
+- [ ] 跑一次 `workflow_dispatch` draft release，於乾淨的 Mac 與 Windows 實機下載驗證一鍵安裝與首次啟動
 
 ## Archive
 

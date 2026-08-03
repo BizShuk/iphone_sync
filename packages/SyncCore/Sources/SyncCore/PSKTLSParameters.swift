@@ -31,9 +31,11 @@ public enum PSKTLSParameters {
             dispatchData(copying: psk),
             dispatchData(copying: identity)
         )
+        // SSLCipherSuite is UInt32 on Intel macOS but UInt16 on arm64/iOS;
+        // normalize so universal (arm64 + x86_64) builds compile.
         sec_protocol_options_append_tls_ciphersuite(
             tls.securityProtocolOptions,
-            tls_ciphersuite_t(rawValue: TLS_PSK_WITH_AES_128_GCM_SHA256)!
+            tls_ciphersuite_t(rawValue: UInt16(TLS_PSK_WITH_AES_128_GCM_SHA256))!
         )
 
         let tcp = NWProtocolTCP.Options()

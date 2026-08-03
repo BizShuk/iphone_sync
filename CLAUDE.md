@@ -34,7 +34,7 @@ iphone_sync/
 │       ├── SKILL.md
 │       └── references/permissions.md
 ├── .github/workflows/
-│   └── release-windows.yml      # Windows 11 NSIS + portable .exe build → GitHub Release
+│   └── release.yml              # macOS DMG/PKG + Windows NSIS/portable build → 同一個 GitHub Release
 ├── project.yml                  # XcodeGen canonical target/plist configuration
 ├── iPhoneSync.xcodeproj/        # committed generated project
 ├── apps/
@@ -76,7 +76,7 @@ iphone_sync/
 │   ├── memory/
 │   └── specs/
 ├── plans/
-├── scripts/verify.sh
+├── scripts/                     # verify.sh、verify_windows.sh、package_mac.sh、run_server.sh、run_iphone.sh
 ├── README.md
 ├── README.permission.md         # iOS/macOS permissions and purpose
 ├── CLAUDE.md
@@ -115,6 +115,7 @@ MacReceiverKit ─────────→ SyncCore
 | Preferences | Typed `MacSettingsStore` backed by sandbox `UserDefaults` |
 | Auto-start | `SMAppService.mainApp` with persistent requested intent |
 | Operation diagnostics | Semantic events、latest 500 entries per App process、Apple Unified Logging |
+| Desktop release packaging | 單一 `release.yml`：macOS universal (arm64 + x86_64) DMG + PKG via `scripts/package_mac.sh`（預設 ad-hoc，env 升級 Developer ID + notarization）；Windows NSIS + portable via electron-builder；同一 GitHub Release |
 
 ## Runtime Ownership
 
@@ -171,8 +172,17 @@ Windows 11 開發機：
 (cd apps/windows && npm ci && npm run build && npm run dist)
 ```
 
+macOS 打包（本機與 CI 共用同一腳本）：
+
+```bash
+bash scripts/package_mac.sh      # universal Release build → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
+```
+
+預設 ad-hoc 簽章；設定 `MAC_SIGN_IDENTITY`（Developer ID Application）加上 `MAC_NOTARY_PROFILE` 或 `MAC_NOTARY_APPLE_ID`/`MAC_NOTARY_TEAM_ID`/`MAC_NOTARY_PASSWORD` 後，同一腳本升級為 Developer ID 簽章 + notarization + stapling；`MAC_INSTALLER_IDENTITY` 另外簽 PKG。
+
 GitHub Actions 自動 release：
-- `.github/workflows/release-windows.yml` 在 `windows-latest` 跑 `npm run dist`，產 NSIS + portable 上傳到 GitHub Release（`v*` tag = public、workflow_dispatch = draft）。
+- `.github/workflows/release.yml` 同一次 run：`macos-latest` 跑 SyncCore package tests + `scripts/package_mac.sh`（DMG + PKG）、`windows-latest` 跑 vitest + `npm run dist`（NSIS + portable），最後由單一 `publish` job 把 `.dmg` / `.pkg` / `.exe` 掛上同一個 GitHub Release（`v*` tag = public、workflow_dispatch = draft）。
+- `v*` tag 版本會 stamp 進 macOS `MARKETING_VERSION`/`CFBundleVersion` 與 Windows `package.json`，兩端 artifact 檔名一致對應 tag。
 
 驗證腳本使用 `CODE_SIGNING_ALLOWED=NO` 建置 `iPhoneSyncMac`、generic iOS Simulator 與 `Release` generic iOS device；Release build 必須編譯 production cadence 分支。腳本也檢查 `BGTaskSchedulerPermittedIdentifiers`、`UIBackgroundModes = processing`、PhotoKit deletion usage string、default-off guard、hard-cancellation、Mac recovery 與兩端 Operation Log source invariants。這些 checks 證明 source contract 與 platform compilation，不是 Photos system confirmation、listener recovery、OS launch/expiration 或 signed network behavior tests。
 

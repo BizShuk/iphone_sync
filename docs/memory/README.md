@@ -9,6 +9,7 @@
 
 ## Entries
 
+- [2026-08-04 Release CI — macOS + Windows](2026-08-04-release-ci-mac-windows.md)
 - [2026-07-27 Delete After Sync](2026-07-27-delete-after-sync.md)
 - [2026-07-23 Automatic LAN Sync](2026-07-23-automatic-lan-sync.md)
 - [2026-07-22 Persistent Mac Settings](2026-07-22-persistent-mac-settings.md)

@@ -1,0 +1,168 @@
+name: Release Desktop Receivers
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag name (defaults to manual-<run number> if empty)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: SyncCore tests + iPhoneSyncMac (DMG + PKG)
+    runs-on: macos-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Run SyncCore package tests
+        run: swift test --package-path packages/SyncCore
+
+      # Ad-hoc signed by default. Add repo secrets and export them here as
+      # MAC_SIGN_IDENTITY / MAC_INSTALLER_IDENTITY / MAC_NOTARY_APPLE_ID /
+      # MAC_NOTARY_TEAM_ID / MAC_NOTARY_PASSWORD (plus a keychain import step
+      # for the Developer ID certificates) to switch the same script to
+      # Developer ID signing + notarization. See
+      # .claude/skills/os-packaging/references/macos.md.
+      - name: Package DMG + PKG
+        env:
+          MAC_BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          version_flag=""
+          case "$GITHUB_REF" in
+            refs/tags/v*) version_flag="--version ${GITHUB_REF_NAME#v}" ;;
+          esac
+          bash scripts/package_mac.sh $version_flag
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPhoneSync-macOS
+          path: |
+            build/mac-dist/*.dmg
+            build/mac-dist/*.pkg
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: SyncCore.Windows + electron-builder (NSIS + portable)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache-dependency-path: |
+            packages/SyncCore.Windows/package-lock.json
+            apps/windows/package-lock.json
+
+      - name: Install + test + build SyncCore.Windows
+        shell: pwsh
+        run: |
+          cd packages/SyncCore.Windows
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+
+      - name: Install + build apps/windows
+        shell: pwsh
+        run: |
+          cd apps/windows
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Copy SyncCore.Windows dist into apps/windows/node_modules
+        shell: pwsh
+        run: |
+          cd apps/windows
+          node scripts/copy-sync-core.js
+
+      - name: Stamp release version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          cd apps/windows
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          npm version $version --no-git-tag-version --allow-same-version
+
+      - name: Produce NSIS installer + portable .exe
+        shell: pwsh
+        run: |
+          cd apps/windows
+          npm run dist
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: iPhoneSync-Windows-x64
+          path: |
+            apps/windows/dist-installer/win-unpacked/**/*
+            apps/windows/dist-installer/*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish GitHub Release
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List release assets
+        run: ls -lR release-assets
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/*.exe
+            release-assets/*.dmg
+            release-assets/*.pkg
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+
+      - name: Publish draft GitHub Release (manual)
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag || format('manual-{0}', github.run_number) }}
+          files: |
+            release-assets/*.exe
+            release-assets/*.dmg
+            release-assets/*.pkg
+          draft: true
+          generate_release_notes: true
+          fail_on_unmatched_files: true

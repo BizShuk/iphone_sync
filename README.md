@@ -237,22 +237,25 @@ Windows 11 receiver 端會額外跑 `scripts/verify_windows.sh`：49 個 vitest�
 
 最近一次 canonical 通過紀錄為 `54` 個 Swift package tests、`41` 個 iOS unit tests、`49` 個 Windows vitest、三個 Apple builds 與兩個 TypeScript builds。Mac half-open deadline 有 package behavior test；其餘 receiver recovery、`BGProcessingTask` lifecycle 與 PhotoKit deletion 主要是編譯 / source-invariant / injected-service tests，不等同完整行為測試或實機驗收。
 
-### Windows 11 Release (GitHub Actions)
+### Desktop Release (GitHub Actions)
 
-`.github/workflows/release-windows.yml` 自動在 `windows-latest` 跑：
+`.github/workflows/release.yml` 用同一個 trigger 打包 macOS 與 Windows 兩個 receiver，並發佈到同一個 GitHub Release，使用者從 Release 頁面下載即可一鍵安裝：
 
-1. `npm ci` + `npm run build`（SyncCore.Windows 與 apps/windows）
-2. `npm run dist`（electron-builder 產 NSIS installer + portable .exe）
-3. 上傳 artifact `iPhoneSync-Windows-x64` 與自動發佈到 GitHub Release
+1. `macos-latest`：SyncCore package tests + `bash scripts/package_mac.sh` → `iPhoneSync-Mac-<version>.dmg`（拖進 Applications）與 `iPhoneSync-Mac-<version>.pkg`（雙擊安裝到 /Applications）
+2. `windows-latest`：vitest + `npm run dist` → `iPhoneSync-Setup-<version>.exe`（NSIS installer）與 `iPhoneSync-Portable-<version>.exe`
+3. `publish`：下載兩端 artifacts，把 `.dmg` / `.pkg` / `.exe` 全部掛上同一個 Release
 
 Trigger：
 
-- `v*` tag push → 自動建立 Public Release
+- `v*` tag push → 自動建立 Public Release（tag 版本 stamp 進兩端 artifact 檔名與 bundle version）
 - `workflow_dispatch` → Manual 建立 Draft Release
 
-本地預覽（macOS 開發機驗證）：
+未設定 Apple Developer ID secrets 時，mac artifacts 為 ad-hoc 簽章：下載後首次開啟會被 Gatekeeper 攔下，需在「系統設定 → 隱私權與安全性」按「強制打開」（或 `xattr -dr com.apple.quarantine "/Applications/iPhone Sync.app"`）。提供 `MAC_SIGN_IDENTITY` / `MAC_NOTARY_*` 環境後，同一腳本自動升級為 Developer ID 簽章 + notarization，安裝就不再有警告。Windows 端未簽 Authenticode 前，SmartScreen 可能顯示「其他資訊 → 仍要執行」。
+
+本地打包 / 預覽（macOS 開發機）：
 
 ```bash
+bash scripts/package_mac.sh         # → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
 bash scripts/verify_windows.sh      # 49 tests + 2 builds + invariants pass
 ```
 
