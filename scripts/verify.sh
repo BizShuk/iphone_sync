@@ -56,6 +56,17 @@ xcrun swiftc \
     -o "$settings_test_binary"
 "$settings_test_binary"
 
+destination_test_binary="$settings_test_dir/verify-mac-destination"
+xcrun swiftc \
+    -D VERIFY_STANDALONE \
+    -I "$synccore_module_dir" \
+    apps/macos/Sources/MacSettingsStore.swift \
+    apps/macos/Sources/DestinationRootResolver.swift \
+    apps/macos/Sources/DestinationBookmarkStore.swift \
+    scripts/verify_mac_destination.swift \
+    -o "$destination_test_binary"
+"$destination_test_binary"
+
 swift test --package-path packages/SyncCore
 xcodegen generate
 

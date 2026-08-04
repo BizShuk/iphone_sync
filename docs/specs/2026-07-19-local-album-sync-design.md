@@ -288,7 +288,7 @@ Manifest 使用 SwiftData，保存在 Mac App container。
 
 ## 9. Finder Destination
 
-使用者選擇的 Finder folder 是 destination root，Mac 以 security-scoped bookmark 保存權限。每個 session 通過 source/album binding 後，Mac 先建立或重用固定 `iPhoneSync` receiving folder，再建立或重用該 album 的穩定安全子資料夾；所有新的 final 與 partial resource 都寫在該階層內。
+使用者選擇的 Finder folder 是 destination root；symbolic-link root 會在選擇邊界解析為現存的實際 target folder，再以 security-scoped bookmark 保存該 resolved capability。每個 session 通過 source/album binding 後，Mac 先建立或重用固定 `iPhoneSync` receiving folder，再建立或重用該 album 的穩定安全子資料夾；所有新的 final 與 partial resource 都寫在該階層內。
 
 ```tree
 Selected Folder/
@@ -318,7 +318,7 @@ Selected Folder/
 - 發生不同內容的 path collision 時延長至 16 碼。
 - 一般相簿名稱原樣作為直接子資料夾；空白名稱使用 `Untitled Album`。
 - 相簿名稱中的斜線、反斜線與控制字元替換為 `_`，前導 `.` 加上 `_`，阻擋 traversal 與隱藏 path injection。
-- `iPhoneSync` 與對應 album 的真實資料夾已存在時，驗證不是 symlink 且仍位於 selected folder 後直接重用，既有內容不刪除；同名項目若是檔案或 symlink，拒絕 session 並記錄 receiver error。
+- `iPhoneSync` 與對應 album 的真實資料夾已存在時，驗證不是 symlink 且仍位於 resolved destination root 後直接重用，既有內容不刪除；同名項目若是檔案或 symlink，拒絕 session 並記錄 receiver error。
 - 不同 album 的安全名稱相同時，第一個使用原名，後續依序使用 `名稱 (2)`、`名稱 (3)`；`AlbumRecord` 保存穩定 mapping，避免跨 session 合併。
 - Manifest 的新 `finalRelativePath` 以 Selected Folder 為基準，格式為 `iPhoneSync/<album-folder>/<resource-path>`。
 - 舊版尚未完成的 root-level 或 direct per-album `.partial` 在續傳時安全搬入 `iPhoneSync/<album-folder>/`；已 committed 檔案保留其 manifest path，不搬移或刪除。

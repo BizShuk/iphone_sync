@@ -21,19 +21,54 @@ struct DestinationBookmarkStore {
         self.settings = settings
     }
 
-    func save(_ url: URL) throws {
-        let data = try url.bookmarkData(
-            options: .withSecurityScope,
-            includingResourceValuesForKeys: nil,
-            relativeTo: nil
-        )
-        settings.destinationBookmark = data
+    @discardableResult
+    func save(_ url: URL) throws -> URL {
+        let accessStarted = url.startAccessingSecurityScopedResource()
+        defer {
+            if accessStarted {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let resolved = try DestinationRootResolver.resolve(url)
+        return try persist(resolved)
     }
 
     func resolve() throws -> URL {
         guard let data = settings.destinationBookmark else {
             throw DestinationBookmarkError.missing
         }
+        let bookmarked = try resolveBookmark(data)
+        let accessStarted = bookmarked.startAccessingSecurityScopedResource()
+        defer {
+            if accessStarted {
+                bookmarked.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        let resolved = try DestinationRootResolver.resolve(bookmarked)
+        guard bookmarked.standardizedFileURL.path != resolved.path else {
+            return bookmarked
+        }
+        return try persist(resolved)
+    }
+
+    func clear() {
+        settings.destinationBookmark = nil
+    }
+
+    private func persist(_ url: URL) throws -> URL {
+        let data = try url.bookmarkData(
+            options: .withSecurityScope,
+            includingResourceValuesForKeys: nil,
+            relativeTo: nil
+        )
+        let bookmarked = try resolveBookmark(data)
+        settings.destinationBookmark = data
+        return bookmarked
+    }
+
+    private func resolveBookmark(_ data: Data) throws -> URL {
         var isStale = false
         let url = try URL(
             resolvingBookmarkData: data,
@@ -43,9 +78,5 @@ struct DestinationBookmarkStore {
         )
         guard !isStale else { throw DestinationBookmarkError.stale }
         return url
-    }
-
-    func clear() {
-        settings.destinationBookmark = nil
     }
 }

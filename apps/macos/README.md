@@ -1,6 +1,6 @@
 # Mac Receiver
 
-`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。第一次開啟 destination chooser 時預設顯示使用者的 `Downloads` 資料夾；使用者確認後 App 保存該 Finder destination。它顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 將已配對 iPhone 的多相簿增量備份寫入 `iPhoneSync/` 底下，依儲存模式分派：預設為「相簿日期分類」(`iPhoneSync/<album>/<year>/<month>/`)，或「單一資料匣 (不分類)」(`iPhoneSync/<file>` )。
+`iPhoneSyncMac` 是 macOS 14+ menu-bar receiver。第一次開啟 destination chooser 時預設顯示使用者的 `Downloads` 資料夾；使用者確認後 App 保存該 Finder destination，symbolic-link root 會固定解析至實際 target folder。它顯示兩分鐘六位數配對碼，並以 Bonjour + Network.framework 將已配對 iPhone 的多相簿增量備份寫入 `iPhoneSync/` 底下，依儲存模式分派：預設為「相簿日期分類」(`iPhoneSync/<album>/<year>/<month>/`)，或「單一資料匣 (不分類)」(`iPhoneSync/<file>` )。
 
 ## Flow
 
@@ -20,14 +20,14 @@ Choose Destination (defaults to Downloads on first use)
 - Operation timeline 使用 levelled semantic events，不逐 chunk 記錄，並同步送入 Apple Unified Logging；panel 不包含 PSK、六位數 pairing code、cryptographic identity、source binding 或 content hash。
 - App Sandbox 只授予 incoming/outgoing network、使用者選擇資料夾 read-write 與 app-scoped bookmark 權限。
 - `MacSettingsStore` 統一管理 receiver ID、source binding、destination bookmark bytes 與 launch-at-login intent，並沿用既有 preference keys。
-- `DestinationBookmarkStore` 專責 security-scoped bookmark encode/resolve；stale bookmark 會要求重新選擇。
+- Destination root 先解析為現存的實際 folder，再由 `DestinationBookmarkStore` 保存 security-scoped bookmark；stale bookmark 會要求重新選擇。
 - Paired peer secrets 留在 Keychain，album/resource state 留在 SwiftData；兩者不寫入 preferences。
 - `Launch at Login` 首次預設啟用並由 `SMAppService.mainApp` 註冊；使用者關閉後 intent 仍會跨 App relaunch 與 Mac restart 保存。
 - Setup window frame 與 menu-bar item position 使用 AppKit autosave。
 - `ReceiverController` 一次只接受一個正常同步 connection。
 - `ManifestStore` 以 SwiftData 保存一個 source binding 下的多個 album/folder mappings，以及 album-scoped resource checkpoint。
 - `AlbumFolderPolicy` 保留一般相簿名稱，並將 path separator、控制字元與隱藏 path injection 轉成安全的單一資料夾名稱。
-- `DestinationWriter` 固定先建立或重用 `iPhoneSync` receiving folder；`相簿日期分類` 模式會於其下建立相簿資料夾與日期子資料夾，`單一資料匣 (不分類)` 模式則直接寫入 `iPhoneSync` 根。任一同名項目若是檔案或 symlink，session 會拒絕並寫入 Operation Log。
+- `DestinationWriter` 固定先建立或重用 resolved root 下的 `iPhoneSync` receiving folder；`相簿日期分類` 模式會於其下建立相簿資料夾與日期子資料夾，`單一資料匣 (不分類)` 模式則直接寫入 `iPhoneSync` 根。任一內部同名項目若是檔案或 symlink，session 會拒絕並寫入 Operation Log。
 - 已存在的真實寫入資料夾會安全重用且內容不刪除；`相簿日期分類` 模式下不同 album 若同名，依序使用 `名稱 (2)`、`名稱 (3)`，避免合併。
 - `DestinationWriter` 不覆寫或刪除 committed user files；完整 SHA-256 驗證後才發布 final file。
 - `Forget iPhone` 只刪除 Keychain trust；`Reset Source` 只建立新的 source binding，兩者都不刪除 Finder 檔案。

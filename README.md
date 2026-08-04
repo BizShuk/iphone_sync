@@ -94,7 +94,7 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 | `Album`                        | `<destination>/iPhoneSync/<album>/<file>`                | 相簿即分類，不需日期層 |
 | `Single Folder`                | `<destination>/iPhoneSync/<file>`                        | 之後交給其他工具再分類 |
 
-若 `iPhoneSync` 或相簿資料夾已是安全的真實資料夾，Mac 直接重用並保留全部既有內容；若同名項目是檔案、symlink 或不安全路徑，session 會拒絕並顯示於 Mac `Operation Log`。切換模式不會搬動或刪除既有 committed 檔案。
+若選取的 destination root 是 symbolic-link folder，Mac 會先解析並保存實際 target folder，`iPhoneSync` 也固定寫入該 target。此例外只適用於使用者選取的 root；`iPhoneSync` 或相簿資料夾若是 symlink 或不安全路徑，session 仍會拒絕並顯示於 Mac `Operation Log`。已存在的安全真實資料夾會直接重用並保留全部內容；切換模式不會搬動或刪除既有 committed 檔案。
 
 ### Automatic Sync 的真實語意
 
@@ -160,7 +160,7 @@ xcodegen generate
 或在 Xcode 開啟 `iPhoneSync.xcodeproj`，為 `iPhoneSyncMac` 選擇開發團隊後執行。
 
 1. menu bar 出現 `iPhone Sync` 圖示，點開選 `Open Setup`。
-2. 按 `Choose Destination`，第一次會預設開在 `Downloads`；選定後 sandbox 以 security-scoped bookmark 保存權限。
+2. 按 `Choose Destination`，第一次會預設開在 `Downloads`；選定 symbolic-link folder 時會固定解析至實際 target，再由 sandbox 以 security-scoped bookmark 保存權限。
 3. 選擇 `Storage Mode`。
 4. 按 `Pair iPhone`，畫面顯示六位數配對碼與兩分鐘倒數。
 5. macOS 15+ 首次會出現 Local Network 授權提示，必須允許。

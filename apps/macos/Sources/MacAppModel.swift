@@ -198,16 +198,17 @@ final class MacAppModel {
             await controller?.stopAll()
             if destinationAccessActive {
                 destinationURL?.stopAccessingSecurityScopedResource()
+                destinationAccessActive = false
             }
             do {
-                try bookmarkStore.save(url)
-                destinationAccessActive = url.startAccessingSecurityScopedResource()
-                destinationURL = url
+                let resolved = try bookmarkStore.save(url)
+                destinationAccessActive = resolved.startAccessingSecurityScopedResource()
+                destinationURL = resolved
                 resetSourceIdentifier()
                 recordOperation(
                     .success,
                     category: "Destination",
-                    message: "Selected “\(url.lastPathComponent)” and reset source binding."
+                    message: "Selected “\(resolved.lastPathComponent)” and reset source binding."
                 )
                 await startReceiverIfReady()
             } catch {
