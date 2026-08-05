@@ -70,7 +70,10 @@ public actor DestinationWriter {
         manifest: ManifestStore,
         storageMode: DestinationStorageMode = .albumDate
     ) {
-        self.destinationRoot = destinationRoot.standardizedFileURL
+        self.destinationRoot = URL(
+            fileURLWithPath: destinationRoot.standardizedFileURL.path,
+            isDirectory: true
+        )
         self.manifest = manifest
         self.storageMode = storageMode
     }
@@ -88,8 +91,7 @@ public actor DestinationWriter {
         albumFolderName = folderName
         if storageMode != .flat {
             let folderURL = receivingRoot.appendingPathComponent(folderName, isDirectory: true)
-            let standardizedParent = folderURL.deletingLastPathComponent().standardizedFileURL
-            guard standardizedParent == receivingRoot else {
+            guard isSameDirectory(folderURL.deletingLastPathComponent(), receivingRoot) else {
                 throw DestinationWriterError.unsafeDestination
             }
             try prepareSafeDirectory(folderURL, expectedParent: receivingRoot)
@@ -357,7 +359,7 @@ public actor DestinationWriter {
     }
 
     private func prepareSafeDirectory(_ url: URL, expectedParent: URL) throws {
-        guard url.deletingLastPathComponent().standardizedFileURL == expectedParent else {
+        guard isSameDirectory(url.deletingLastPathComponent(), expectedParent) else {
             throw DestinationWriterError.unsafeDestination
         }
 
@@ -410,6 +412,10 @@ public actor DestinationWriter {
                 throw DestinationWriterError.unsafeDestination
             }
         }
+    }
+
+    private func isSameDirectory(_ url: URL, _ other: URL) -> Bool {
+        url.standardizedFileURL.path == other.standardizedFileURL.path
     }
 
     private func isWithinDestinationRoot(_ url: URL, resolvedRoot root: URL) -> Bool {

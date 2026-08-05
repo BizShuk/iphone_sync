@@ -159,6 +159,30 @@ func existingAlbumNameThatIsAFileIsRejected() async throws {
 }
 
 @Test
+func destinationRootWithoutDirectoryFlagStillPreparesAlbum() async throws {
+    let harness = try ReceiverHarness()
+    let nonDirectoryRoot = URL(
+        fileURLWithPath: harness.directory.path,
+        isDirectory: false
+    )
+    let writer = DestinationWriter(
+        destinationRoot: nonDirectoryRoot,
+        manifest: harness.manifest
+    )
+
+    let folderName = try await writer.prepareAlbumDirectory(named: "surfing-raw")
+
+    #expect(folderName == "surfing-raw")
+    var isDirectory: ObjCBool = false
+    let albumURL = harness.receivingRootURL
+        .appendingPathComponent("surfing-raw", isDirectory: true)
+    #expect(
+        FileManager.default.fileExists(atPath: albumURL.path, isDirectory: &isDirectory)
+    )
+    #expect(isDirectory.boolValue)
+}
+
+@Test
 func receivingFolderNameThatIsAFileIsRejected() async throws {
     let harness = try ReceiverHarness()
     try Data("not a folder".utf8).write(to: harness.receivingRootURL)
