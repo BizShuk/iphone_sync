@@ -15,7 +15,7 @@ public enum DestinationWriterError: Error, Equatable, LocalizedError, Sendable {
     case incompleteTransfer
     case integrityMismatch
     case unsafeDestination
-    case unableToCreatePartial
+    case unableToCreatePartial(reason: String)
 
     public var errorDescription: String? {
         switch self {
@@ -35,8 +35,8 @@ public enum DestinationWriterError: Error, Equatable, LocalizedError, Sendable {
             "The received resource failed SHA-256 verification."
         case .unsafeDestination:
             "The album destination conflicts with a file, symlink, or unsafe path."
-        case .unableToCreatePartial:
-            "The receiver could not create the partial resource file."
+        case let .unableToCreatePartial(reason):
+            "The receiver could not create the partial resource file: \(reason)"
         }
     }
 }
@@ -148,8 +148,14 @@ public actor DestinationWriter {
                       FileManager.default.fileExists(atPath: legacyPartialURL.path) {
                 try FileManager.default.moveItem(at: legacyPartialURL, to: partialURL)
             } else {
-                guard FileManager.default.createFile(atPath: partialURL.path, contents: nil) else {
-                    throw DestinationWriterError.unableToCreatePartial
+                do {
+                    // `Data.write` reports why the file could not be created;
+                    // `FileManager.createFile` only returns false.
+                    try Data().write(to: partialURL, options: .withoutOverwriting)
+                } catch {
+                    throw DestinationWriterError.unableToCreatePartial(
+                        reason: error.localizedDescription
+                    )
                 }
             }
         }
@@ -362,25 +368,29 @@ public actor DestinationWriter {
         guard isSameDirectory(url.deletingLastPathComponent(), expectedParent) else {
             throw DestinationWriterError.unsafeDestination
         }
+        try prepareDirectory(at: url)
+    }
 
+    /// Creates `url` when it is missing. An existing entry is accepted only when it
+    /// resolves to a directory, so a symbolic link to a folder is used like a normal
+    /// folder even when its target lives outside the destination root.
+    private func prepareDirectory(at url: URL) throws {
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) {
-            try rejectSymbolicLink(at: url)
             guard isDirectory.boolValue else {
                 throw DestinationWriterError.unsafeDestination
             }
-        } else {
-            try FileManager.default.createDirectory(
-                at: url,
-                withIntermediateDirectories: false
-            )
+            return
         }
 
-        let root = destinationRoot.resolvingSymlinksInPath().standardizedFileURL
-        let resolvedDirectory = url.resolvingSymlinksInPath().standardizedFileURL
-        guard isWithinDestinationRoot(resolvedDirectory, resolvedRoot: root) else {
+        // A dangling symbolic link is invisible to `fileExists` but still owns the name.
+        guard (try? FileManager.default.attributesOfItem(atPath: url.path)) == nil else {
             throw DestinationWriterError.unsafeDestination
         }
+        try FileManager.default.createDirectory(
+            at: url,
+            withIntermediateDirectories: false
+        )
     }
 
     private func fileMatches(_ url: URL, offer: ResourceOffer) throws -> Bool {
@@ -395,34 +405,21 @@ public actor DestinationWriter {
     }
 
     private func createSafeParentDirectory(for fileURL: URL) throws {
-        let root = destinationRoot.resolvingSymlinksInPath().standardizedFileURL
         var current = destinationRoot
         let relativeParent = fileURL.deletingLastPathComponent().path
             .dropFirst(destinationRoot.path.count)
             .split(separator: "/")
         for component in relativeParent {
-            current.appendPathComponent(String(component), isDirectory: true)
-            if FileManager.default.fileExists(atPath: current.path) {
-                try rejectSymbolicLink(at: current)
-            } else {
-                try FileManager.default.createDirectory(at: current, withIntermediateDirectories: false)
-            }
-            let resolved = current.resolvingSymlinksInPath().standardizedFileURL
-            guard isWithinDestinationRoot(resolved, resolvedRoot: root) else {
+            guard component != ".." else {
                 throw DestinationWriterError.unsafeDestination
             }
+            current.appendPathComponent(String(component), isDirectory: true)
+            try prepareDirectory(at: current)
         }
     }
 
     private func isSameDirectory(_ url: URL, _ other: URL) -> Bool {
         url.standardizedFileURL.path == other.standardizedFileURL.path
-    }
-
-    private func isWithinDestinationRoot(_ url: URL, resolvedRoot root: URL) -> Bool {
-        if root.path == "/" {
-            return url.path.hasPrefix("/")
-        }
-        return url.path == root.path || url.path.hasPrefix(root.path + "/")
     }
 
     private func rejectSymbolicLink(at url: URL) throws {

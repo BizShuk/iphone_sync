@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "npx npm-run-all --parallel dev:*",
     "dev:mac": "./scripts/run_server.sh",
-    "dev:iphone": "./scripts/run_iphone.sh",
+    "dev:ios": "./scripts/run_iphone.sh",
     "dev:windows": "cd apps/windows && npm run build && npm start",
     "test": "npx npm-run-all --parallel test:*",
     "test:mac": "swift test --package-path packages/SyncCore",
@@ -27,8 +27,6 @@
     "destroy:windows": "pkill -f 'iphonesync-windows' || true",
     "run:verify": "./scripts/verify.sh",
     "run:verify-windows": "./scripts/verify_windows.sh",
-    "run:package-mac": "./scripts/package_mac.sh",
-    "run:server": "./scripts/run_server.sh",
-    "run:iphone": "./scripts/run_iphone.sh"
+    "deploy:package-mac": "./scripts/package_mac.sh"
   }
 }

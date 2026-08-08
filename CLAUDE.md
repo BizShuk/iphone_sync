@@ -13,7 +13,7 @@ MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels
 - iPhone sync 可由前景 `Sync Now` 手動觸發，或由使用者預先 opt in、再由 iOS best-effort 啟動 automatic run；background runtime 不得被描述為固定 cron。
 - Automatic run 只有在 `iPhone Wi-Fi + exact paired receiverID Bonjour visible + TLS-PSK authentication` 同時成立時才傳輸；不得以 SSID、IP subnet 或 `requiresNetworkConnectivity` 取代此 gate。
 - 同一時間只綁定一組使用者選取的來源相簿、一部 iPhone 與一部 Mac；來源相簿可多選。
-- 使用者選擇的 Finder folder 是 destination root；若它是 symbolic link，選擇時先解析並保存實際 target folder。每個 album 的 resource 一律寫入 resolved root 的固定 `iPhoneSync` 容器下；內部 symlink 仍拒絕，已存在的真實資料夾安全重用，同名的不同 album 以 `名稱 (2)`、`名稱 (3)` 穩定區分。
+- 使用者選擇的 Finder folder 是 destination root；若它是 symbolic link，選擇時先解析並保存實際 target folder。每個 album 的 resource 一律寫入 resolved root 的固定 `iPhoneSync` 容器下；`iPhoneSync` 容器、相簿資料夾與日期子資料夾若是 symbolic link，只要解析後是實際存在的資料夾就當一般資料夾使用（允許 target 位於 destination root 之外，實際寫入仍受 sandbox 授權限制），不解析為資料夾者拒絕。已存在的真實資料夾安全重用，同名的不同 album 以 `名稱 (2)`、`名稱 (3)` 穩定區分；檔案層級的 symlink 一律拒絕，維持絕不覆寫既有檔案。
 - 同步只能新增，永不因來源變動刪除或覆寫 Mac 既有檔案。
 - `Delete After Sync` 預設關閉；關閉時所有同步入口都不得 enqueue 或呼叫 Photos deletion，disable 與 forget receiver 會清除 pending deletion IDs。
 - 刪除單位是整個 `PHAsset`。只有 asset 的每個本機 resource 在每個已選相簿 occurrence 都由 receiver 回覆 committed / already present，且完整 multi-album run 成功時才可成為 candidate；任何 not-local resource、failure、cancel 或 expiration 都必須保留 asset。

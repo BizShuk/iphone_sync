@@ -94,7 +94,7 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 | `Album`                        | `<destination>/iPhoneSync/<album>/<file>`                | 相簿即分類，不需日期層 |
 | `Single Folder`                | `<destination>/iPhoneSync/<file>`                        | 之後交給其他工具再分類 |
 
-若選取的 destination root 是 symbolic-link folder，Mac 會先解析並保存實際 target folder，`iPhoneSync` 也固定寫入該 target。此例外只適用於使用者選取的 root；`iPhoneSync` 或相簿資料夾若是 symlink 或不安全路徑，session 仍會拒絕並顯示於 Mac `Operation Log`。已存在的安全真實資料夾會直接重用並保留全部內容；切換模式不會搬動或刪除既有 committed 檔案。
+若選取的 destination root 是 symbolic-link folder，Mac 會先解析並保存實際 target folder，`iPhoneSync` 也固定寫入該 target。`iPhoneSync` 容器、相簿資料夾與日期子資料夾若是 symbolic link，只要解析後是實際存在的資料夾，就當一般資料夾使用，target 也可以位於 destination root 之外（例如外接硬碟）；實際能否寫入仍取決於 macOS 授予的 sandbox 權限。解析不到資料夾（斷掉的連結或指向檔案）與同名檔案仍會拒絕，並顯示於 Mac `Operation Log`。已存在的資料夾會直接重用並保留全部內容；切換模式不會搬動或刪除既有 committed 檔案。
 
 ### Automatic Sync 的真實語意
 
@@ -220,7 +220,7 @@ iPhone sender：
 | 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                |
 | Automatic 從未執行    | `earliestBeginDate` 不是保證；先用 Debug 卡片驗證路徑，再用 `Sync Now` 作為 fallback                  |
 | 已同步但尚未刪除      | Background run 只建立 pending list；回到 App，在 `AFTER SYNC` 按 `Delete N Synced Photos` 並確認     |
-| Mac 寫入被拒          | 目的地同名項目是檔案或 symlink，`Operation Log` 會標示；換一個 destination 或移除該項目               |
+| Mac 寫入被拒          | 目的地同名項目是檔案，或 symlink 解析不到資料夾，`Operation Log` 會標示；換一個 destination 或移除該項目 |
 
 ## 4. 驗證、設定與邊界 (Verification, Settings, Boundaries)
 

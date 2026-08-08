@@ -159,6 +159,129 @@ func existingAlbumNameThatIsAFileIsRejected() async throws {
 }
 
 @Test
+func partialCreationFailureReportsTheUnderlyingReason() async throws {
+    let harness = try ReceiverHarness(storageMode: .albumOnly)
+    try await harness.prepareWriter()
+    _ = try await harness.manifest.decision(for: harness.offer)
+    let albumURL = harness.receivingRootURL
+        .appendingPathComponent(harness.albumFolderName, isDirectory: true)
+    try FileManager.default.setAttributes(
+        [.posixPermissions: 0o500],
+        ofItemAtPath: albumURL.path
+    )
+    defer {
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: albumURL.path
+        )
+    }
+
+    let error = await #expect(throws: DestinationWriterError.self) {
+        try await harness.writer.begin(harness.offer)
+    }
+
+    guard case let .unableToCreatePartial(reason) = error else {
+        Issue.record("Unexpected error: \(String(describing: error))")
+        return
+    }
+    #expect(!reason.isEmpty)
+}
+
+@Test
+func albumFolderSymbolicLinkIsUsedLikeANormalFolder() async throws {
+    let bytes = Data("photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes)
+    let external = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: external, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: external) }
+    try FileManager.default.createDirectory(
+        at: harness.receivingRootURL,
+        withIntermediateDirectories: false
+    )
+    try FileManager.default.createSymbolicLink(
+        at: harness.receivingRootURL
+            .appendingPathComponent(harness.albumFolderName, isDirectory: true),
+        withDestinationURL: external
+    )
+
+    try await harness.prepareWriter()
+    _ = try await harness.manifest.decision(for: harness.offer)
+    _ = try await harness.writer.begin(harness.offer)
+    try await harness.writer.append(bytes, offset: 0)
+    try await harness.writer.checkpoint()
+    let committed = try await harness.writer.commit(
+        expectedHash: harness.offer.descriptor.contentHash
+    )
+
+    #expect(committed.path == harness.existingURL.path)
+    let externalURL = external.appendingPathComponent(harness.resourceRelativePath)
+    #expect(try Data(contentsOf: externalURL) == bytes)
+}
+
+@Test
+func receivingFolderSymbolicLinkIsUsedLikeANormalFolder() async throws {
+    let harness = try ReceiverHarness()
+    let external = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: external, withIntermediateDirectories: false)
+    defer { try? FileManager.default.removeItem(at: external) }
+    try FileManager.default.createSymbolicLink(
+        at: harness.receivingRootURL,
+        withDestinationURL: external
+    )
+
+    let folderName = try await harness.writer.prepareAlbumDirectory(named: "Family")
+
+    #expect(folderName == "Family")
+    var isDirectory: ObjCBool = false
+    #expect(
+        FileManager.default.fileExists(
+            atPath: external.appendingPathComponent("Family").path,
+            isDirectory: &isDirectory
+        )
+    )
+    #expect(isDirectory.boolValue)
+}
+
+@Test
+func albumFolderSymbolicLinkToAFileIsRejected() async throws {
+    let harness = try ReceiverHarness()
+    try FileManager.default.createDirectory(
+        at: harness.receivingRootURL,
+        withIntermediateDirectories: false
+    )
+    let target = harness.receivingRootURL.appendingPathComponent("target.txt")
+    try Data("not a folder".utf8).write(to: target)
+    try FileManager.default.createSymbolicLink(
+        at: harness.receivingRootURL.appendingPathComponent("Family", isDirectory: true),
+        withDestinationURL: target
+    )
+
+    await #expect(throws: DestinationWriterError.unsafeDestination) {
+        try await harness.writer.prepareAlbumDirectory(named: "Family")
+    }
+}
+
+@Test
+func danglingAlbumFolderSymbolicLinkIsRejected() async throws {
+    let harness = try ReceiverHarness()
+    try FileManager.default.createDirectory(
+        at: harness.receivingRootURL,
+        withIntermediateDirectories: false
+    )
+    try FileManager.default.createSymbolicLink(
+        at: harness.receivingRootURL.appendingPathComponent("Family", isDirectory: true),
+        withDestinationURL: harness.receivingRootURL
+            .appendingPathComponent("missing", isDirectory: true)
+    )
+
+    await #expect(throws: DestinationWriterError.unsafeDestination) {
+        try await harness.writer.prepareAlbumDirectory(named: "Family")
+    }
+}
+
+@Test
 func destinationRootWithoutDirectoryFlagStillPreparesAlbum() async throws {
     let harness = try ReceiverHarness()
     let nonDirectoryRoot = URL(

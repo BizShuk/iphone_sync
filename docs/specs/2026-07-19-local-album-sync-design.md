@@ -318,7 +318,7 @@ Selected Folder/
 - 發生不同內容的 path collision 時延長至 16 碼。
 - 一般相簿名稱原樣作為直接子資料夾；空白名稱使用 `Untitled Album`。
 - 相簿名稱中的斜線、反斜線與控制字元替換為 `_`，前導 `.` 加上 `_`，阻擋 traversal 與隱藏 path injection。
-- `iPhoneSync` 與對應 album 的真實資料夾已存在時，驗證不是 symlink 且仍位於 resolved destination root 後直接重用，既有內容不刪除；同名項目若是檔案或 symlink，拒絕 session 並記錄 receiver error。
+- `iPhoneSync` 與對應 album 的資料夾已存在時直接重用，既有內容不刪除；symbolic link 只要解析後是實際存在的資料夾即當一般資料夾使用，target 可位於 destination root 之外。同名項目若是檔案，或 symlink 解析不到資料夾，拒絕 session 並記錄 receiver error；檔案層級的 symlink 仍一律拒絕。
 - 不同 album 的安全名稱相同時，第一個使用原名，後續依序使用 `名稱 (2)`、`名稱 (3)`；`AlbumRecord` 保存穩定 mapping，避免跨 session 合併。
 - Manifest 的新 `finalRelativePath` 以 Selected Folder 為基準，格式為 `iPhoneSync/<album-folder>/<resource-path>`。
 - 舊版尚未完成的 root-level 或 direct per-album `.partial` 在續傳時安全搬入 `iPhoneSync/<album-folder>/`；已 committed 檔案保留其 manifest path，不搬移或刪除。

@@ -1,9 +1,10 @@
 // DestinationWriter — partial → SHA-256 → atomic rename, mirroring
-// `DestinationWriter.swift`. NTFS-aware: rejects symlinks / reparse points,
+// `DestinationWriter.swift`. NTFS-aware: follows directory symlinks / junctions
+// like normal folders, rejects ones that do not resolve to a directory,
 // enforces case-insensitive album name uniqueness, refuses reserved names,
 // and prepends `\\?\` for paths exceeding MAX_PATH.
 
-import { existsSync, mkdirSync, openSync, closeSync, fsyncSync, readSync, writeSync, unlinkSync, readlinkSync, statSync, renameSync, utimesSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, closeSync, fsyncSync, readSync, writeSync, unlinkSync, readlinkSync, lstatSync, statSync, renameSync, utimesSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { FileHasher } from '../crypto/file-hasher.js';
 import { SyncConstants } from '../protocol/constants.js';
@@ -278,6 +279,13 @@ function ensureSafeDirectory(path: string, expectedParent: string): void {
     }
     return;
   }
+  // A dangling symlink / reparse point is invisible to existsSync but owns the name.
+  if (lstatSafe(path) !== null) {
+    throw new DestinationWriterError(
+      `path does not resolve to a directory: ${path}`,
+      'unsafeDestination',
+    );
+  }
   const normalisedPath = path.replace(/\\/g, '/').toLowerCase();
   const normalisedParent = expectedParent.replace(/\\/g, '/').toLowerCase();
   if (!normalisedPath.startsWith(normalisedParent + '/')) {
@@ -287,6 +295,14 @@ function ensureSafeDirectory(path: string, expectedParent: string): void {
     );
   }
   mkdirSync(path, { recursive: true });
+}
+
+function lstatSafe(path: string): ReturnType<typeof lstatSync> | null {
+  try {
+    return lstatSync(path);
+  } catch {
+    return null;
+  }
 }
 
 function ym(date?: Date): { year: string; month: string } {
