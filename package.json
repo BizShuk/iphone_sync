@@ -27,6 +27,7 @@
     "deploy:ios": "./scripts/run-iphone.sh",
     "deploy:mac": "./scripts/run-mac.sh",
     "release": "./scripts/release.sh",
+    "release:store": "./scripts/release-store.sh",
     "run:verify": "./scripts/verify.sh",
     "run:verify-windows": "./scripts/verify-windows.sh"
   }
