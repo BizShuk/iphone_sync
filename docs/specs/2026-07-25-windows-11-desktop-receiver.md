@@ -152,11 +152,11 @@ iphone_sync/
 
 ```bash
 if [[ -d "packages/SyncCore.Windows" && -d "apps/windows" ]]; then
-  bash scripts/verify_windows.sh
+  bash scripts/verify-windows.sh
 fi
 ```
 
-`scripts/verify_windows.sh` 跨平台跑：
+`scripts/verify-windows.sh` 跨平台跑：
 
 1. `npm ci` + `npm test` 與 `npm run build`（macOS / Linux / Windows MSYS）
 2. source-string invariant grep（HKDF labels、`"IPS1"` magic、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`iPhoneSync` container 等）

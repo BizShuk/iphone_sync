@@ -152,10 +152,18 @@ xcodegen generate
 ### 3.2 Mac 端設定 (Receiver)
 
 ```bash
-./scripts/run_server.sh
+./scripts/run-server.sh
 ```
 
 此腳本重新產生 project、以 `Debug` 建置 `iPhoneSyncMac`、停止舊 process，並帶 `--open-setup` 啟動 App。可用旗標：`--build-only`（只建置）、`--no-build`（只啟動既有建置）。
+
+要長期使用而不是改一行看一次，改成安裝進 `/Applications`：
+
+```bash
+npm run deploy:mac
+```
+
+此腳本以 `Release` 建置、簽章（預設 ad-hoc，`MAC_SIGN_IDENTITY` 可換 Developer ID）、結束執行中的舊版本，再取代 `/Applications/iPhone Sync.app` 並啟動。旗標 `--no-launch` 只安裝不啟動；`INSTALL_DIR` 可改安裝位置。ad-hoc 簽章每次建置都是新的 code identity，login Keychain 中的 PSK 與 destination bookmark 會需要重新授權；要保留既有配對就設固定的 Developer ID。散佈給別人仍走 `npm run build:mac` 產生的 DMG / PKG。
 
 或在 Xcode 開啟 `iPhoneSync.xcodeproj`，為 `iPhoneSyncMac` 選擇開發團隊後執行。
 
@@ -170,9 +178,10 @@ xcodegen generate
 ### 3.3 iPhone 端設定 (Sender)
 
 ```bash
-./scripts/run_iphone.sh                        # Debug 建置、安裝、啟動
-./scripts/run_iphone.sh --profile=production   # Release
-./scripts/run_iphone.sh --build-only           # 只產生已簽署 archive
+npm run deploy                                # Debug 建置、安裝、啟動（實機）
+npm run dev                                    # 同上，但跑在 iOS Simulator
+./scripts/run-iphone.sh --profile=production   # Release
+./scripts/run-iphone.sh --build-only           # 只產生已簽署 archive
 ```
 
 腳本會自動解析 Apple Development team、以 `xcrun devicectl` 挑選唯一一台已配對且連線的實體 iPhone。多台裝置時設 `DEVICE_UDID`；多組團隊時設 `DEVELOPMENT_TEAM`。前提是 iPhone 已解鎖、已信任這台 Mac 並開啟 `Developer Mode`。
@@ -190,7 +199,7 @@ xcodegen generate
 Mac receiver：
 
 ```bash
-./scripts/run_server.sh --build-only                      # 只驗證編譯
+./scripts/run-server.sh --build-only                      # 只驗證編譯
 log stream --predicate 'subsystem CONTAINS "iphonesync"'  # Unified Logging 即時串流
 ```
 
@@ -202,7 +211,7 @@ log stream --predicate 'subsystem CONTAINS "iphonesync"'  # Unified Logging 即�
 iPhone sender：
 
 ```bash
-./scripts/run_iphone.sh --console   # 重啟 App 並附掛 process console
+./scripts/run-iphone.sh --console   # 重啟 App 並附掛 process console
 ```
 
 - 主畫面 `Operation Log` 展開後可看到 App、Photos、相簿、配對、discovery、scheduler、run、session 與每個 resource 的 levelled 事件。
@@ -233,7 +242,7 @@ swift test --package-path packages/SyncCore     # 只跑 Swift package tests
 
 驗證入口會執行 Swift package tests、重新產生 Xcode project、建置 macOS、iOS Simulator 與 `Release` generic iOS device targets、檢查 plist / entitlements / local-only source invariants，以及 tracked、staged、untracked whitespace checks。`Release` device build 會實際編譯 `#if DEBUG` 之外的 production cadence 分支。建置使用 `CODE_SIGNING_ALLOWED=NO`。
 
-Windows 11 receiver 端會額外跑 `scripts/verify_windows.sh`：49 個 vitest、SyncCore.Windows 與 apps/windows 兩個 TypeScript build、source-string invariants（HKDF labels、`IPS1` magic、`iPhoneSync` 容器、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`powerMonitor` 等）。`npm run dist`（NSIS + portable）只在 Windows MSYS shell 觸發。
+Windows 11 receiver 端會額外跑 `scripts/verify-windows.sh`：49 個 vitest、SyncCore.Windows 與 apps/windows 兩個 TypeScript build、source-string invariants（HKDF labels、`IPS1` magic、`iPhoneSync` 容器、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`powerMonitor` 等）。`npm run dist`（NSIS + portable）只在 Windows MSYS shell 觸發。
 
 最近一次 canonical 通過紀錄為 `54` 個 Swift package tests、`41` 個 iOS unit tests、`49` 個 Windows vitest、三個 Apple builds 與兩個 TypeScript builds。Mac half-open deadline 有 package behavior test；其餘 receiver recovery、`BGProcessingTask` lifecycle 與 PhotoKit deletion 主要是編譯 / source-invariant / injected-service tests，不等同完整行為測試或實機驗收。
 
@@ -241,7 +250,7 @@ Windows 11 receiver 端會額外跑 `scripts/verify_windows.sh`：49 個 vitest�
 
 `.github/workflows/release.yml` 用同一個 trigger 打包 macOS 與 Windows 兩個 receiver，並發佈到同一個 GitHub Release，使用者從 Release 頁面下載即可一鍵安裝：
 
-1. `macos-latest`：SyncCore package tests + `bash scripts/package_mac.sh` → `iPhoneSync-Mac-<version>.dmg`（拖進 Applications）與 `iPhoneSync-Mac-<version>.pkg`（雙擊安裝到 /Applications）
+1. `macos-latest`：SyncCore package tests + `bash scripts/package-mac.sh` → `iPhoneSync-Mac-<version>.dmg`（拖進 Applications）與 `iPhoneSync-Mac-<version>.pkg`（雙擊安裝到 /Applications）
 2. `windows-latest`：vitest + `npm run dist` → `iPhoneSync-Setup-<version>.exe`（NSIS installer）與 `iPhoneSync-Portable-<version>.exe`
 3. `publish`：下載兩端 artifacts，把 `.dmg` / `.pkg` / `.exe` 全部掛上同一個 Release
 
@@ -255,8 +264,9 @@ Trigger：
 本地打包 / 預覽（macOS 開發機）：
 
 ```bash
-bash scripts/package_mac.sh         # → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
-bash scripts/verify_windows.sh      # 49 tests + 2 builds + invariants pass
+bash scripts/package-mac.sh         # → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
+bash scripts/run-mac.sh             # → /Applications/iPhone Sync.app（本機安裝，不產生 DMG/PKG）
+bash scripts/verify-windows.sh      # 49 tests + 2 builds + invariants pass
 ```
 
 ### 持久化設定 (Persistent Settings)

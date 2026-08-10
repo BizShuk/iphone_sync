@@ -23,7 +23,7 @@
 | Operation Log | in-memory 500 + JSONL at `%LOCALAPPDATA%\iPhoneSync\logs\` |
 | IPC | `setup:changed` / `setup:snapshot` / `setup:choose-destination` / `setup:open-pairing` / `setup:cancel-pairing` / `setup:forget-phone` / `setup:reset-source` / `setup:set-storage-mode` / `setup:set-launch-at-login` / `setup:copy-operation-log` / `setup:clear-operation-log` |
 | Canonical docs | `README.md`（章節 + 文件索引）+ `README.permission.md`（Windows 對應表）+ `README.todo`（進度 + 未完成清單）+ `CLAUDE.md`（Architecture + Approved Technical Choices）+ `docs/terminology.md`（新增 Windows 詞彙）+ `docs/specs/2026-07-25-windows-11-desktop-receiver.md` + `plans/2026-07-25-windows-11-desktop-receiver.md` |
-| `scripts/verify_windows.sh` | 跨平台 verify 入口（macOS / Linux / Windows MSYS） |
+| `scripts/verify-windows.sh` | 跨平台 verify 入口（macOS / Linux / Windows MSYS） |
 | `scripts/verify.sh` | Windows 區段掛載點 |
 
 ## Durable Decisions

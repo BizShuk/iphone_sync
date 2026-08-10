@@ -40,7 +40,7 @@ require_command() {
 
 usage() {
     cat <<'USAGE'
-Usage: ./scripts/run_server.sh [--build-only|--no-build|--help]
+Usage: ./scripts/run-server.sh [--build-only|--no-build|--help]
 
   (no option)  Regenerate, build, and launch the macOS receiver app.
   --build-only  Regenerate and build without launching the app.

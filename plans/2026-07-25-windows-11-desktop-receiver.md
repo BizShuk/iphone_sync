@@ -294,9 +294,9 @@ iphone_sync/
 └── scripts/
     ├── verify.sh                  # 擴充 windows 區段
     ├── verify_mac_settings.swift
-    ├── run_server.sh
-    ├── run_iphone.sh
-    └── verify_windows.sh          # ← NEW: 純 Node/Electron 入口
+    ├── run-server.sh
+    ├── run-iphone.sh
+    └── verify-windows.sh          # ← NEW: 純 Node/Electron 入口
 ```
 
 依賴方向：
@@ -436,7 +436,7 @@ Windows port 必須跑完以下測試向量且與 Swift 既有測試結果一致
 - `apps/windows/` 與 `packages/SyncCore.Windows/` 目錄結構（見 Project Layout）
 - `package.json` + `tsconfig.json` + `electron-builder.yml`
 - `Program.cs`-like Electron `main.ts`：app.whenReady → bootstrap → tray icon skeleton（不接 listener）
-- `scripts/verify_windows.sh` + `scripts/verify.sh` 擴充
+- `scripts/verify-windows.sh` + `scripts/verify.sh` 擴充
 - `README.md` 新增「Windows 11 receiver」章節並 reference 本文件
 
 ### Phase 2：SyncCore.Windows 對齊既有測試向量
@@ -483,7 +483,7 @@ Windows port 必須跑完以下測試向量且與 Swift 既有測試結果一致
 | `docs/specs/2026-07-25-windows-11-desktop-receiver.md`（新） | 從本 plan file 精煉歸檔 |
 | `docs/terminology.md` | 新增 Windows 11 端詞彙（`iPhoneSync container`、`NTFS reparse point` 等） |
 | `docs/memory/2026-07-25-windows-11-port.md`（新） | port 完成後 retrospective |
-| `scripts/verify_windows.sh`（新） | Windows verify 入口 |
+| `scripts/verify-windows.sh`（新） | Windows verify 入口 |
 | `packages/SyncCore/README.md` | 新增「Cross-platform Test Vectors」一節指向 Node 對等測試 |
 
 ### Phase 8：Backlog（首發後補）

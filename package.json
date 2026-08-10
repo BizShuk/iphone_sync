@@ -4,17 +4,16 @@
   "private": true,
   "description": "Local Wi-Fi Photo & Video Sync from iPhone to Mac and Windows",
   "scripts": {
-    "dev": "npx npm-run-all --parallel dev:*",
-    "dev:mac": "./scripts/run_server.sh",
-    "dev:ios": "./scripts/run_iphone.sh",
+    "dev:ios": "./scripts/run-simulator.sh",
+    "dev:mac": "./scripts/run-server.sh",
     "dev:windows": "cd apps/windows && npm run build && npm start",
     "test": "npx npm-run-all --parallel test:*",
     "test:mac": "swift test --package-path packages/SyncCore",
     "test:windows": "cd packages/SyncCore.Windows && npm test && cd ../../apps/windows && npm test",
     "build": "npx npm-run-all --parallel build:*",
-    "build:mac": "./scripts/package_mac.sh",
+    "build:mac": "./scripts/package-mac.sh",
     "build:windows": "cd packages/SyncCore.Windows && npm ci && npm run build && cd ../../apps/windows && npm ci && npm run build && npm run dist",
-    "build:ios": "./scripts/run_iphone.sh --build-only",
+    "build:ios": "./scripts/run-iphone.sh --build-only",
     "lint": "npx npm-run-all --parallel lint:*",
     "lint:windows": "cd packages/SyncCore.Windows && npm run lint",
     "lint:swift": "xcodegen generate && xcodebuild -project iPhoneSync.xcodeproj -scheme iPhoneSyncMac -destination 'platform=macOS' build CODE_SIGNING_ALLOWED=NO",
@@ -25,8 +24,10 @@
     "destroy": "npx npm-run-all --parallel destroy:*",
     "destroy:mac": "pkill -f 'iPhone Sync' || true",
     "destroy:windows": "pkill -f 'iphonesync-windows' || true",
+    "deploy:ios": "./scripts/run-iphone.sh",
+    "deploy:mac": "./scripts/run-mac.sh",
+    "release": "./scripts/release.sh",
     "run:verify": "./scripts/verify.sh",
-    "run:verify-windows": "./scripts/verify_windows.sh",
-    "deploy:package-mac": "./scripts/package_mac.sh"
+    "run:verify-windows": "./scripts/verify-windows.sh"
   }
 }

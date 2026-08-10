@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
     cat <<'USAGE'
 Usage:
-  bash scripts/package_mac.sh [--version <X.Y.Z>] [--help]
+  bash scripts/package-mac.sh [--version <X.Y.Z>] [--help]
 
 Builds the Release iPhoneSyncMac universal app and packages one-click
 install artifacts into build/mac-dist/:

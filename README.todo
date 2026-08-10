@@ -39,7 +39,7 @@
 
 ## 打包與發佈 (Packaging & Release)
 
-- [x] 統一 release CI：`release.yml` 一個 `v*` tag 同時產 macOS universal DMG + PKG（`scripts/package_mac.sh`）與 Windows NSIS + portable，單一 publish job 掛同一個 GitHub Release @2026-08-04_01:30:00 @Completed @Packaging_Release
+- [x] 統一 release CI：`release.yml` 一個 `v*` tag 同時產 macOS universal DMG + PKG（`scripts/package-mac.sh`）與 Windows NSIS + portable，單一 publish job 掛同一個 GitHub Release @2026-08-04_01:30:00 @Completed @Packaging_Release
 - [ ] 設定 Apple Developer ID secrets（`MAC_SIGN_IDENTITY` + `MAC_NOTARY_*`）讓 CI 產出公證後的 DMG/PKG，移除 Gatekeeper bypass 步驟
 - [ ] Windows Authenticode / Azure Trusted Signing 簽章，消除 SmartScreen 警告
 - [ ] 跑一次 `workflow_dispatch` draft release，於乾淨的 Mac 與 Windows 實機下載驗證一鍵安裝與首次啟動

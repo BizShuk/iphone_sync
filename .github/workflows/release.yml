@@ -51,7 +51,7 @@ jobs:
           case "$GITHUB_REF" in
             refs/tags/v*) version_flag="--version ${GITHUB_REF_NAME#v}" ;;
           esac
-          bash scripts/package_mac.sh $version_flag
+          bash scripts/package-mac.sh $version_flag
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

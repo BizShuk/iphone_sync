@@ -26,7 +26,7 @@ case "${1:-}" in
         exit 0
         ;;
     --launch-view)
-        bash scripts/run_server.sh --no-build
+        bash scripts/run-server.sh --no-build
         exit 0
         ;;
     --build-only|"")
@@ -203,5 +203,5 @@ done < <(git ls-files --others --exclude-standard -z)
 # state) or if node/npm is unavailable. The script is cross-platform; the
 # electron-builder packaging step only runs on Windows MSYS shells.
 if [[ -d "packages/SyncCore.Windows" && -d "apps/windows" ]]; then
-    bash scripts/verify_windows.sh
+    bash scripts/verify-windows.sh
 fi

@@ -76,7 +76,7 @@ iphone_sync/
 │   ├── memory/
 │   └── specs/
 ├── plans/
-├── scripts/                     # verify.sh、verify_windows.sh、package_mac.sh、run_server.sh、run_iphone.sh
+├── scripts/                     # verify.sh、verify-windows.sh、package-mac.sh、run-mac.sh、run-server.sh、run-simulator.sh、run-iphone.sh、release.sh
 ├── README.md
 ├── README.permission.md         # iOS/macOS permissions and purpose
 ├── CLAUDE.md
@@ -115,7 +115,7 @@ MacReceiverKit ─────────→ SyncCore
 | Preferences | Typed `MacSettingsStore` backed by sandbox `UserDefaults` |
 | Auto-start | `SMAppService.mainApp` with persistent requested intent |
 | Operation diagnostics | Semantic events、latest 500 entries per App process、Apple Unified Logging |
-| Desktop release packaging | 單一 `release.yml`：macOS universal (arm64 + x86_64) DMG + PKG via `scripts/package_mac.sh`（預設 ad-hoc，env 升級 Developer ID + notarization）；Windows NSIS + portable via electron-builder；同一 GitHub Release |
+| Desktop release packaging | 單一 `release.yml`：macOS universal (arm64 + x86_64) DMG + PKG via `scripts/package-mac.sh`（預設 ad-hoc，env 升級 Developer ID + notarization）；Windows NSIS + portable via electron-builder；同一 GitHub Release |
 
 ## Runtime Ownership
 
@@ -152,6 +152,26 @@ Mac bootstrap 先依 `launchAtLoginRequested` reconcile `SMAppService`，再讀�
 xcodegen generate
 ```
 
+統一任務入口（`npm run` 可探索）：
+
+```bash
+npm run dev              # iOS Simulator 建置、安裝、啟動
+npm run deploy           # 實機 archive、安裝、啟動
+npm run dev:mac          # macOS receiver（Debug，從 build 目錄啟動）
+npm run dev:windows      # Windows receiver
+npm run deploy:mac       # 本機安裝：Release build → /Applications → 啟動
+npm run build:mac        # 本機 macOS 散佈：universal DMG + PKG
+npm run release          # App Store：archive → export .ipa → upload
+```
+
+`dev` 不再 fan out 成 `dev:*`——那會讓一次 `npm run dev` 把建置推上實機。
+`dev:mac` 與 `deploy:mac` 的差別是產物落點：前者跑 `build/` 裡的 Debug build，
+用於改一行看一次；後者把 Release build 裝進 `/Applications`，是實際長期使用的那一份。
+`deploy` 是裝到實機／`/Applications`，`release` 才是 App Store；本機 macOS 打包是
+`build:mac`。`release` 的前置條件
+（App Store Connect app record 與 distribution 憑證）`尚未齊備`，未設定
+`DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 時會在 archive 前失敗。
+
 完整非破壞性驗證：
 
 ```bash
@@ -162,7 +182,7 @@ bash scripts/verify.sh           # macOS + iOS + Windows 端 SyncCore.Windows te
 
 ```bash
 swift test --package-path packages/SyncCore
-bash scripts/verify_windows.sh   # SyncCore.Windows 49 vitest + 兩 build + source invariants
+bash scripts/verify-windows.sh   # SyncCore.Windows 49 vitest + 兩 build + source invariants
 ```
 
 Windows 11 開發機：
@@ -175,13 +195,14 @@ Windows 11 開發機：
 macOS 打包（本機與 CI 共用同一腳本）：
 
 ```bash
-bash scripts/package_mac.sh      # universal Release build → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
+bash scripts/package-mac.sh      # universal Release build → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
+bash scripts/run-mac.sh          # Release build → /Applications/iPhone Sync.app → 啟動（不產生 DMG/PKG）
 ```
 
 預設 ad-hoc 簽章；設定 `MAC_SIGN_IDENTITY`（Developer ID Application）加上 `MAC_NOTARY_PROFILE` 或 `MAC_NOTARY_APPLE_ID`/`MAC_NOTARY_TEAM_ID`/`MAC_NOTARY_PASSWORD` 後，同一腳本升級為 Developer ID 簽章 + notarization + stapling；`MAC_INSTALLER_IDENTITY` 另外簽 PKG。
 
 GitHub Actions 自動 release：
-- `.github/workflows/release.yml` 同一次 run：`macos-latest` 跑 SyncCore package tests + `scripts/package_mac.sh`（DMG + PKG）、`windows-latest` 跑 vitest + `npm run dist`（NSIS + portable），最後由單一 `publish` job 把 `.dmg` / `.pkg` / `.exe` 掛上同一個 GitHub Release（`v*` tag = public、workflow_dispatch = draft）。
+- `.github/workflows/release.yml` 同一次 run：`macos-latest` 跑 SyncCore package tests + `scripts/package-mac.sh`（DMG + PKG）、`windows-latest` 跑 vitest + `npm run dist`（NSIS + portable），最後由單一 `publish` job 把 `.dmg` / `.pkg` / `.exe` 掛上同一個 GitHub Release（`v*` tag = public、workflow_dispatch = draft）。
 - `v*` tag 版本會 stamp 進 macOS `MARKETING_VERSION`/`CFBundleVersion` 與 Windows `package.json`，兩端 artifact 檔名一致對應 tag。
 
 驗證腳本使用 `CODE_SIGNING_ALLOWED=NO` 建置 `iPhoneSyncMac`、generic iOS Simulator 與 `Release` generic iOS device；Release build 必須編譯 production cadence 分支。腳本也檢查 `BGTaskSchedulerPermittedIdentifiers`、`UIBackgroundModes = processing`、PhotoKit deletion usage string、default-off guard、hard-cancellation、Mac recovery 與兩端 Operation Log source invariants。這些 checks 證明 source contract 與 platform compilation，不是 Photos system confirmation、listener recovery、OS launch/expiration 或 signed network behavior tests。

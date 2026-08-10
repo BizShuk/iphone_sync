@@ -65,7 +65,7 @@ window supports **Copy All** and **Clear**.
 (cd apps/windows && npm run dist)
 ```
 
-`scripts/verify_windows.sh` runs the build + tests on macOS / Linux / Windows
+`scripts/verify-windows.sh` runs the build + tests on macOS / Linux / Windows
 MSYS, and only invokes `npm run dist` on Windows MSYS shells.
 
 ## Architecture

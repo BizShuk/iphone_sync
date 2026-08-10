@@ -26,7 +26,7 @@ fail() {
 
 usage() {
   cat <<'USAGE'
-Usage: ./scripts/run_iphone.sh [--profile=debug|production] [--build-only|--console|--help]
+Usage: ./scripts/run-iphone.sh [--profile=debug|production] [--build-only|--console|--help]
 
   (no option)   Build, install, and launch iPhone Sync on one paired iPhone.
   --profile=... Select debug (Debug) or production (Release); debug is the default.
@@ -35,9 +35,9 @@ Usage: ./scripts/run_iphone.sh [--profile=debug|production] [--build-only|--cons
   --help        Show this help.
 
 Examples:
-  ./scripts/run_iphone.sh
-  ./scripts/run_iphone.sh --profile=production
-  ./scripts/run_iphone.sh --profile=production --build-only
+  ./scripts/run-iphone.sh
+  ./scripts/run-iphone.sh --profile=production
+  ./scripts/run-iphone.sh --profile=production --build-only
 
 Optional environment:
   DEVICE_UDID                 Select a specific paired iPhone.

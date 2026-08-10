@@ -48,7 +48,7 @@ bash scripts/verify.sh
 
 Unsigned build 只能驗證 plist、entitlements 與編譯，不會授予或證明 Photos、Local Network、Finder destination 或 Login Item 權限，也不證明 iOS 會啟動 `BGProcessingTask`。這些項目必須用 signed 實體 iPhone 與 signed macOS App 驗收。
 
-Windows 11 端的 `scripts/verify_windows.sh` 跑 vitest + source invariant grep + electron-builder `npm run dist`；NSIS installer 需在 Windows 11 22H2+ 開發機執行，後續 signed 走 `electron-builder` signtool 流程。
+Windows 11 端的 `scripts/verify-windows.sh` 跑 vitest + source invariant grep + electron-builder `npm run dist`；NSIS installer 需在 Windows 11 22H2+ 開發機執行，後續 signed 走 `electron-builder` signtool 流程。
 
 ## Apple 官方參考
 

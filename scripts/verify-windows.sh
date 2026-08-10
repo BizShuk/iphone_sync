@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# verify_windows.sh — cross-platform check for the Windows 11 receiver ports.
+# verify-windows.sh — cross-platform check for the Windows 11 receiver ports.
 #
 # Runs on macOS / Linux / Windows. The NSIS + portable packaging steps are
 # Windows-only (`uname -s` MINGW/CYGWIN/MSYS); every other step (TypeScript
@@ -17,11 +17,11 @@ SYNCCORE_DIR="$ROOT_DIR/packages/SyncCore.Windows"
 WINDOWS_APP_DIR="$ROOT_DIR/apps/windows"
 
 if ! command -v node >/dev/null 2>&1; then
-  echo "verify_windows.sh: node not found; skipping Windows port verification." >&2
+  echo "verify-windows.sh: node not found; skipping Windows port verification." >&2
   exit 0
 fi
 if ! command -v npm >/dev/null 2>&1; then
-  echo "verify_windows.sh: npm not found; skipping Windows port verification." >&2
+  echo "verify-windows.sh: npm not found; skipping Windows port verification." >&2
   exit 0
 fi
 
@@ -49,7 +49,7 @@ cd "$ROOT_DIR"
 require() {
   local label="$1" file="$2"
   if ! grep -F -- "$label" "$file" >/dev/null 2>&1; then
-    echo "verify_windows.sh: missing '$label' in $file" >&2
+    echo "verify-windows.sh: missing '$label' in $file" >&2
     exit 1
   fi
 }
@@ -59,7 +59,7 @@ require 'protocolVersion: 1' "$SYNCCORE_DIR/src/protocol/constants.ts"
 # is absent so future drift (e.g. accidentally introducing `_iphones._tcp`)
 # surfaces immediately.
 if grep -F -- '_iphones._tcp' "$SYNCCORE_DIR/src/protocol/constants.ts" >/dev/null 2>&1; then
-  echo "verify_windows.sh: unexpected typo '_iphones._tcp' in constants.ts" >&2
+  echo "verify-windows.sh: unexpected typo '_iphones._tcp' in constants.ts" >&2
   exit 1
 fi
 require '_iphonesync._tcp' "$SYNCCORE_DIR/src/protocol/constants.ts"
@@ -87,4 +87,4 @@ if [[ "$(uname -s)" == MINGW* || "$(uname -s)" == CYGWIN* || "$(uname -s)" == MS
   (cd "$WINDOWS_APP_DIR" && npm run dist --silent)
 fi
 
-echo "verify_windows.sh: OK"
+echo "verify-windows.sh: OK"

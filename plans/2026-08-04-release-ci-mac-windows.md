@@ -12,7 +12,7 @@
 | macOS 產物 | `iPhoneSync-Mac-<version>.dmg`（拖曳安裝）+ `iPhoneSync-Mac-<version>.pkg`（雙擊安裝到 /Applications） | PKG 是 macOS 最接近 NSIS installer 的一鍵安裝；DMG 是慣例散佈形態，對應 Windows 的 installer + portable 雙產物 |
 | macOS build | universal（arm64 + x86_64）Release，`generic/platform=macOS` | 部署目標 macOS 14+ 含 Intel 機種 |
 | macOS 簽章 | 預設 ad-hoc（`--sign -`）+ 完整 sandbox entitlements；`MAC_SIGN_IDENTITY` / `MAC_NOTARY_*` / `MAC_INSTALLER_IDENTITY` env 提供後同一腳本升級 Developer ID + notarization + stapling | 簽署與公證方式尚未定案（README.todo）；CI 不依賴 secrets 即可運作，secrets 加入後不需改腳本 |
-| 腳本歸屬 | `scripts/package_mac.sh` 為本機與 CI 共用單一入口 | 與 `verify.sh` 同哲學：CI 只是呼叫者，流程可在本機完整重現 |
+| 腳本歸屬 | `scripts/package-mac.sh` 為本機與 CI 共用單一入口 | 與 `verify.sh` 同哲學：CI 只是呼叫者，流程可在本機完整重現 |
 | 版本 stamp | tag `vX.Y.Z` → macOS `MARKETING_VERSION=X.Y.Z` + `CFBundleVersion=run_number`；Windows `npm version X.Y.Z --no-git-tag-version` | Release 資產檔名與 bundle version 對應 tag，兩端一致 |
 | Notary 失敗語意 | credentials 存在但 notarytool 失敗 → build fail；credentials 不存在 → 明確訊息後跳過 | 公證失敗不得被「跳過」訊息吞掉 |
 
@@ -22,7 +22,7 @@
 
 ## 驗證 (Verification)
 
-- 本機執行 `bash scripts/package_mac.sh`：universal binary（`lipo -archs` = `x86_64 arm64`）、`codesign --verify --deep --strict` 通過、entitlements 含 app-sandbox、`hdiutil verify` 通過、DMG 內含 app + `Applications` symlink、`pkgutil --payload-files` 含完整 bundle、pkg min OS 14.0。
+- 本機執行 `bash scripts/package-mac.sh`：universal binary（`lipo -archs` = `x86_64 arm64`）、`codesign --verify --deep --strict` 通過、entitlements 含 app-sandbox、`hdiutil verify` 通過、DMG 內含 app + `Applications` symlink、`pkgutil --payload-files` 含完整 bundle、pkg min OS 14.0。
 - `ruby -ryaml` 驗證 workflow YAML。
 - `bash scripts/verify.sh` canonical gate。
 - CI 實跑（`workflow_dispatch` → draft release）留待 push 後執行，見 README.todo 打包與發佈段。
