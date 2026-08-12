@@ -90,7 +90,7 @@
 		05A2E759012EE230E42C709D /* ReceiverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverController.swift; sourceTree = "<group>"; };
 		06D06ECD013467FA51D89888 /* IOSOperationLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSOperationLogView.swift; sourceTree = "<group>"; };
 		08575D6CE0D20300FED6C49F /* iPhoneSyncControlCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPhoneSyncControlCenter.swift; sourceTree = "<group>"; };
-		0A6089E29B5F5E9A7818D79A /* iPhone Sync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iPhone Sync.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iPhoneSyncMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		17871838F811E03BB19D7484 /* SyncNowShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncNowShortcuts.swift; sourceTree = "<group>"; };
 		1D4AB8D4ADD9F14E1807BDB2 /* AutomaticSyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticSyncScheduler.swift; sourceTree = "<group>"; };
 		202B91CBF48641FF84544432 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
@@ -111,10 +111,10 @@
 		674396AA0E3E37673AD11F75 /* SyncNowIntentBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncNowIntentBridge.swift; sourceTree = "<group>"; };
 		723C77020AAFB4E5160889CB /* MacAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppModel.swift; sourceTree = "<group>"; };
 		98D012BE92E8113AEBF953A2 /* SyncNowIntentReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncNowIntentReceiver.swift; sourceTree = "<group>"; };
-		9BD890A5640CF71D8E685F6C /* iPhoneSyncControlCenter.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.extensionkit-extension"; name = iPhoneSyncControlCenter.appex; path = "iPhone Sync Control.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		9BD890A5640CF71D8E685F6C /* iPhoneSyncControlCenter.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = iPhoneSyncControlCenter.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		9C4EBFD847D2226B8B254240 /* AlbumSelectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlbumSelectionStore.swift; sourceTree = "<group>"; };
 		A0D32600BF6280F2B1C4015D /* Tokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tokens.swift; sourceTree = "<group>"; };
-		A31F3933762C43A71D86AD82 /* iPhone Sync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iPhone Sync.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		A31F3933762C43A71D86AD82 /* iPhoneSyncIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iPhoneSyncIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3D654D27AB26AF92F3EEC49 /* PhotoLibrarySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibrarySource.swift; sourceTree = "<group>"; };
 		A4A163BE7F95677C11347DCA /* IOSSyncRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSyncRuntimeTests.swift; sourceTree = "<group>"; };
 		B0A6B7A1625EEBB80420A5C3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -191,9 +191,9 @@
 			isa = PBXGroup;
 			children = (
 				9BD890A5640CF71D8E685F6C /* iPhoneSyncControlCenter.appex */,
-				A31F3933762C43A71D86AD82 /* iPhone Sync.app */,
+				A31F3933762C43A71D86AD82 /* iPhoneSyncIOS.app */,
 				4194643AC417E74D1E967C1A /* iPhoneSyncIOSTests.xctest */,
-				0A6089E29B5F5E9A7818D79A /* iPhone Sync.app */,
+				0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -351,7 +351,7 @@
 				9F0AAA22218B401A50B17E95 /* MacReceiverKit */,
 			);
 			productName = iPhoneSyncMac;
-			productReference = 0A6089E29B5F5E9A7818D79A /* iPhone Sync.app */;
+			productReference = 0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E1AAE778FF869E43170E0BF7 /* iPhoneSyncIOS */ = {
@@ -373,7 +373,7 @@
 				13221DB4E57B0C6301671B83 /* SyncCore */,
 			);
 			productName = iPhoneSyncIOS;
-			productReference = A31F3933762C43A71D86AD82 /* iPhone Sync.app */;
+			productReference = A31F3933762C43A71D86AD82 /* iPhoneSyncIOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -551,7 +551,7 @@
 		94DB1B76766338CA0A791465 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/ControlCenter/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -571,7 +571,7 @@
 		A10B8EE2E58C82FC5FAE48B4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/ControlCenter/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -650,13 +650,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/macos/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -673,13 +671,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/macos/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -696,13 +692,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/ios/iPhoneSync.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -720,13 +714,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/ios/iPhoneSync.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/Info.plist;
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

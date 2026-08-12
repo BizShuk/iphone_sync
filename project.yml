@@ -32,6 +32,10 @@ targets:
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # 出口合規：傳檔通道的加密全部由 OS 提供（Network.framework TLS 1.2 PSK、
+        # CryptoKit Curve25519 / SHA-256 / HKDF、Security.framework Keychain），
+        # 專案未自行實作任何演算法，符合 EAR Category 5 Part 2 豁免。
+        ITSAppUsesNonExemptEncryption: false
         CFBundleURLTypes:
           - CFBundleURLName: com.shuk.iphonesync.sync
             CFBundleURLSchemes:
@@ -67,7 +71,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: apps/ios/iPhoneSync.entitlements
         MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         TARGETED_DEVICE_FAMILY: 1
 
   iPhoneSyncControlCenter:
@@ -80,17 +84,22 @@ targets:
     info:
       path: apps/ios/ControlCenter/Info.plist
       properties:
+        # App Store 要求內嵌 extension 必須自帶 CFBundleDisplayName（ITMS-90360）。
+        CFBundleDisplayName: iPhone Sync Control
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:
-          NSExtensionPointIdentifier: com.apple.controlcenter-widget-extension
+          # Control Center controls 是 WidgetKit extension 內的 ControlWidget，
+          # 沒有 Control Center 專屬的 extension point。用 controlcenter-widget-extension
+          # 可以建置與本機安裝，但上傳會被 ITMS-90349 擋下。
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shuk.iphonesync.ios.controlcenter
         PRODUCT_NAME: iPhone Sync Control
         GENERATE_INFOPLIST_FILE: NO
         MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         # 內嵌 extension 的 device family 不得超出 container app（iPhone-only）。
         TARGETED_DEVICE_FAMILY: 1
 
@@ -107,6 +116,8 @@ targets:
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        # 與 iOS 端同一條傳檔通道、同一組系統加密框架；為 Mac App Store 預先宣告。
+        ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.utilities
         LSUIElement: true
         NSBonjourServices:
@@ -134,7 +145,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: apps/macos/iPhoneSyncMac.entitlements
         MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
 
   iPhoneSyncIOSTests:
     type: bundle.unit-test
