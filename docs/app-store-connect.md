@@ -86,13 +86,21 @@ Connect 拒收帶 alpha 的截圖）並驗證尺寸。`--check` 只驗證不改�
 | 資產 | 規格 | 實測 | 狀態 |
 | --- | --- | --- | --- |
 | 6.9" `appstore/preview/iphone-page.png` | 1320×2868、無 alpha、Release 畫面 | 1320×2868、alpha 已移除；畫面仍是舊 Debug build（含 `AUTOMATIC SYNC (DEBUG)` 卡片、舊名稱） | ❌ 待重拍 |
+| 6.9" `appstore/preview/iphone-page2.png` | 同上 | 1320×2868、無 alpha；但仍是 Debug build：標題為 `iPhone Sync`、含 `AUTOMATIC SYNC (DEBUG)` 卡片 | ❌ 待重拍 |
 | 6.9" `appstore/preview/iphone-operation-log.png` | 同上 | 1320×2868、alpha 已移除；內容來自 Debug build（三筆重複 scheduler 事件反映 debug + production 雙 scheduler） | ❌ 待重拍 |
 | 6.5" `iphone-page-6.5.png` | 1284×2778 | 同 6.9"，alpha 已移除 | ❌ 待重拍 |
 | 6.5" `iphone-operation-log-6.5.png` | 1284×2778 | 同 6.9"，alpha 已移除 | ❌ 待重拍 |
 | App Icon `appstore/app-icon.png` | 1024×1024、不透明 | 1024×1024、hasAlpha no | ✅ |
 | Bundled icon | asset catalog | `apps/ios/Sources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png` | ✅ |
 | App Preview 影片 | 選填 | 未製作；腳本見 `README.md` §1 | ✅ 可略 |
-| `appstore/preview/mac-receiver.png` | — | 666×362，非 App Store 尺寸，僅供 intro page；不受 prepare 腳本處理 | ✅ 不送審 |
+| `appstore/preview/mac-menu.png`、`mac-setup.png` | — | 666×362 / 1172×1298，非 App Store 尺寸，僅供 intro page；不受 prepare 腳本處理 | ✅ 不送審 |
+
+重拍必須用 **Release** build，`npm run deploy:ios` 預設是 Debug（會出現 DEBUG 卡片
+與舊名稱）。正確指令：
+
+```bash
+./scripts/run-iphone.sh --profile=production
+```
 
 重拍條件（Release build 已驗證此三點成立）：標題顯示 `Photo Sync`、
 `AUTOMATIC SYNC (DEBUG)` 卡片不存在、底部出現 `About` 區的 Privacy Policy link。
