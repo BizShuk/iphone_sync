@@ -13,6 +13,7 @@
 		08161D9947C25166CBF36E8C /* DestinationBookmarkStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */; };
 		14705E941321BCC7439B7176 /* IOSAppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E54637942FB37B30D6DDA037 /* IOSAppModel.swift */; };
 		1BABAB49069C8C3C1FF91D73 /* SyncCore in Frameworks */ = {isa = PBXBuildFile; productRef = 13221DB4E57B0C6301671B83 /* SyncCore */; };
+		1D51F2315CB24CDCB2C8621F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B0A6B7A1625EEBB80420A5C3 /* Assets.xcassets */; };
 		1D8973C4CF7EFAF2A79BD7AC /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B193A0E20AF47EAF17D0517 /* Tokens.swift */; };
 		25F605BD28B200F1A931C970 /* SetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C9D0BFB486918D0032F13FA /* SetupView.swift */; };
 		333FA09E52768621F8C72FDF /* SyncNowShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17871838F811E03BB19D7484 /* SyncNowShortcuts.swift */; };
@@ -116,6 +117,7 @@
 		A31F3933762C43A71D86AD82 /* iPhoneSyncIOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = iPhoneSyncIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A3D654D27AB26AF92F3EEC49 /* PhotoLibrarySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibrarySource.swift; sourceTree = "<group>"; };
 		A4A163BE7F95677C11347DCA /* IOSSyncRuntimeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSSyncRuntimeTests.swift; sourceTree = "<group>"; };
+		B0A6B7A1625EEBB80420A5C3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B33A27ED9057A6F22B2262FB /* SyncCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SyncCore; path = packages/SyncCore; sourceTree = SOURCE_ROOT; };
 		C6D9EA22ACD0C4C1DC119661 /* AutomaticSyncSchedulerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticSyncSchedulerTests.swift; sourceTree = "<group>"; };
 		CC94C2F3ECB26073A18771A9 /* DestinationRootResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationRootResolver.swift; sourceTree = "<group>"; };
@@ -225,6 +227,7 @@
 		6B430D6BF8B4987AAE19B187 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				B0A6B7A1625EEBB80420A5C3 /* Assets.xcassets */,
 				4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */,
 				CC94C2F3ECB26073A18771A9 /* DestinationRootResolver.swift */,
 				EAE9F6A757DFC89BB7C3BBB8 /* iPhoneSyncMacApp.swift */,
@@ -335,6 +338,7 @@
 			buildConfigurationList = 52F8FF69B99DAAB3F0B47808 /* Build configuration list for PBXNativeTarget "iPhoneSyncMac" */;
 			buildPhases = (
 				0E4D6A8D864BFE267E3E231C /* Sources */,
+				59D06401AD75DF9A5CD5E1BC /* Resources */,
 				B186A00F8514D0F7E772CCAB /* Frameworks */,
 			);
 			buildRules = (
@@ -382,16 +386,20 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					064F46D8CDC4A7773A735CF0 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = F3G9SMLJU6;
+						ProvisioningStyle = Automatic;
 					};
 					0E1F2DA621D16CCEC9270D10 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = F3G9SMLJU6;
+						ProvisioningStyle = Automatic;
 					};
 					3CF38D151CB973F834C0D7FE = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = F3G9SMLJU6;
+						ProvisioningStyle = Automatic;
 					};
 					E1AAE778FF869E43170E0BF7 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = F3G9SMLJU6;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -426,6 +434,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				3DBFCD079A136DCA10764104 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		59D06401AD75DF9A5CD5E1BC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1D51F2315CB24CDCB2C8621F /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -527,7 +543,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.ios.tests;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iPhone Sync.app/iPhone Sync";
 			};
 			name = Debug;
@@ -544,11 +560,11 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.ios.controlcenter;
 				PRODUCT_NAME = "iPhone Sync Control";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -564,11 +580,11 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.ios.controlcenter;
 				PRODUCT_NAME = "iPhone Sync Control";
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -605,9 +621,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = F3G9SMLJU6;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -643,7 +660,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.mac;
 				PRODUCT_NAME = "iPhone Sync";
 				SDKROOT = macosx;
@@ -664,7 +681,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.mac;
 				PRODUCT_NAME = "iPhone Sync";
 				SDKROOT = macosx;
@@ -685,7 +702,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.ios;
 				PRODUCT_NAME = "iPhone Sync";
 				SDKROOT = iphoneos;
@@ -707,7 +724,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.ios;
 				PRODUCT_NAME = "iPhone Sync";
 				SDKROOT = iphoneos;
@@ -748,9 +765,10 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = F3G9SMLJU6;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -792,7 +810,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shuk.iphonesync.ios.tests;
 				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/iPhone Sync.app/iPhone Sync";
 			};
 			name = Release;
