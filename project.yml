@@ -28,7 +28,11 @@ targets:
     info:
       path: apps/ios/Info.plist
       properties:
-        CFBundleDisplayName: iPhone Sync
+        # 對外名稱不得含 Apple 商標（Guideline 5.2.5）。PRODUCT_NAME 維持
+        # `iPhone Sync` 讓 .app 檔名與既有腳本／建置路徑不變，使用者可見的
+        # CFBundleDisplayName / CFBundleName 才是送審要對齊 App Store Name 的欄位。
+        CFBundleDisplayName: Photo Sync
+        CFBundleName: Photo Sync
         CFBundleIconName: AppIcon
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
@@ -85,7 +89,8 @@ targets:
       path: apps/ios/ControlCenter/Info.plist
       properties:
         # App Store 要求內嵌 extension 必須自帶 CFBundleDisplayName（ITMS-90360）。
-        CFBundleDisplayName: iPhone Sync Control
+        CFBundleDisplayName: Photo Sync Control
+        CFBundleName: Photo Sync Control
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         NSExtension:

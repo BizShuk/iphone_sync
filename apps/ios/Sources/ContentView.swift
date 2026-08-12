@@ -24,12 +24,13 @@ struct ContentView: View {
                     if case let .error(message) = model.state {
                         errorCard(message: message)
                     }
+                    aboutZone
                 }
                 .padding(.horizontal)
                 .padding(.vertical, 12)
             }
             .background(Tokens.Palette.paper)
-            .navigationTitle("iPhone Sync")
+            .navigationTitle("Photo Sync")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showsAlbumPicker) {
                 AlbumPickerView(
@@ -521,6 +522,49 @@ struct ContentView: View {
             RoundedRectangle(cornerRadius: Tokens.Layout.cardCornerRadius)
                 .stroke(Tokens.Palette.alert.opacity(0.4), lineWidth: Tokens.Layout.hairline)
         )
+    }
+
+    // MARK: About Zone
+
+    /// App Store review expects the privacy policy to be reachable from inside
+    /// the app, not only from the store listing. These URLs are the same public
+    /// artifacts the App Store Connect submission points at.
+    private var aboutZone: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            zoneHeader("About")
+
+            VStack(alignment: .leading, spacing: 10) {
+                Link("Privacy Policy", destination: Self.privacyPolicyURL)
+                Link("Support", destination: Self.supportURL)
+                Text(versionText)
+                    .font(Tokens.Typography.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .font(Tokens.Typography.callout)
+            .tint(Tokens.Palette.signal)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Tokens.Layout.cardPadding)
+            .background(Tokens.Palette.paper)
+            .overlay(
+                RoundedRectangle(cornerRadius: Tokens.Layout.cardCornerRadius)
+                    .stroke(Tokens.Palette.frame, lineWidth: Tokens.Layout.hairline)
+            )
+        }
+    }
+
+    private static let privacyPolicyURL = URL(
+        string: "https://bizshuk.github.io/pkg/iphone_sync/privacy.html"
+    )!
+
+    private static let supportURL = URL(
+        string: "https://bizshuk.github.io/pkg/iphone_sync/index.html"
+    )!
+
+    private var versionText: String {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info?["CFBundleVersion"] as? String ?? "—"
+        return "Version \(version) (\(build))"
     }
 
     // MARK: Helpers

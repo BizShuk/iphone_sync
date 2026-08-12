@@ -8,7 +8,7 @@ struct PairingView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
                     Text(
-                        "Enter the six-digit code shown by iPhone Sync on your Mac. "
+                        "Enter the six-digit code shown by the receiver on your computer. "
                             + "The code stays on your devices and is never sent over the network."
                     )
                     .font(Tokens.Typography.callout)

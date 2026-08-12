@@ -9,6 +9,7 @@
     - [2. 使用方式 (How to Use)](#2-使用方式-how-to-use)
     - [3. 安裝與設定步驟 (Setup Step by Step)](#3-安裝與設定步驟-setup-step-by-step)
     - [4. 驗證、設定與邊界 (Verification, Settings, Boundaries)](#4-驗證設定與邊界-verification-settings-boundaries)
+    - [5. App Store 送審必填資訊 (App Store Submission)](#5-app-store-送審必填資訊-app-store-submission)
 
 ## 1. 這是什麼 (What It Is For)
 
@@ -77,12 +78,12 @@ flowchart LR
 | ---------------- | ------------------------------------------- | --------------------------------------------------- |
 | `Sync Now`       | iPhone 主畫面 Mac 卡片                      | 立即前景同步，永遠可用的 fallback                   |
 | Control widget   | 控制中心自訂項目 `Sync Now`                 | 不開啟 App，透過 `SyncNowIntent` 觸發既有 sync 入口 |
-| 1x1 shortcut     | Shortcuts / Siri：`Sync now in iPhone Sync` | 同上，走同一個 `handleIncomingURL` 路徑             |
+| 1x1 shortcut     | Shortcuts / Siri：`Sync now in Photo Sync`  | 同上，走同一個 `handleIncomingURL` 路徑             |
 | `Automatic Sync` | 主畫面 `AUTOMATIC SYNC` 區                  | opt-in 後由 iOS `BGProcessingTask` best-effort 啟動 |
 
-3. 同步中可按 `Cancel`；同一時間只允許一個 run（single-flight）。
-4. 完成後 `LAST SYNC` 顯示 `Added` / `Already` / `Not local` / `Failed` 四項摘要。
-5. 若明確啟用 `Delete After Sync`，foreground sync 完成後 Photos 會要求確認刪除；background sync 只建立 pending list，回到 App 後按 `Delete N Synced Photos`。
+1. 同步中可按 `Cancel`；同一時間只允許一個 run（single-flight）。
+2. 完成後 `LAST SYNC` 顯示 `Added` / `Already` / `Not local` / `Failed` 四項摘要。
+3. 若明確啟用 `Delete After Sync`，foreground sync 完成後 Photos 會要求確認刪除；background sync 只建立 pending list，回到 App 後按 `Delete N Synced Photos`。
 
 ### 檔案落點 (Storage Mode)
 
@@ -178,10 +179,10 @@ npm run deploy:mac
 ### 3.3 iPhone 端設定 (Sender)
 
 ```bash
-npm run deploy                                # Debug 建置、安裝、啟動（實機）
-npm run dev                                    # 同上，但跑在 iOS Simulator
+npm run deploy:ios                             # Debug 建置、安裝、啟動（實機）
+npm run dev:ios                                # 同上，但跑在 iOS Simulator
 ./scripts/run-iphone.sh --profile=production   # Release
-./scripts/run-iphone.sh --build-only           # 只產生已簽署 archive
+npm run build:ios                              # 只產生已簽署 archive → build/iphone/iPhoneSync.xcarchive
 ```
 
 腳本會自動解析 Apple Development team、以 `xcrun devicectl` 挑選唯一一台已配對且連線的實體 iPhone。多台裝置時設 `DEVICE_UDID`；多組團隊時設 `DEVELOPMENT_TEAM`。前提是 iPhone 已解鎖、已信任這台 Mac 並開啟 `Developer Mode`。
@@ -222,13 +223,13 @@ iPhone sender：
 
 常見狀況：
 
-| 症狀                  | 檢查點                                                                                                |
-| --------------------- | ----------------------------------------------------------------------------------------------------- |
-| `Find Mac` 找不到 Mac | 兩端同一 Wi-Fi、Mac 配對視窗仍在兩分鐘內、非 guest network / VLAN / VPN、router 未開 client isolation |
-| 配對碼輸入失敗        | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone`                                           |
-| 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                |
-| Automatic 從未執行    | `earliestBeginDate` 不是保證；先用 Debug 卡片驗證路徑，再用 `Sync Now` 作為 fallback                  |
-| 已同步但尚未刪除      | Background run 只建立 pending list；回到 App，在 `AFTER SYNC` 按 `Delete N Synced Photos` 並確認     |
+| 症狀                  | 檢查點                                                                                                   |
+| --------------------- | -------------------------------------------------------------------------------------------------------- |
+| `Find Mac` 找不到 Mac | 兩端同一 Wi-Fi、Mac 配對視窗仍在兩分鐘內、非 guest network / VLAN / VPN、router 未開 client isolation    |
+| 配對碼輸入失敗        | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone`                                              |
+| 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                   |
+| Automatic 從未執行    | `earliestBeginDate` 不是保證；先用 Debug 卡片驗證路徑，再用 `Sync Now` 作為 fallback                     |
+| 已同步但尚未刪除      | Background run 只建立 pending list；回到 App，在 `AFTER SYNC` 按 `Delete N Synced Photos` 並確認         |
 | Mac 寫入被拒          | 目的地同名項目是檔案，或 symlink 解析不到資料夾，`Operation Log` 會標示；換一個 destination 或移除該項目 |
 
 ## 4. 驗證、設定與邊界 (Verification, Settings, Boundaries)
@@ -245,6 +246,24 @@ swift test --package-path packages/SyncCore     # 只跑 Swift package tests
 Windows 11 receiver 端會額外跑 `scripts/verify-windows.sh`：49 個 vitest、SyncCore.Windows 與 apps/windows 兩個 TypeScript build、source-string invariants（HKDF labels、`IPS1` magic、`iPhoneSync` 容器、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`powerMonitor` 等）。`npm run dist`（NSIS + portable）只在 Windows MSYS shell 觸發。
 
 最近一次 canonical 通過紀錄為 `54` 個 Swift package tests、`41` 個 iOS unit tests、`49` 個 Windows vitest、三個 Apple builds 與兩個 TypeScript builds。Mac half-open deadline 有 package behavior test；其餘 receiver recovery、`BGProcessingTask` lifecycle 與 PhotoKit deletion 主要是編譯 / source-invariant / injected-service tests，不等同完整行為測試或實機驗收。
+
+### 建置產物位置 (Build Output Locations)
+
+所有本機建置產物都落在 repo 根目錄的 `build/`（已被 `.gitignore` 忽略），Windows 端則落在各自的 package 目錄下。`npm run clean` 會清掉 `build/`、TypeScript `dist/` 與 Swift package build。
+
+| 指令                   | 腳本 / 工具        | 產物                                        | 位置                                                                    |
+| ---------------------- | ------------------ | ------------------------------------------- | ----------------------------------------------------------------------- |
+| `npm run dev:ios`      | `run-simulator.sh` | Simulator `.app`                            | `build/simulator/Build/Products/Debug-iphonesimulator/iPhone Sync.app`  |
+| `npm run deploy:ios`   | `run-iphone.sh`    | 已簽署 archive（安裝到實機）                | `build/iphone/iPhoneSync.xcarchive`（derived data 在 `build/iphone/DerivedData`） |
+| `npm run build:ios`    | `run-iphone.sh`    | 同上，只建置不安裝                          | `build/iphone/iPhoneSync.xcarchive/Products/Applications/iPhone Sync.app` |
+| `npm run release`      | `release.sh`       | App Store archive + `.ipa`                  | `build/appstore/iPhoneSync.xcarchive`、`build/appstore/ipa/*.ipa`       |
+| `npm run dev:mac`      | `run-server.sh`    | Debug `.app`（原地啟動）                    | `build/mac/DerivedData/Build/Products/Debug/iPhone Sync.app`            |
+| `npm run deploy:mac`   | `run-mac.sh`       | Release `.app`（安裝後啟動）                | 建置於 `build/mac-install-derived/`，安裝至 `/Applications/iPhone Sync.app` |
+| `npm run build:mac`    | `package-mac.sh`   | universal DMG + PKG                         | `build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}`（中繼在 `build/mac-release-derived/`） |
+| `npm run build:windows`| `electron-builder` | NSIS installer + portable `.exe`            | `apps/windows/dist-installer/iPhoneSync-{Setup,Portable}-<version>.exe` |
+| `npm run build:windows`| `tsc`              | 編譯後的 JavaScript                         | `packages/SyncCore.Windows/dist/`、`apps/windows/dist/`                  |
+
+`INSTALL_DIR` 可改 `deploy:mac` 的安裝目的地；`BUILD_ROOT`、`DERIVED_DATA_PATH`、`APP_PATH` 可覆寫各腳本的建置根目錄。
 
 ### Desktop Release (GitHub Actions)
 
@@ -322,3 +341,162 @@ MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、def
 | [docs/specs/2026-07-27-delete-after-sync.md](docs/specs/2026-07-27-delete-after-sync.md)                     | 同步後 optional Photos deletion contract |
 | [plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)                         | Operation timeline contract              |
 | [plans/2026-07-25-windows-11-desktop-receiver.md](plans/2026-07-25-windows-11-desktop-receiver.md)           | Windows 11 port 實作計畫                 |
+
+## 5. App Store 送審必填資訊 (App Store Submission)
+
+送審對象是 iOS sender（`iPhoneSyncIOS`）。macOS 與 Windows receiver 目前走 GitHub Release 直接下載，不在此次 App Store 送審範圍。以下值全部由 `project.yml`、`appstore/` policy package 與已上線的 policy URLs 佐證；標示 `決定中` 者尚未確認，不可直接貼進 App Store Connect。
+
+### 5.1 App Information（App 層級，跨版本共用）
+
+| App Store Connect 欄位  | 值                           | 佐證                                                                     |
+| ----------------------- | ---------------------------- | ------------------------------------------------------------------------ |
+| Name（≤30）             | `Photo Sync`                 | `project.yml` iOS target `CFBundleDisplayName` / `CFBundleName`         |
+| Subtitle（≤30）         | `Album backup over your LAN` | 26 字元                                                                  |
+| Bundle ID               | `com.shuk.iphonesync.ios`    | `project.yml` `PRODUCT_BUNDLE_IDENTIFIER`                                |
+| SKU                     | `iphone-sync-ios`            | 內部識別，不對外顯示                                                     |
+| Primary Language        | `English (U.S.)`             | 專案無 `.lproj` / `.xcstrings`，僅英文                                   |
+| Primary Category        | `Utilities`                  | Mac target `LSApplicationCategoryType` = `public.app-category.utilities` |
+| Secondary Category      | `Photo & Video`              | 建議值                                                                   |
+| Age Rating              | `4+`                         | 無 UGC 分享、無廣告、無 web browser、無 in-app purchase                  |
+| License Agreement       | `Apple Standard EULA`        | `appstore/copyright.html`                                                |
+| Copyright               | `2026 BizShuk`               | `appstore/copyright.html`                                                |
+| Content Rights          | 不含第三方內容               | 媒體全部由使用者自有 Photo Library 提供                                  |
+| Trader Status（EU DSA） | `決定中`                     | 需由 developer/legal entity 確認個人或商業 trader                        |
+
+### 5.2 Version Information（1.0.0 版本層級）
+
+| 欄位                  | 值                                                       | 佐證                                                                                    |
+| --------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Version               | `1.0.0`                                                  | `project.yml` `MARKETING_VERSION`                                                       |
+| Build                 | `2`                                                      | `project.yml` `CURRENT_PROJECT_VERSION`                                                 |
+| Minimum OS            | `iOS 18.0`                                               | `project.yml` `deploymentTarget`                                                        |
+| Device Family         | iPhone only、Portrait only                               | `TARGETED_DEVICE_FAMILY: 1`、`UIRequiresFullScreen`、`UISupportedInterfaceOrientations` |
+| Privacy Policy URL    | <https://bizshuk.github.io/pkg/iphone_sync/privacy.html> | 2026-08-12 實測 `200`                                                                   |
+| Support URL           | <https://bizshuk.github.io/pkg/iphone_sync/index.html>   | 2026-08-12 實測 `200`                                                                   |
+| Marketing URL（選填） | <https://bizshuk.github.io/pkg/iphone_sync/index.html>   | 同上                                                                                    |
+| What's New            | 首次發佈，留空                                           | —                                                                                       |
+
+Promotional Text（≤170）：
+
+```text
+Back up the albums you choose to a computer you own over Wi-Fi. Original resources only, verified by SHA-256, and nothing ever leaves your local network.
+```
+
+Keywords（≤100，逗號分隔、不加空白於逗號後）：
+
+```text
+backup,album,photo,video,local network,wifi transfer,originals,raw,live photo,offline,private
+```
+
+Description（≤4000）：
+
+```text
+Photo Sync copies the original resources of the albums you choose to a computer you own on the same local network. There is no cloud, no account, and no developer relay. Your photos go from your iPhone to your own disk and nowhere else.
+
+Pair once with the free Mac or Windows receiver, choose the albums you want, and the app transfers everything that is not backed up yet. Run it by hand from the app, from a Control Center button, or from a Shortcut. Turn on Automatic Sync and iOS will pick a moment after the daily time you set.
+
+WHAT GETS BACKED UP
+- Original resources as PhotoKit provides them, including RAW, video, Live Photo components, and adjustment data.
+- Multiple albums at once, each into its own folder on the receiver.
+- Only what is missing. Re-running the sync adds new items and leaves everything else untouched.
+
+HOW IT STAYS SAFE
+- Transfers are additive. Photo Sync never deletes or overwrites an existing file on the receiver.
+- Every resource is verified with SHA-256 before it is committed to its final path.
+- Interrupted transfers resume from a durable checkpoint instead of starting over.
+
+HOW IT STAYS PRIVATE
+- Discovery uses Bonjour on your local network. There is no internet relay and no sign-in.
+- Pairing is explicit: the receiver shows a six-digit code that is never sent over the network.
+- After pairing, transfers run over TLS with a pre-shared secret held in the Keychain.
+- Photos that live only in iCloud are skipped rather than downloaded.
+
+OPTIONAL: DELETE AFTER SYNC
+Delete After Sync is off by default. When you turn it on, Photo Sync only offers a photo for deletion after the receiver has confirmed every one of its resources. Deletion always goes through the standard iOS confirmation, removes the item from your whole library rather than one album, and may affect other devices if you use iCloud Photos. Files already written to the receiver are never touched.
+
+REQUIREMENTS
+- A Mac running macOS 14 or later, or a PC running Windows 11, with the free receiver app installed from <RECEIVER_URL>.
+- Both devices on the same Wi-Fi network, with Bonjour reachable. Guest networks, client isolation, and some VPN configurations will block discovery.
+```
+
+### 5.3 App Privacy（Privacy Nutrition Label）
+
+| 問題                    | 答案                                       | 佐證                                                                  |
+| ----------------------- | ------------------------------------------ | --------------------------------------------------------------------- |
+| Data collected?         | `No, we do not collect data from this app` | 無 analytics / ads / crash SDK；App 不對開發者伺服器發任何請求        |
+| Tracking?               | `No`                                       | 無 `ATT`、無廣告識別碼、無第三方 SDK                                  |
+| Photos 是否 collected？ | 否                                         | 媒體只在使用者自選、自持的 receiver 之間傳輸，開發者不接收            |
+| Third-party processors  | 無                                         | 僅使用 Apple 平台服務（PhotoKit、Bonjour、Keychain、BackgroundTasks） |
+
+公開版本以 [appstore/privacy.md](appstore/privacy.md) 為 canonical wording，HTML 不得另寫第二份。
+
+### 5.4 Export Compliance
+
+| 欄位                            | 值             | 佐證                                                                                              |
+| ------------------------------- | -------------- | ------------------------------------------------------------------------------------------------- |
+| `ITSAppUsesNonExemptEncryption` | `false`        | `project.yml`；已內嵌 plist，上傳後不會再逐次詢問                                                 |
+| 使用的加密                      | 全部由 OS 提供 | Network.framework TLS 1.2 PSK、CryptoKit Curve25519 / SHA-256 / HKDF、Security.framework Keychain |
+| 自行實作演算法                  | 無             | 符合 EAR Category 5 Part 2 豁免                                                                   |
+
+### 5.5 Screenshots 與 App Icon
+
+| 資產                | 規格                 | 檔案                                                                                      |
+| ------------------- | -------------------- | ----------------------------------------------------------------------------------------- |
+| 6.9" iPhone（必要） | `1320 × 2868`        | `appstore/preview/iphone-page.png`、`iphone-operation-log.png`                            |
+| 6.5" iPhone（相容） | `1284 × 2778`        | `appstore/preview/iphone-page-6.5.png`、`iphone-operation-log-6.5.png`                    |
+| App Icon            | `1024 × 1024` 不透明 | `appstore/app-icon.png`（App 內為 `apps/ios/Sources/Assets.xcassets/AppIcon.appiconset`） |
+| App Preview 影片    | 選填，未製作         | 腳本見 [影片示範腳本](#影片示範腳本-video-demo-transcript)                                |
+
+截圖必須呈現實際 shipped 畫面；`AUTOMATIC SYNC (DEBUG)` 卡片只在 Debug build 出現，不得入鏡。
+目前四張仍是舊 Debug build 畫面，送審前必須以 Release build 在已配對 iPhone 重拍。
+
+拍完一律跑一次：
+
+```bash
+bash scripts/prepare-screenshots.sh          # 移除 alpha channel + 驗證尺寸
+bash scripts/prepare-screenshots.sh --check  # 送審前 gate，只驗證不改檔
+```
+
+App Store Connect 拒收帶 alpha channel 的截圖，而 iOS 與模擬器截圖都會帶一條
+（圓角處為透明），肉眼看不出來，上傳時才會被擋。
+
+### 5.6 App Review Information
+
+Sign-in 不需要帳號，`Demo account` 留空；但審查員必須有第二台裝置才能觀察到完整流程，Notes 必須說明這點：
+
+```text
+Photo Sync transfers photos to a receiver app running on a Mac or Windows PC on
+the same local network. No account, no server, and no demo credentials are needed.
+
+To review the full flow, install the free macOS receiver from <RECEIVER_URL>,
+then:
+1. Launch the receiver, open Setup, and choose any destination folder.
+2. Press "Pair iPhone". The receiver shows a six-digit code.
+3. On iPhone, grant Photos access and Local Network access, choose an album,
+   press "Find Mac", pick the Mac, and enter the six-digit code.
+4. Press "Sync Now". The selected album's originals appear in the destination
+   folder under iPhoneSync/.
+
+If a second machine is not available, the iPhone app alone still demonstrates
+album selection, permission handling, discovery, and the operation log. Discovery
+requires Bonjour on the local network; it will find no receiver otherwise.
+
+Delete After Sync is off by default and is not exercised unless it is explicitly
+enabled. When enabled it uses the standard PhotoKit deletion confirmation.
+
+Local Network access is required for Bonjour discovery and the direct TLS
+transfer. Background processing is used only for the opt-in Automatic Sync.
+```
+
+`App Review contact`：待填 developer 真實姓名、電話與 email（不寫入 repo）。
+
+### 5.7 送審前尚未完成的項目 (Pre-submission Gaps)
+
+逐欄 evidence 與完整 gap 清單見 [docs/app-store-connect.md](docs/app-store-connect.md)。以下每一項都會影響能否通過審查或上傳，尚未完成：
+
+- **截圖仍是舊 Debug build 畫面**：四張都含 `AUTOMATIC SYNC (DEBUG)` 卡片或舊名稱，屬 `Guideline 2.3`。需以 Release build 在已配對 iPhone 重拍，再跑 `scripts/prepare-screenshots.sh`。
+- **缺少 `PrivacyInfo.xcprivacy`**：iOS target 使用 `UserDefaults`（reason `CA92.1`）與 `FileManager.attributesOfItem`（file timestamp，reason `C617.1`）等 required-reason APIs，未附 privacy manifest 會在上傳後收到 `ITMS-91053` 通知。
+- **Receiver 下載路徑未定案**：description 與 review notes 都指向「release page」，但 `github.com/bizshuk/iphone_sync` 目前非公開（releases API 回 `404`），審查員拿不到 receiver，屬 `Guideline 2.1`。需確定對外的固定 URL 後回填。
+- **公開 policy 站台未重新發佈**：`appstore/*.html` 已改名為 `Photo Sync`，`bizshuk.github.io` 上的線上版本仍是舊文案。
+- **App Store Connect app record 與 distribution 憑證未齊備**：`npm run release` 在未設定 `DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 時會在 archive 前失敗（見 [CLAUDE.md](CLAUDE.md)）。
+- **實機驗收未完成**：signed 裝置上的 `Delete After Sync` confirmation、background launch 與完整 LAN failure matrix 仍列於 [README.todo](README.todo)。
