@@ -90,7 +90,7 @@
 		05A2E759012EE230E42C709D /* ReceiverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverController.swift; sourceTree = "<group>"; };
 		06D06ECD013467FA51D89888 /* IOSOperationLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IOSOperationLogView.swift; sourceTree = "<group>"; };
 		08575D6CE0D20300FED6C49F /* iPhoneSyncControlCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPhoneSyncControlCenter.swift; sourceTree = "<group>"; };
-		0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = iPhoneSyncMac.app; path = "iPhone Sync.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		0A6089E29B5F5E9A7818D79A /* iPhone Sync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "iPhone Sync.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		17871838F811E03BB19D7484 /* SyncNowShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncNowShortcuts.swift; sourceTree = "<group>"; };
 		1D4AB8D4ADD9F14E1807BDB2 /* AutomaticSyncScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutomaticSyncScheduler.swift; sourceTree = "<group>"; };
 		202B91CBF48641FF84544432 /* MenuBarIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIcon.swift; sourceTree = "<group>"; };
@@ -193,7 +193,7 @@
 				9BD890A5640CF71D8E685F6C /* iPhoneSyncControlCenter.appex */,
 				A31F3933762C43A71D86AD82 /* iPhone Sync.app */,
 				4194643AC417E74D1E967C1A /* iPhoneSyncIOSTests.xctest */,
-				0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */,
+				0A6089E29B5F5E9A7818D79A /* iPhone Sync.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -351,7 +351,7 @@
 				9F0AAA22218B401A50B17E95 /* MacReceiverKit */,
 			);
 			productName = iPhoneSyncMac;
-			productReference = 0A6089E29B5F5E9A7818D79A /* iPhoneSyncMac.app */;
+			productReference = 0A6089E29B5F5E9A7818D79A /* iPhone Sync.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E1AAE778FF869E43170E0BF7 /* iPhoneSyncIOS */ = {
@@ -650,11 +650,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/macos/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -671,11 +673,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 2;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/macos/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -692,11 +696,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/ios/iPhoneSync.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -714,11 +720,13 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = apps/ios/iPhoneSync.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CURRENT_PROJECT_VERSION = 3;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
