@@ -7,7 +7,6 @@ enum AutomaticSyncOutcomeCode: String, Codable, Equatable, Sendable {
     case macUnavailable
     case networkUnavailable
     case alreadyRunning
-    case alreadyCompletedToday
     case photosAccessRequired
     case albumsRequired
     case pairingRequired
@@ -34,8 +33,6 @@ struct IOSAutomaticSyncStore: @unchecked Sendable {
         static let lastOutcome = "lastOutcome"
         static let lastMessage = "lastMessage"
         static let nextEligibleAt = "nextEligibleAt"
-        static let dailyHour = "daily.hour"
-        static let dailyMinute = "daily.minute"
     }
 
     private let defaults: UserDefaults
@@ -97,20 +94,5 @@ struct IOSAutomaticSyncStore: @unchecked Sendable {
         } else {
             defaults.removeObject(forKey: "\(prefix).\(Key.nextEligibleAt)")
         }
-    }
-
-    func setDailySyncTime(hour: Int, minute: Int) {
-        let normalizedHour = max(0, min(23, hour))
-        let normalizedMinute = max(0, min(59, minute))
-        defaults.set(normalizedHour, forKey: "\(prefix).\(Key.dailyHour)")
-        defaults.set(normalizedMinute, forKey: "\(prefix).\(Key.dailyMinute)")
-    }
-
-    var dailyHour: Int {
-        defaults.integer(forKey: "\(prefix).\(Key.dailyHour)")
-    }
-
-    var dailyMinute: Int {
-        defaults.integer(forKey: "\(prefix).\(Key.dailyMinute)")
     }
 }

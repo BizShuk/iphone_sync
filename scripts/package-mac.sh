@@ -17,8 +17,12 @@ stripped, so tag names like v1.2.3 are accepted as-is.
 
 Environment:
   MAC_BUILD_NUMBER        CFBundleVersion (default: 1; CI passes the run number)
-  MAC_SIGN_IDENTITY       codesign identity (default: "-" = ad-hoc; set to
-                          "Developer ID Application: ..." for distribution)
+  MAC_SIGN_IDENTITY       codesign identity (default: the first Apple
+                          Development identity in the Keychain, else "-" =
+                          ad-hoc; set to "Developer ID Application: ..." for
+                          distribution — an Apple Development identity is
+                          rejected by Gatekeeper on other machines and cannot
+                          be notarized)
   MAC_INSTALLER_IDENTITY  optional "Developer ID Installer: ..." for the pkg
   MAC_NOTARY_PROFILE      optional notarytool keychain profile; alternatively
                           set MAC_NOTARY_APPLE_ID + MAC_NOTARY_TEAM_ID +
@@ -70,7 +74,11 @@ version="${version#v}"
 }
 
 build_number="${MAC_BUILD_NUMBER:-1}"
-identity="${MAC_SIGN_IDENTITY:--}"
+identity="${MAC_SIGN_IDENTITY:-$(
+    security find-identity -v -p codesigning 2>/dev/null \
+        | awk -F'"' '/Apple Development/ {print $2; exit}' || true
+)}"
+identity="${identity:--}"
 entitlements="apps/macos/iPhoneSyncMac.entitlements"
 derived="build/mac-release-derived"
 dist="build/mac-dist"

@@ -26,6 +26,12 @@ export const SyncConstants = {
   // that haven't sent `.session(.request)` within this window.
   defaultOpeningTimeoutSeconds: 15,
 
+  // Sync session idle deadline — an open session that stops producing frames
+  // is almost always an iPhone that got locked or suspended mid-transfer.
+  // Without this bound the receiver would block on `receive()` until TCP
+  // keepalive gives up and reject every following connection.
+  defaultIdleTimeoutSeconds: 45,
+
   // PSK cipher; both sides must agree exactly.
   tlsPskCipherSuite: 'TLS_PSK_WITH_AES_128_GCM_SHA256',
   tlsPskCipherSuiteAlias: 'PSK-AES128-GCM-SHA256', // accepted by Node OpenSSL backend

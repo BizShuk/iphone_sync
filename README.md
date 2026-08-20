@@ -99,9 +99,12 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 
 ### Automatic Sync 的真實語意
 
-- Release：最早執行時間為使用者在 `Schedule time` 設定的每日本地時間（預設 local midnight）。
-- Debug：另有獨立的 `AUTOMATIC SYNC (DEBUG)` 卡片，最早為提交後 `10 分鐘`，並附前景測試迴圈；Release build 不註冊此迴圈。
-- 兩者都只是 `earliestBeginDate`。iOS 不保證準時、不保證固定週期、不保證一定提供 runtime，實際執行可能晚很多。
+- Release：**iPhone 充電中每 30 分鐘嘗試一次**。沒有指定時間、沒有每日配額，成功與失敗都以相同的 30 分鐘重新排下一次。
+- 未充電時 iOS 不會啟動 automatic sync。充電是換取較長背景執行視窗的條件，由 iOS 判斷，App 不讀取電池狀態。
+- 單次執行時間`不設上限`：iOS 給多久就傳多久，到點由系統中止，未傳完的部分由 Mac / Windows 的 checkpoint 續傳。
+- 上一次還在執行時，下一次啟動直接略過，並立刻重新排程，不會有兩條連線。
+- Debug：另有獨立的 `AUTOMATIC SYNC (DEBUG)` 卡片，最早為提交後 `10 分鐘`、不要求充電，並附前景測試迴圈；Release build 不註冊此迴圈。
+- 全部都只是 `earliestBeginDate`。iOS 不保證準時、不保證固定週期、不保證一定提供 runtime，實際執行可能晚很多。
 - App 啟動與 scene 切換會 reconcile 既有 pending request：同一 request 若不晚於目前目標便保留，不重複提交、不把 `Next attempt` 往後推。
 - Mac 不可達、系統未啟動 background task 或背景排程不可用時，請直接用 `Sync Now`。
 
@@ -114,6 +117,10 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 - Photos deletion 會從整個 library 移除 asset，不是只從所選相簿移除；若使用 `iCloud Photos`，也會影響同 Apple Account 的其他裝置。Receiver 已 committed 的 Finder / Windows files 永遠保留。
 
 完整 contract 見 [Delete After Sync 規格](docs/specs/2026-07-27-delete-after-sync.md)。
+
+### 螢幕鎖定與背景化 (Lock and Backgrounding)
+
+前景 `Sync Now` 進行中 iPhone 不會自動鎖定，長片段也能一次傳完；完成或取消後自動鎖定立刻恢復。若手動按側邊鍵鎖定或切到其他 App，iOS 會停止這個前景 run：App 會先安全關閉連線再結束，receiver 隨即回到 `Ready`，下一次同步從 manifest checkpoint 續傳，不會重傳已完成的位元組。receiver 對已開啟但停止送資料的 session 另有 45 秒 deadline，因此就算 iPhone 被直接 suspend 或 Wi-Fi 斷線，Mac 也不會卡在舊 session 而拒絕後續連線。
 
 ### 網路前提 (Network Gate)
 
@@ -256,7 +263,7 @@ Windows 11 receiver 端會額外跑 `scripts/verify-windows.sh`：49 個 vitest�
 | `npm run dev:ios`      | `run-simulator.sh` | Simulator `.app`                            | `build/simulator/Build/Products/Debug-iphonesimulator/iPhone Sync.app`  |
 | `npm run deploy:ios`   | `run-iphone.sh`    | 已簽署 archive（安裝到實機）                | `build/iphone/iPhoneSync.xcarchive`（derived data 在 `build/iphone/DerivedData`） |
 | `npm run build:ios`    | `run-iphone.sh`    | 同上，只建置不安裝                          | `build/iphone/iPhoneSync.xcarchive/Products/Applications/iPhone Sync.app` |
-| `npm run release`      | `release.sh`       | App Store archive + `.ipa`                  | `build/appstore/iPhoneSync.xcarchive`、`build/appstore/ipa/*.ipa`       |
+| `npm run release:ios`| `release.sh`       | App Store archive + `.ipa`                  | `build/appstore/iPhoneSync.xcarchive`、`build/appstore/ipa/*.ipa`       |
 | `npm run dev:mac`      | `run-server.sh`    | Debug `.app`（原地啟動）                    | `build/mac/DerivedData/Build/Products/Debug/iPhone Sync.app`            |
 | `npm run deploy:mac`   | `run-mac.sh`       | Release `.app`（安裝後啟動）                | 建置於 `build/mac-install-derived/`，安裝至 `/Applications/iPhone Sync.app` |
 | `npm run build:mac`    | `package-mac.sh`   | universal DMG + PKG                         | `build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}`（中繼在 `build/mac-release-derived/`） |
@@ -498,5 +505,5 @@ transfer. Background processing is used only for the opt-in Automatic Sync.
 - **缺少 `PrivacyInfo.xcprivacy`**：iOS target 使用 `UserDefaults`（reason `CA92.1`）與 `FileManager.attributesOfItem`（file timestamp，reason `C617.1`）等 required-reason APIs，未附 privacy manifest 會在上傳後收到 `ITMS-91053` 通知。
 - **Receiver 下載路徑未定案**：description 與 review notes 都指向「release page」，但 `github.com/bizshuk/iphone_sync` 目前非公開（releases API 回 `404`），審查員拿不到 receiver，屬 `Guideline 2.1`。需確定對外的固定 URL 後回填。
 - **公開 policy 站台未重新發佈**：`appstore/*.html` 已改名為 `Photo Sync`，`bizshuk.github.io` 上的線上版本仍是舊文案。
-- **App Store Connect app record 與 distribution 憑證未齊備**：`npm run release` 在未設定 `DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 時會在 archive 前失敗（見 [CLAUDE.md](CLAUDE.md)）。
+- **App Store Connect app record 與 distribution 憑證未齊備**：`npm run release:ios` 在未設定 `DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 時會在 archive 前失敗（見 [CLAUDE.md](CLAUDE.md)）。
 - **實機驗收未完成**：signed 裝置上的 `Delete After Sync` confirmation、background launch 與完整 LAN failure matrix 仍列於 [README.todo](README.todo)。

@@ -11,7 +11,11 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-build/mac-install-derived}"
 APP_NAME="${APP_NAME:-iPhone Sync}"
 BUNDLE_ID="${BUNDLE_ID:-com.shuk.iphonesync.mac}"
 ENTITLEMENTS="${ENTITLEMENTS:-apps/macos/iPhoneSyncMac.entitlements}"
-SIGN_IDENTITY="${MAC_SIGN_IDENTITY:--}"
+SIGN_IDENTITY="${MAC_SIGN_IDENTITY:-$(
+    security find-identity -v -p codesigning 2>/dev/null \
+        | awk -F'"' '/Apple Development/ {print $2; exit}' || true
+)}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 INSTALL_DIR="${INSTALL_DIR:-/Applications}"
 
 BUILT_APP="$DERIVED_DATA_PATH/Build/Products/$CONFIGURATION/$APP_NAME.app"
@@ -50,12 +54,14 @@ Optional environment:
   APP_NAME           Built app name (default: iPhone Sync).
   BUNDLE_ID          Bundle identifier used to stop the running App.
   ENTITLEMENTS       Entitlements file (default: apps/macos/iPhoneSyncMac.entitlements).
-  MAC_SIGN_IDENTITY  codesign identity (default: "-" = ad-hoc).
+  MAC_SIGN_IDENTITY  codesign identity（預設：Keychain 中第一張 Apple
+                     Development 憑證；找不到才退回 "-" = ad-hoc）。
   INSTALL_DIR        Install destination (default: /Applications).
 
 ad-hoc 簽章每次建置都是不同的 code identity，macOS 會把安裝後的 App 視為
 另一個程式：login Keychain 中的 PSK 與 sandbox 的 destination bookmark 需要
-重新授權。要保留既有配對，設 MAC_SIGN_IDENTITY 為固定的 Developer ID。
+重新授權。因此預設改用 Keychain 既有的 Apple Development 憑證，讓 identity
+跨重建保持固定。要對外散佈時另設 MAC_SIGN_IDENTITY 為 Developer ID。
 USAGE
 }
 

@@ -2,8 +2,7 @@ import Foundation
 
 enum AutomaticSyncCadence: Equatable, Sendable {
     case tenMinutes
-    case dailyAtLocalMidnight
-    case dailyAtLocalTime(hour: Int, minute: Int)
+    case thirtyMinutesWhileCharging
 }
 
 enum AutomaticSyncScheduleReason: Equatable, Sendable {
@@ -16,31 +15,37 @@ enum AutomaticSyncScheduleReason: Equatable, Sendable {
 
 struct AutomaticSyncPolicy: Sendable {
     static let debugInterval: TimeInterval = 10 * 60
-    static let productionRetryInterval: TimeInterval = 60 * 60
-    static let scheduledRunMaximumDuration: Duration = .seconds(8 * 60)
-    static let productionDefaultHour = 0
-    static let productionDefaultMinute = 0
+    static let productionInterval: TimeInterval = 30 * 60
 
     let cadence: AutomaticSyncCadence
-    var calendar: Calendar
 
-    init(
-        cadence: AutomaticSyncCadence,
-        calendar: Calendar = .autoupdatingCurrent
-    ) {
+    init(cadence: AutomaticSyncCadence) {
         self.cadence = cadence
-        self.calendar = calendar
     }
 
-    static var current: AutomaticSyncPolicy {
-#if DEBUG
-        AutomaticSyncPolicy(cadence: .tenMinutes)
-#else
-        AutomaticSyncPolicy(cadence: .dailyAtLocalTime(
-            hour: productionDefaultHour,
-            minute: productionDefaultMinute
-        ))
-#endif
+    /// Every launch is one attempt and nothing more. There is no daily quota
+    /// and no wall-clock appointment, so the request is always re-armed the
+    /// same fixed interval ahead, whatever the previous outcome was.
+    var interval: TimeInterval {
+        switch cadence {
+        case .tenMinutes:
+            Self.debugInterval
+        case .thirtyMinutesWhileCharging:
+            Self.productionInterval
+        }
+    }
+
+    /// Charging is the gate that makes iOS willing to grant long processing
+    /// windows, so the production cadence asks for it and accepts that the
+    /// iPhone simply does not sync while running on battery. The debug lane
+    /// stays power-free so the launch path can be tested without a cable.
+    var requiresExternalPower: Bool {
+        switch cadence {
+        case .tenMinutes:
+            false
+        case .thirtyMinutesWhileCharging:
+            true
+        }
     }
 
     func foregroundTestDelay(
@@ -53,93 +58,23 @@ struct AutomaticSyncPolicy: Sendable {
         return .seconds(max(0, eligibleAt.timeIntervalSince(now)))
     }
 
-    func hasSuccessfulRunToday(_ lastSuccess: Date?, now: Date) -> Bool {
-        guard let lastSuccess else { return false }
-        return calendar.isDate(lastSuccess, inSameDayAs: now)
-    }
-
     func nextRequestDate(
         after now: Date,
-        lastSuccess: Date?,
         reason: AutomaticSyncScheduleReason
     ) -> Date {
-        switch cadence {
-        case .tenMinutes:
-            return now.addingTimeInterval(Self.debugInterval)
-        case .dailyAtLocalMidnight, .dailyAtLocalTime:
-            if reason == .retry, !hasSuccessfulRunToday(lastSuccess, now: now) {
-                return now.addingTimeInterval(Self.productionRetryInterval)
-            }
-            let components = dailyTimeComponents
-            return nextDailyRun(after: now, hour: components.hour, minute: components.minute)
-        }
+        now.addingTimeInterval(interval)
     }
 
+    /// A persisted eligibility is a relative interval, not a wall-clock
+    /// appointment, so re-entering the app must never postpone it. An elapsed
+    /// date stays elapsed and the next launch happens as soon as iOS allows.
     func restoredRequestDate(
         after now: Date,
-        lastSuccess: Date?,
         persistedDate: Date?
     ) -> Date {
-        switch cadence {
-        case .tenMinutes:
-            if let persistedDate {
-                return persistedDate
-            }
-            return nextRequestDate(
-                after: now,
-                lastSuccess: lastSuccess,
-                reason: .restore
-            )
-        case .dailyAtLocalMidnight, .dailyAtLocalTime:
-            // A persisted absolute date was calculated in the previous local
-            // timezone. Recompute daily scheduling whenever the app wakes.
-            return nextRequestDate(
-                after: now,
-                lastSuccess: lastSuccess,
-                reason: .restore
-            )
+        if let persistedDate {
+            return persistedDate
         }
-    }
-
-    var isDailyCadence: Bool {
-        switch cadence {
-        case .dailyAtLocalMidnight, .dailyAtLocalTime:
-            return true
-        case .tenMinutes:
-            return false
-        }
-    }
-
-    var dailyTimeComponents: (hour: Int, minute: Int) {
-        switch cadence {
-        case .tenMinutes:
-            return (0, 0)
-        case .dailyAtLocalMidnight:
-            return (0, 0)
-        case let .dailyAtLocalTime(hour, minute):
-            return (
-                max(0, min(23, hour)),
-                max(0, min(59, minute))
-            )
-        }
-    }
-
-    private func nextDailyRun(after now: Date, hour: Int, minute: Int) -> Date {
-        let calendar = self.calendar
-        let todayStart = calendar.startOfDay(for: now)
-        let todayRun = calendar.date(
-            bySettingHour: hour,
-            minute: minute,
-            second: 0,
-            of: todayStart
-        ) ?? now
-        if todayRun <= now {
-            return calendar.date(
-                byAdding: .day,
-                value: 1,
-                to: todayRun
-            ) ?? now.addingTimeInterval(24 * 60 * 60)
-        }
-        return todayRun
+        return nextRequestDate(after: now, reason: .restore)
     }
 }

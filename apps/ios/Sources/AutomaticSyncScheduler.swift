@@ -51,7 +51,7 @@ final class AutomaticSyncScheduler {
 
     private let runtime: IOSSyncRuntime
     private let store: IOSAutomaticSyncStore
-    private var policy: AutomaticSyncPolicy
+    private let policy: AutomaticSyncPolicy
     private let scheduler: BGTaskScheduler
     private let requestScheduler: any AutomaticSyncRequestScheduling
     private let now: () -> Date
@@ -110,13 +110,6 @@ final class AutomaticSyncScheduler {
         self.onSnapshotChange = onSnapshotChange
         self.onRunStateChange = onRunStateChange
         self.onOperation = onOperation
-    }
-
-    func updatePolicy(_ policy: AutomaticSyncPolicy) {
-        self.policy = policy
-        if isRegistered, store.snapshot.isEnabled {
-            _ = replaceSchedule(reason: .restore)
-        }
     }
 
     @discardableResult
@@ -204,7 +197,6 @@ final class AutomaticSyncScheduler {
         let snapshot = store.snapshot
         let restoredDate = policy.restoredRequestDate(
             after: referenceDate,
-            lastSuccess: snapshot.lastSuccessAt,
             persistedDate: snapshot.nextEligibleAt
         )
         let pendingRequest = await requestScheduler.pendingRequests().first {
@@ -266,24 +258,19 @@ final class AutomaticSyncScheduler {
         }
         beginRun(runID)
         publishSnapshot()
-        let outcome: SyncRunOutcome
-        if automaticRunAlreadyCompletedToday(at: attemptDate) {
-            outcome = .deferred(.alreadyCompletedToday)
-        } else {
-            let runtime = runtime
-            outcome = await withTaskCancellationHandler {
-                await runtime.run(SyncRunRequest(
-                    id: runID,
-                    trigger: .automaticForeground,
-                    maximumElapsed: AutomaticSyncPolicy.scheduledRunMaximumDuration
-                ))
-            } onCancel: {
-                Task {
-                    await runtime.cancel(
-                        runID: runID,
-                        reason: .sceneBackgrounded
-                    )
-                }
+        let runtime = runtime
+        let outcome = await withTaskCancellationHandler {
+            await runtime.run(SyncRunRequest(
+                id: runID,
+                trigger: .automaticForeground,
+                maximumElapsed: nil
+            ))
+        } onCancel: {
+            Task {
+                await runtime.cancel(
+                    runID: runID,
+                    reason: .sceneBackgrounded
+                )
             }
         }
         if foregroundRunID == runID {
@@ -304,8 +291,12 @@ final class AutomaticSyncScheduler {
             return
         }
         guard backgroundExecution == nil else {
-            emit(.warning, "Rejected a duplicate background launch.")
-            task.setTaskCompleted(success: false)
+            emit(
+                .warning,
+                "Skipped a background launch because a sync is already running."
+            )
+            _ = replaceSchedule(reason: .retry)
+            task.setTaskCompleted(success: true)
             return
         }
 
@@ -355,13 +346,14 @@ final class AutomaticSyncScheduler {
         let outcome: SyncRunOutcome
         if let forcedOutcome = execution.forcedOutcome {
             outcome = forcedOutcome
-        } else if automaticRunAlreadyCompletedToday(at: attemptDate) {
-            outcome = .deferred(.alreadyCompletedToday)
         } else {
+            // No application budget: iOS decides how long this window lasts
+            // and calls the expiration handler, which cancels the run and
+            // leaves the receiver checkpoint to resume from.
             outcome = await runtime.run(SyncRunRequest(
                 id: runID,
                 trigger: .automaticBackground,
-                maximumElapsed: AutomaticSyncPolicy.scheduledRunMaximumDuration
+                maximumElapsed: nil
             ))
         }
         finishBackgroundExecution(
@@ -419,11 +411,6 @@ final class AutomaticSyncScheduler {
         return .needsAttention
     }
 
-    private func automaticRunAlreadyCompletedToday(at date: Date) -> Bool {
-        guard policy.isDailyCadence else { return false }
-        return policy.hasSuccessfulRunToday(store.snapshot.lastSuccessAt, now: date)
-    }
-
     private func record(_ outcome: SyncRunOutcome, at date: Date) {
         store.recordOutcome(
             outcome.automaticCode,
@@ -438,11 +425,7 @@ final class AutomaticSyncScheduler {
             store.recordNextEligibleAt(nil)
             return false
         }
-        let date = policy.nextRequestDate(
-            after: now(),
-            lastSuccess: store.snapshot.lastSuccessAt,
-            reason: reason
-        )
+        let date = policy.nextRequestDate(after: now(), reason: reason)
         return submitSchedule(earliestBeginDate: date)
     }
 
@@ -450,7 +433,7 @@ final class AutomaticSyncScheduler {
         let request = BGProcessingTaskRequest(identifier: taskIdentifier)
         request.earliestBeginDate = date
         request.requiresNetworkConnectivity = true
-        request.requiresExternalPower = false
+        request.requiresExternalPower = policy.requiresExternalPower
         do {
             try requestScheduler.submit(request)
             store.recordNextEligibleAt(date)

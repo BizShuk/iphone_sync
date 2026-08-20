@@ -13,11 +13,14 @@
 - [ ] 驗證 mixed-resource asset（Live Photo / RAW+JPEG / adjustment / iCloud-only）只有全部 resource confirmed 才刪除，且 `iCloud Photos` 跨裝置與 `Recently Deleted` 行為符合警告
 - [ ] 驗證 background sync 只保存 pending IDs，App relaunch 後由 foreground `Delete N Synced Photos` confirmation 完成或安全取消
 - [ ] 驗證中斷續傳、iPhone 進入背景、Mac sleep、VPN、router isolation 與磁碟空間不足
+- [ ] 在實機驗證長片段同步期間 iPhone 不自動鎖定，手動鎖定後 receiver 於 45 秒內回到 `Ready` 且下一次從 checkpoint 續傳
 - [ ] 決定簽署、公證 (notarization) 與安裝/發佈方式
 
 ## Automatic LAN Sync
 
 - [ ] 在 signed 實體 iPhone / Mac 驗證 simulated launch/expiration、same/different LAN、sleep/wake、resume 與 overnight delay
+- [ ] 驗證充電 cadence：接電後 iOS 會實際啟動 30 分鐘 request、拔電後不再啟動、單次 run 由 OS expiration 中止且下次從 checkpoint 續傳
+- [ ] 驗證前一次 run 未結束時的 background launch 被略過，且 `Next attempt` 有立即重排
 
 ## Windows 11 Receiver
 

@@ -85,6 +85,24 @@ struct SetupView: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
 
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("Destination")
+                    .font(Tokens.Typography.caption)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Text(destinationDisplayPath)
+                    .font(Tokens.Typography.caption)
+                    .foregroundStyle(model.destinationURL == nil ? .secondary : .primary)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .multilineTextAlignment(.trailing)
+                    .textSelection(.enabled)
+                    .help(destinationDisplayPath)
+                Button("Choose\u{2026}") { model.chooseDestination() }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+            }
+
             HStack(spacing: 10) {
                 Text("Storage Mode")
                     .font(Tokens.Typography.caption)
@@ -149,6 +167,10 @@ struct SetupView: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
+    }
+
+    private var destinationDisplayPath: String {
+        model.destinationURL?.path(percentEncoded: false) ?? "Not selected"
     }
 
     private var pairingInfo: (code: String, expiresAt: Date)? {

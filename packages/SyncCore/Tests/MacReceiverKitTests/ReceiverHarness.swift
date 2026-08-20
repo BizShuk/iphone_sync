@@ -180,6 +180,7 @@ actor SyncTestListener {
     private let manifest: ManifestStore
     private let destinationRoot: URL
     private let openingTimeout: Duration
+    private let idleTimeout: Duration
     private let onAccepted: SyncServerSession.AcceptedHandler?
     private let onEvent: SyncServerSession.EventHandler?
     private let queue = DispatchQueue(label: "com.shuk.iphonesync.tests.sync-listener")
@@ -193,6 +194,7 @@ actor SyncTestListener {
         manifest: ManifestStore,
         destinationRoot: URL,
         openingTimeout: Duration = SyncServerSession.defaultOpeningTimeout,
+        idleTimeout: Duration = SyncServerSession.defaultIdleTimeout,
         onAccepted: SyncServerSession.AcceptedHandler? = nil,
         onEvent: SyncServerSession.EventHandler? = nil
     ) throws {
@@ -200,6 +202,7 @@ actor SyncTestListener {
         self.manifest = manifest
         self.destinationRoot = destinationRoot
         self.openingTimeout = openingTimeout
+        self.idleTimeout = idleTimeout
         self.onAccepted = onAccepted
         self.onEvent = onEvent
     }
@@ -249,6 +252,7 @@ actor SyncTestListener {
         let manifest = manifest
         let root = destinationRoot
         let openingTimeout = openingTimeout
+        let idleTimeout = idleTimeout
         let onAccepted = onAccepted
         let onEvent = onEvent
         let task = Task { [weak self] in
@@ -258,6 +262,7 @@ actor SyncTestListener {
                 _ = try await session.run(
                     connection: FramedConnection(connection),
                     openingTimeout: openingTimeout,
+                    idleTimeout: idleTimeout,
                     onAccepted: onAccepted,
                     onEvent: onEvent
                 )

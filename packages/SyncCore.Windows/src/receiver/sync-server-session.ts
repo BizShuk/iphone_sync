@@ -23,6 +23,7 @@ import {
   encodeResult,
   encodeSessionRequest,
   FrameCodec,
+  type FrameHeader,
   FrameKind,
   FramedConnection,
   SyncConstants,
@@ -40,6 +41,7 @@ export interface SyncServerSessionOptions {
   onAccepted?: () => void;
   onEvent?: (event: { level: OperationLogLevel; category: string; message: string }) => void;
   openingTimeoutSeconds?: number;
+  idleTimeoutSeconds?: number;
 }
 
 export class SyncServerSession extends EventEmitter {
@@ -50,6 +52,7 @@ export class SyncServerSession extends EventEmitter {
   private readonly onAccepted?: () => void;
   private readonly onEvent?: (event: { level: OperationLogLevel; category: string; message: string }) => void;
   private readonly openingTimeoutSeconds: number;
+  private readonly idleTimeoutSeconds: number;
   private integrityFailures = new Map<string, number>();
 
   constructor(options: SyncServerSessionOptions) {
@@ -61,6 +64,26 @@ export class SyncServerSession extends EventEmitter {
     this.onAccepted = options.onAccepted;
     this.onEvent = options.onEvent;
     this.openingTimeoutSeconds = options.openingTimeoutSeconds ?? SyncConstants.defaultOpeningTimeoutSeconds;
+    this.idleTimeoutSeconds = options.idleTimeoutSeconds ?? SyncConstants.defaultIdleTimeoutSeconds;
+  }
+
+  // Receives the next frame, bounding the wait so a sender that vanishes
+  // (locked iPhone, suspended app, LAN drop) ends the session instead of
+  // holding the receiver's single active connection slot open forever.
+  private async receive(): Promise<{ header: FrameHeader; payload: Uint8Array }> {
+    let timer: NodeJS.Timeout | undefined;
+    const idle = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        this.connection.destroy();
+        reject(new Error('idleTimedOut'));
+      }, this.idleTimeoutSeconds * 1000);
+      timer.unref?.();
+    });
+    try {
+      return await Promise.race([this.connection.receive(), idle]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   async run(): Promise<SyncSummary> {
@@ -69,7 +92,7 @@ export class SyncServerSession extends EventEmitter {
       await this.openSession();
       this.onAccepted?.();
       while (true) {
-        const { header, payload } = await this.connection.receive();
+        const { header, payload } = await this.receive();
         if (header.kind === FrameKind.session) {
           const session = decodeSessionMessage(payload);
           if (session.kind === 'finished') {
@@ -173,7 +196,7 @@ export class SyncServerSession extends EventEmitter {
     let offset = result.offset;
     const requestID = FrameCodec.newRequestID();
     while (offset < expectedSize) {
-      const { header: chunkHeader, payload: chunkPayload } = await this.connection.receive();
+      const { header: chunkHeader, payload: chunkPayload } = await this.receive();
       if (chunkHeader.kind !== FrameKind.chunk) {
         throw new Error('protocolViolation: expected chunk');
       }

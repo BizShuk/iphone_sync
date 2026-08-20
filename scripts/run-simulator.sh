@@ -8,7 +8,7 @@
 # `SIMULATOR` 環境變數可換機型，預設 iPhone 17 Pro。
 #
 # 模擬器建置一律 `CODE_SIGNING_ALLOWED=NO`：模擬器不驗簽章，把 provisioning
-# 拉進來只會讓「程式能不能編過」卡在憑證上。實機請改用 npm run deploy。
+# 拉進來只會讓「程式能不能編過」卡在憑證上。實機請改用 npm run deploy:ios。
 #
 set -euo pipefail
 

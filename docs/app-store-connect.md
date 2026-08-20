@@ -120,7 +120,7 @@ Notes 草稿見 `README.md` §5.6；送審前必須補上可公開存取的 rece
 | 缺 `PrivacyInfo.xcprivacy` | ❌ ITMS-91053 | 宣告 `CA92.1`（`UserDefaults`，13 處）與 `C617.1`（`attributesOfItem`，`apps/ios/Sources/PhotoLibrarySource.swift:449`、`packages/SyncCore/Sources/SyncCore/SyncClient.swift:59`） |
 | Receiver 下載 URL 不可公開存取 | ❌ Guideline 2.1 | `github.com/bizshuk/iphone_sync` releases API 回 404（repo 非公開）；改用可公開 URL 或公開 repo，再回填 description 與 review notes |
 | 公開 policy 站台尚未重新發佈 | ⚠️ | `appstore/*.html` 已改名為 `Photo Sync`，但 `bizshuk.github.io` 上的頁面仍是舊版；送審前重新發佈並 curl 實測 |
-| ASC API key / distribution 憑證未備 | ⚠️ | Keychain 只有 `Apple Development`；`DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 皆未設定，`npm run release` 會在 archive 前失敗 |
+| ASC API key / distribution 憑證未備 | ⚠️ | Keychain 只有 `Apple Development`；`DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 皆未設定，`npm run release:ios` 會在 archive 前失敗 |
 | App Store Name 可用性未確認 | ⚠️ | `Photo Sync` 需在 App Store Connect 佔用時才知道是否唯一；備案：`Photo Sync LAN`、`LAN Album Backup` |
 | Trader Status、legal rights holder | ⚠️ | 由 legal entity 決定 |
 | macOS / Windows receiver 仍名為 `iPhone Sync` | ⚠️ | 不在 App Store 送審範圍（GitHub Release 散佈），但對外一致性上建議一併改名 |

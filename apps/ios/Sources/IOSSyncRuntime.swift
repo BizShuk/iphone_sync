@@ -11,7 +11,6 @@ enum SyncTrigger: Sendable {
 
 enum SyncDeferredReason: String, Equatable, Sendable {
     case alreadyRunning
-    case alreadyCompletedToday
     case macUnavailable
     case networkUnavailable
     case photosAccessRequired
@@ -56,7 +55,6 @@ enum SyncRunOutcome: Equatable, Sendable {
         case .completed: .completed
         case .noChanges: .noChanges
         case .deferred(.alreadyRunning): .alreadyRunning
-        case .deferred(.alreadyCompletedToday): .alreadyCompletedToday
         case .deferred(.macUnavailable): .macUnavailable
         case .deferred(.networkUnavailable): .networkUnavailable
         case .deferred(.photosAccessRequired): .photosAccessRequired
@@ -120,8 +118,6 @@ enum SyncRunOutcome: Equatable, Sendable {
             "No new local resources were found."
         case .deferred(.alreadyRunning):
             "Another sync is already running."
-        case .deferred(.alreadyCompletedToday):
-            "Automatic sync already completed today."
         case .deferred(.macUnavailable):
             "The paired Mac is not visible on this local network."
         case .deferred(.networkUnavailable):

@@ -130,36 +130,17 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         ))
     }
 
-    func testDailyRestoreRecomputesElapsedEligibilityAtNextConfiguredLocalTime() async {
-        var gregorian = Calendar(identifier: .gregorian)
-        gregorian.locale = Locale(identifier: "en_US_POSIX")
-        gregorian.timeZone = TimeZone(identifier: "America/Los_Angeles")!
-
-        let now = gregorian.date(from: DateComponents(
-            timeZone: gregorian.timeZone,
-            year: 2026,
-            month: 7,
-            day: 23,
-            hour: 20,
-            minute: 34
-        ))!
+    /// The charging cadence never recomputes a wall-clock appointment, so an
+    /// elapsed eligibility survives an app relaunch untouched and iOS gets to
+    /// launch as soon as the iPhone is charging again.
+    func testChargingRestoreKeepsElapsedEligibilityAndAsksForExternalPower() async {
+        let now = Date(timeIntervalSince1970: 1_774_300_000)
         let elapsedDate = now.addingTimeInterval(-4 * 60)
-        let expectedNextDailyRun = gregorian.date(from: DateComponents(
-            timeZone: gregorian.timeZone,
-            year: 2026,
-            month: 7,
-            day: 24,
-            hour: 0,
-            minute: 53
-        ))!
         let requestScheduler = FakeAutomaticSyncRequestScheduler()
         let (scheduler, store, defaults) = makeScheduler(
             now: now,
             requestScheduler: requestScheduler,
-            policy: AutomaticSyncPolicy(
-                cadence: .dailyAtLocalTime(hour: 0, minute: 53),
-                calendar: gregorian
-            )
+            policy: AutomaticSyncPolicy(cadence: .thirtyMinutesWhileCharging)
         )
         defer {
             defaults.removePersistentDomain(forName: defaultsSuiteName)
@@ -170,16 +151,34 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         await scheduler.ensureScheduled()
 
         XCTAssertEqual(
-            requestScheduler.submittedRequests,
-            [AutomaticSyncPendingRequest(
-                identifier: AutomaticSyncScheduler.taskIdentifier,
-                earliestBeginDate: expectedNextDailyRun
-            )]
+            requestScheduler.submittedRequests.map(\.earliestBeginDate),
+            [elapsedDate]
         )
+        XCTAssertEqual(requestScheduler.submittedExternalPowerFlags, [true])
+        XCTAssertEqual(requestScheduler.submittedNetworkFlags, [true])
         XCTAssertEqual(requestScheduler.cancelledIdentifiers, [])
-        XCTAssertEqual(store.snapshot.nextEligibleAt, expectedNextDailyRun)
-        XCTAssertNotEqual(store.snapshot.nextEligibleAt, elapsedDate)
-        XCTAssertNotEqual(store.snapshot.nextEligibleAt, now)
+        XCTAssertEqual(store.snapshot.nextEligibleAt, elapsedDate)
+    }
+
+    func testDebugScheduleDoesNotRequireExternalPower() async {
+        let now = Date(timeIntervalSince1970: 1_774_300_000)
+        let requestScheduler = FakeAutomaticSyncRequestScheduler()
+        let (scheduler, store, defaults) = makeScheduler(
+            now: now,
+            requestScheduler: requestScheduler
+        )
+        defer {
+            defaults.removePersistentDomain(forName: defaultsSuiteName)
+        }
+        store.setEnabled(true)
+
+        await scheduler.ensureScheduled()
+
+        XCTAssertEqual(requestScheduler.submittedExternalPowerFlags, [false])
+        XCTAssertEqual(
+            store.snapshot.nextEligibleAt,
+            now.addingTimeInterval(10 * 60)
+        )
     }
 
     private var defaultsSuiteName: String {
@@ -189,10 +188,7 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
     private func makeScheduler(
         now: Date,
         requestScheduler: FakeAutomaticSyncRequestScheduler,
-        policy: AutomaticSyncPolicy = AutomaticSyncPolicy(
-            cadence: .tenMinutes,
-            calendar: Calendar(identifier: .gregorian)
-        )
+        policy: AutomaticSyncPolicy = AutomaticSyncPolicy(cadence: .tenMinutes)
     ) -> (
         scheduler: AutomaticSyncScheduler,
         store: IOSAutomaticSyncStore,
@@ -225,6 +221,8 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
 private final class FakeAutomaticSyncRequestScheduler:
     AutomaticSyncRequestScheduling {
     private(set) var submittedRequests: [AutomaticSyncPendingRequest] = []
+    private(set) var submittedExternalPowerFlags: [Bool] = []
+    private(set) var submittedNetworkFlags: [Bool] = []
     private(set) var cancelledIdentifiers: [String] = []
     private(set) var pendingRequestSnapshots: [AutomaticSyncPendingRequest]
     private let submitError: Error?
@@ -246,6 +244,14 @@ private final class FakeAutomaticSyncRequestScheduler:
             earliestBeginDate: request.earliestBeginDate
         )
         submittedRequests.append(snapshot)
+        if let processingRequest = request as? BGProcessingTaskRequest {
+            submittedExternalPowerFlags.append(
+                processingRequest.requiresExternalPower
+            )
+            submittedNetworkFlags.append(
+                processingRequest.requiresNetworkConnectivity
+            )
+        }
         pendingRequestSnapshots.removeAll {
             $0.identifier == request.identifier
         }

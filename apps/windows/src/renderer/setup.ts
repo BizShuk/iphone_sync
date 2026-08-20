@@ -10,6 +10,7 @@ const els = {
   statusSecondary: document.getElementById('status-secondary') as HTMLDivElement,
   statusIcon: document.getElementById('status-icon') as HTMLDivElement,
   storageMode: document.getElementById('storage-mode') as HTMLSelectElement,
+  destinationPath: document.getElementById('destination-path') as HTMLSpanElement,
   chooseDestination: document.getElementById('choose-destination') as HTMLButtonElement,
   pairIPhone: document.getElementById('pair-iphone') as HTMLButtonElement,
   pairingCard: document.getElementById('pairing-card') as HTMLDivElement,
@@ -34,6 +35,9 @@ function renderSnapshot(snap: any): void {
     : (snap.destinationPath ? 'Pair an iPhone' : 'Choose a destination');
   els.statusSecondary.textContent = snap.pairedPeerID ?? '';
   els.pairIPhone.disabled = !snap.destinationPath;
+  els.destinationPath.textContent = snap.destinationPath ?? 'Not selected';
+  els.destinationPath.title = snap.destinationPath ?? '';
+  els.destinationPath.classList.toggle('empty', !snap.destinationPath);
 
   if (snap.isPairing && snap.pairingCode) {
     els.pairingCard.classList.remove('hidden');

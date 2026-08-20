@@ -633,27 +633,7 @@ private struct AutomaticSyncCard: View {
             statRow("Last success", value: formattedDate(snapshot.lastSuccessAt))
             statRow("Next attempt", value: formattedDate(snapshot.nextEligibleAt))
 
-            if mode == .production {
-                HStack(spacing: 8) {
-                    Text("Schedule time")
-                        .font(Tokens.Typography.callout)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    DatePicker(
-                        "Schedule time",
-                        selection: Binding(
-                            get: { model.automaticProductionSyncDate },
-                            set: { model.automaticProductionSyncDate = $0 }
-                        ),
-                        displayedComponents: .hourAndMinute
-                    )
-                    .labelsHidden()
-                    .datePickerStyle(.compact)
-                    .tint(Tokens.Palette.signal)
-                }
-            } else {
-                statRow("Cadence", value: "Every 10 minutes")
-            }
+            statRow("Cadence", value: cadenceText)
 
         }
         .padding(Tokens.Layout.cardPadding)
@@ -666,7 +646,9 @@ private struct AutomaticSyncCard: View {
             Button("OK", role: .cancel) { showTimingInfo = false }
         } message: {
             Text("iOS controls the actual background execution time. "
-                + "The configured time may still be delayed by device conditions.")
+                + "Automatic sync is only attempted while the iPhone is "
+                + "charging, and each attempt may still be delayed or "
+                + "shortened by device conditions.")
         }
     }
 
@@ -686,6 +668,12 @@ private struct AutomaticSyncCard: View {
         case .production:
             model.automaticProductionRunIsActive
         }
+    }
+
+    private var cadenceText: String {
+        mode == .debug
+            ? "Every 10 minutes"
+            : "Every 30 minutes while charging"
     }
 
     private var cardTitle: String {

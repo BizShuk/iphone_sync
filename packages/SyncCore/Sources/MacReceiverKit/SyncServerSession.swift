@@ -2,6 +2,7 @@ import Foundation
 import SyncCore
 
 public enum SyncServerSessionError: Error, Equatable, LocalizedError, Sendable {
+    case idleTimedOut
     case integrityFailureLimitExceeded
     case invalidChunk
     case openingTimedOut
@@ -10,6 +11,9 @@ public enum SyncServerSessionError: Error, Equatable, LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
+        case .idleTimedOut:
+            "The sender stopped sending before the session finished; "
+                + "the iPhone was most likely locked or suspended."
         case .integrityFailureLimitExceeded:
             "The same resource failed integrity verification twice."
         case .invalidChunk:
@@ -29,10 +33,16 @@ public actor SyncServerSession {
     public typealias EventHandler = @Sendable (OperationLogEvent) async -> Void
 
     public static let defaultOpeningTimeout: Duration = .seconds(15)
+    // An open session that stops producing frames is almost always an iPhone
+    // that got locked or suspended mid-transfer. Without this bound the
+    // receiver would block on `receive()` until TCP keepalive gives up
+    // (~2 hours on Darwin) and reject every following connection.
+    public static let defaultIdleTimeout: Duration = .seconds(45)
 
     private let manifest: ManifestStore
     private let writer: DestinationWriter
     private var integrityFailures: [String: Int] = [:]
+    private var idleTimeout: Duration = SyncServerSession.defaultIdleTimeout
 
     public init(manifest: ManifestStore, writer: DestinationWriter) {
         self.manifest = manifest
@@ -42,10 +52,12 @@ public actor SyncServerSession {
     public func run(
         connection: FramedConnection,
         openingTimeout: Duration = SyncServerSession.defaultOpeningTimeout,
+        idleTimeout: Duration = SyncServerSession.defaultIdleTimeout,
         onAccepted: AcceptedHandler? = nil,
         onEvent: EventHandler? = nil
     ) async throws -> SyncSummary {
         defer { connection.cancel() }
+        self.idleTimeout = idleTimeout
 
         try await openSession(
             connection: connection,
@@ -56,7 +68,7 @@ public actor SyncServerSession {
 
         var summary = SyncSummary.zero
         while true {
-            let frame = try await connection.receive()
+            let frame = try await receive(from: connection)
             let message = try frame.controlMessage()
             switch message {
             case .session(.finished):
@@ -305,6 +317,28 @@ public actor SyncServerSession {
         }
     }
 
+    /// Receives the next frame, bounding the wait so a sender that vanishes
+    /// (locked iPhone, suspended app, LAN drop) ends the session instead of
+    /// holding the receiver's single active connection slot open forever.
+    private func receive(from connection: FramedConnection) async throws -> SyncFrame {
+        let idleTimeout = idleTimeout
+        return try await withThrowingTaskGroup(of: SyncFrame.self) { group in
+            group.addTask {
+                try await connection.receive()
+            }
+            group.addTask {
+                try await Task.sleep(for: idleTimeout)
+                connection.cancel()
+                throw SyncServerSessionError.idleTimedOut
+            }
+            defer { group.cancelAll() }
+            guard let frame = try await group.next() else {
+                throw SyncServerSessionError.idleTimedOut
+            }
+            return frame
+        }
+    }
+
     private func receiveBytes(
         offer: ResourceOffer,
         requestID: UUID,
@@ -313,7 +347,7 @@ public actor SyncServerSession {
     ) async throws {
         var offset = startingOffset
         while offset < offer.descriptor.expectedSize {
-            let chunk = try await connection.receive()
+            let chunk = try await receive(from: connection)
             guard chunk.kind == .chunk,
                   chunk.requestID == requestID,
                   chunk.offset == UInt64(offset),

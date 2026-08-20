@@ -74,6 +74,69 @@ func validPSKHalfOpenSessionTimesOutBeforeAcceptance() async throws {
     #expect(await acceptanceRecorder.count == 1)
 }
 
+/// A locked or suspended iPhone stops sending mid-session without closing the
+/// TLS connection. The receiver must abandon that session instead of blocking
+/// on `receive()` forever, otherwise its single active-connection slot stays
+/// taken and every following sync is rejected.
+@Test
+func openSessionThatStopsSendingIsAbandonedAndTheNextClientCanConnect() async throws {
+    let harness = try ReceiverHarness()
+    let psk = Data(repeating: 0x42, count: 32)
+    let identity = Data("phone-1".utf8)
+    let listener = try SyncTestListener(
+        parameters: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .server,
+            requireWiFi: false
+        ),
+        manifest: harness.manifest,
+        destinationRoot: harness.directory,
+        idleTimeout: .milliseconds(250)
+    )
+    let port = try await listener.start()
+    defer { Task { await listener.stop() } }
+
+    func makeConnection() -> FramedConnection {
+        FramedConnection(NWConnection(
+            host: "127.0.0.1",
+            port: port,
+            using: PSKTLSParameters.make(
+                psk: psk,
+                identity: identity,
+                role: .client,
+                requireWiFi: false
+            )
+        ))
+    }
+
+    // Open a valid session, then go silent the way a suspended app does.
+    let silent = SyncClient(connection: makeConnection())
+    _ = try await silent.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: nil
+    )
+
+    for _ in 0..<100 {
+        if !(await listener.recordedSessionErrors()).isEmpty {
+            break
+        }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(await listener.recordedSessionErrors() == [.idleTimedOut])
+
+    // The receiver is free again, so the next run resumes normally.
+    let next = SyncClient(connection: makeConnection())
+    let binding = try await next.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: nil
+    )
+    #expect(binding == "binding-1")
+    _ = try await next.finish()
+}
+
 @Test
 func roundTripSecondSyncSkipsCommittedResource() async throws {
     let bytes = Data(repeating: 0x5a, count: SyncConstants.chunkSize * 2 + 17)

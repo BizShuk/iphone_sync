@@ -61,10 +61,10 @@ final class IOSAppModel {
     @ObservationIgnored private var discoveryTask: Task<Void, Never>?
     @ObservationIgnored private var debugForegroundAutomaticTask: Task<Void, Never>?
     @ObservationIgnored private var activeForegroundRunID: UUID?
+    @ObservationIgnored private let activityAssertion = SyncActivityAssertion()
     @ObservationIgnored private var isSceneActive = false
     @ObservationIgnored private var automaticDebugSchedulerRegistered = false
     @ObservationIgnored private var automaticProductionSchedulerRegistered = false
-    @ObservationIgnored private let automaticCalendar = Calendar.autoupdatingCurrent
 
     var automaticSchedulerRegistered: Bool {
 #if DEBUG
@@ -90,10 +90,7 @@ final class IOSAppModel {
         let deleteAfterSyncStore = IOSDeleteAfterSyncStore()
         let debugPolicy = AutomaticSyncPolicy(cadence: .tenMinutes)
         let productionPolicy = AutomaticSyncPolicy(
-            cadence: .dailyAtLocalTime(
-                hour: automaticProductionStore.dailyHour,
-                minute: automaticProductionStore.dailyMinute
-            )
+            cadence: .thirtyMinutesWhileCharging
         )
         self.photoSource = photoSource
         self.albumStore = albumStore
@@ -224,11 +221,6 @@ final class IOSAppModel {
         case 1: selectedAlbums[0].title
         default: "\(selectedAlbums.count) selected"
         }
-    }
-
-    var automaticProductionSyncDate: Date {
-        get { productionSyncDateFromStoredValues }
-        set { setAutomaticProductionSyncTime(newValue) }
     }
 
     func bootstrap() async {
@@ -405,6 +397,7 @@ final class IOSAppModel {
         guard canSync else { return }
         let runID = UUID()
         activeForegroundRunID = runID
+        activityAssertion.beginRun()
         state = .syncing
         recordOperation(
             .info,
@@ -420,6 +413,7 @@ final class IOSAppModel {
             if activeForegroundRunID == runID {
                 activeForegroundRunID = nil
             }
+            activityAssertion.endRun()
             recordSyncOutcome(outcome, category: "Manual Sync")
             switch outcome {
             case .completed(let summary), .noChanges(let summary):
@@ -532,21 +526,6 @@ final class IOSAppModel {
         refreshAutomaticSchedulers()
     }
 
-    func setAutomaticProductionSyncTime(_ date: Date) {
-        let components = automaticCalendar.dateComponents([.hour, .minute], from: date)
-        let hour = max(0, min(23, components.hour ?? 0))
-        let minute = max(0, min(59, components.minute ?? 0))
-        automaticProductionStore.setDailySyncTime(hour: hour, minute: minute)
-        automaticProductionScheduler.updatePolicy(
-            AutomaticSyncPolicy(
-                cadence: .dailyAtLocalTime(hour: hour, minute: minute),
-                calendar: automaticCalendar
-            )
-        )
-        automaticProductionSync = automaticProductionStore.snapshot
-        refreshAutomaticSchedulers()
-    }
-
     func enteredForeground() {
         guard !isSceneActive else { return }
         isSceneActive = true
@@ -588,6 +567,10 @@ final class IOSAppModel {
         debugForegroundAutomaticTask?.cancel()
         debugForegroundAutomaticTask = nil
         if let activeForegroundRunID {
+            // Hold execution open long enough for the cancellation to reach
+            // the TLS connection. Suspending with the socket still open leaves
+            // the receiver blocked on a sender that will never send again.
+            activityAssertion.beginBackgroundGracePeriod()
             Task {
                 await runtime.cancel(
                     runID: activeForegroundRunID,
@@ -715,15 +698,6 @@ final class IOSAppModel {
         await automaticDebugScheduler.ensureScheduled()
 #endif
         await automaticProductionScheduler.ensureScheduled()
-    }
-
-    private var productionSyncDateFromStoredValues: Date {
-        automaticCalendar.date(
-            bySettingHour: automaticProductionStore.dailyHour,
-            minute: automaticProductionStore.dailyMinute,
-            second: 0,
-            of: automaticCalendar.startOfDay(for: Date())
-        ) ?? Date()
     }
 
     private func loadAlbums() throws {
