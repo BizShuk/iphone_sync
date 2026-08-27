@@ -5,7 +5,6 @@ import SyncCore
 
 enum SyncTrigger: Sendable {
     case manualForeground
-    case automaticForeground
     case automaticBackground
 }
 
@@ -265,12 +264,7 @@ actor IOSSyncRuntime {
                 )
             } onCancel: {
                 Task {
-                    await self.cancel(
-                        runID: request.id,
-                        reason: request.trigger == .automaticForeground
-                            ? .sceneBackgrounded
-                            : .user
-                    )
+                    await self.cancel(runID: request.id, reason: .user)
                 }
             }
             if summary.added == 0, summary.failed == 0 {

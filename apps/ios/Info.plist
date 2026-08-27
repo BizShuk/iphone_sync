@@ -5,7 +5,6 @@
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
 		<string>com.shuk.iphonesync.ios.scheduled-sync</string>
-		<string>com.shuk.iphonesync.ios.scheduled-sync.debug</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>

@@ -57,7 +57,7 @@ flowchart TD
 `IOSPostSyncDeletionController` 在完整 run 成功後處理 candidates：
 
 - toggle off：立即返回，不寫 pending store。
-- foreground manual / debug automatic：先 enqueue，再以一個 `PHPhotoLibrary.performChanges` batch 請求刪除。
+- foreground manual：先 enqueue，再以一個 `PHPhotoLibrary.performChanges` batch 請求刪除。
 - system-launched background automatic：只 enqueue，不在背景嘗試顯示 change confirmation。
 
 ## 5. Pending State
@@ -67,6 +67,7 @@ flowchart TD
 | enabled intent | `IOSDeleteAfterSyncStore` | iOS sandbox `UserDefaults` |
 | fully backed-up pending asset ID / `modificationDate` snapshots | `IOSDeleteAfterSyncStore` | iOS sandbox `UserDefaults` |
 | active PhotoKit deletion request | `IOSPostSyncDeletionController` | transient |
+| pending-confirmation prompt | `PendingDeletionNotifier` | iOS Notification Center 的單一固定 identifier |
 | asset/resource eligibility | `PhotoDeletionCandidateAccumulator` | single sync run only |
 
 Pending ID 只代表某次完整 sync 已確認的 deletion candidate，不是 transfer checkpoint。Mac / Windows manifest 仍是 resource completion 的 authoritative source。
@@ -77,7 +78,8 @@ Pending ID 只代表某次完整 sync 已確認的 deletion candidate，不是 t
 
 - 保留 `PHPhotoLibrary.requestAuthorization(for: .readWrite)` 與 Full Photos Access requirement。
 - 更新 `NSPhotoLibraryUsageDescription`，同時說明 backup 與 optional deletion。
-- 不新增 entitlement。
+- 啟用 toggle 時以 `UNUserNotificationCenter.requestAuthorization(options: [.alert, .sound])` 請求通知授權；被拒不影響刪除流程，只是少了提示。
+- 不新增 entitlement；只用 local notification，不得引入 `aps-environment` 或 remote push。
 - 不新增 `NSPhotoLibraryAddUsageDescription`；本功能不是 add-only access。
 - `isNetworkAccessAllowed = false` invariant 不變。
 
@@ -90,7 +92,9 @@ Pending ID 只代表某次完整 sync 已確認的 deletion candidate，不是 t
 - toggle on、有 pending：顯示 pending count 與 `Delete N Synced Photos` destructive button。
 - deletion active：顯示等待 Photos confirmation，並停用 toggle、sync 與重複 delete action。
 
-Operation Log 使用 `Delete After Sync` category 記錄 enable / disable、pending、request、success、skip 與 failure；不得寫入 asset local identifier。
+Operation Log 使用 `Delete After Sync` category 記錄 enable / disable、pending、request、success、skip 與 failure；不得寫入 asset local identifier。iOS 的 Operation Log 由 `PersistentOperationLogStore` 落地保存，background run 的事件在 process 結束後仍可回查。
+
+Background run 留下 pending 時另發一則 local notification，內容只有等待確認的張數；使用者完成刪除、關閉 toggle 或按 `Forget` 時撤回。Foreground run 直接進入 PhotoKit confirmation，不發通知。
 
 ## 8. 不變條件
 
@@ -98,6 +102,7 @@ Operation Log 使用 `Delete After Sync` category 記錄 enable / disable、pend
 - Wire protocol、`protocolVersion`、resource identity 與 receiver manifest schema 不變。
 - `Delete After Sync` 只處理本次或既有 pending 的 fully backed-up assets，不是來源刪除 propagation。
 - Automatic background timing仍是 iOS best-effort；pending deletion 必須等待 foreground user confirmation。
+- 通知只是提示層：不得成為刪除的前置條件，也不得攜帶 asset identifier。
 - 關閉功能時，所有同步入口（`Sync Now`、Control Center、Shortcuts、automatic run）都不得刪除 Photos assets。
 
 ## 9. 驗證邊界
@@ -108,6 +113,8 @@ Automated tests 驗證：
 - 跨相簿 eligibility 使用 AND，不刪 partial / not-local asset。
 - 同一 asset 在 sync 中或 pending 後版本改變時失去刪除資格。
 - disabled controller 不 queue、不呼叫 deletion service。
+- background run 以 pending 張數發出提示，foreground run 不發提示並在刪除後撤回。
+- 落地 operation log 跨 store instance 還原、依 capacity 截斷最舊項目、clear 後不留殘留。
 - background run queue、foreground action delete。
 - PhotoKit deletion failure 保留 pending IDs。
 - Simulator / generic device compilation 與 plist source invariants。

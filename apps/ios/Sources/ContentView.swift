@@ -451,10 +451,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             zoneHeader("Automatic Sync")
 
-            #if DEBUG
-            AutomaticSyncCard(model: model, mode: .debug)
-            #endif
-            AutomaticSyncCard(model: model, mode: .production)
+            AutomaticSyncCard(model: model)
         }
     }
 
@@ -583,16 +580,15 @@ struct ContentView: View {
 
 private struct AutomaticSyncCard: View {
     @Bindable var model: IOSAppModel
-    let mode: IOSAppModel.AutomaticSyncMode
     @State private var showTimingInfo = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 HStack(spacing: 6) {
-                    Text(cardTitle)
+                    Text("AUTOMATIC SYNC")
                         .font(Tokens.Typography.body.weight(.semibold))
-                        .foregroundStyle(cardTint)
+                        .foregroundStyle(Tokens.Palette.signal)
                     Button {
                         showTimingInfo = true
                     } label: {
@@ -612,7 +608,7 @@ private struct AutomaticSyncCard: View {
                     "Automatically sync",
                     isOn: Binding(
                         get: { snapshot.isEnabled },
-                        set: { model.setAutomaticSyncEnabled($0, mode: mode) }
+                        set: { model.setAutomaticSyncEnabled($0) }
                     )
                 )
                 .labelsHidden()
@@ -633,7 +629,7 @@ private struct AutomaticSyncCard: View {
             statRow("Last success", value: formattedDate(snapshot.lastSuccessAt))
             statRow("Next attempt", value: formattedDate(snapshot.nextEligibleAt))
 
-            statRow("Cadence", value: cadenceText)
+            statRow("Cadence", value: "Every 30 minutes while charging")
 
         }
         .padding(Tokens.Layout.cardPadding)
@@ -653,35 +649,11 @@ private struct AutomaticSyncCard: View {
     }
 
     private var snapshot: IOSAutomaticSyncSnapshot {
-        switch mode {
-        case .debug:
-            model.automaticDebugSync
-        case .production:
-            model.automaticProductionSync
-        }
+        model.automaticSync
     }
 
     private var isRunning: Bool {
-        switch mode {
-        case .debug:
-            model.automaticDebugRunIsActive
-        case .production:
-            model.automaticProductionRunIsActive
-        }
-    }
-
-    private var cadenceText: String {
-        mode == .debug
-            ? "Every 10 minutes"
-            : "Every 30 minutes while charging"
-    }
-
-    private var cardTitle: String {
-        mode == .debug ? "AUTOMATIC SYNC (DEBUG)" : "AUTOMATIC SYNC"
-    }
-
-    private var cardTint: Color {
-        mode == .debug ? Tokens.Palette.alert : Tokens.Palette.signal
+        model.automaticRunIsActive
     }
 
     private func statRow(_ label: String, value: String) -> some View {

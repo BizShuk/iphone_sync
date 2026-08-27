@@ -12,6 +12,8 @@
 - [ ] 在 signed 實體 iPhone 驗證 `Delete After Sync` 預設關閉、enable warning、Photos allow / cancel、disable 清 pending 與 App relaunch persistence
 - [ ] 驗證 mixed-resource asset（Live Photo / RAW+JPEG / adjustment / iCloud-only）只有全部 resource confirmed 才刪除，且 `iCloud Photos` 跨裝置與 `Recently Deleted` 行為符合警告
 - [ ] 驗證 background sync 只保存 pending IDs，App relaunch 後由 foreground `Delete N Synced Photos` confirmation 完成或安全取消
+- [ ] 在 signed 實體 iPhone 驗證背景 automatic run 留下 pending 時會送出 local notification，且完成刪除 / 關閉 toggle / `Forget` 後通知被撤回；拒絕通知授權時排隊與刪除行為不變
+- [ ] 驗證背景 automatic run 的 `Operation Log` 事件在 App process 被系統終止後仍可於下次開啟時回查，且 500 筆上限與 clear 行為正確
 - [ ] 驗證中斷續傳、iPhone 進入背景、Mac sleep、VPN、router isolation 與磁碟空間不足
 - [ ] 在實機驗證長片段同步期間 iPhone 不自動鎖定，手動鎖定後 receiver 於 45 秒內回到 `Ready` 且下一次從 checkpoint 續傳
 - [ ] 決定簽署、公證 (notarization) 與安裝/發佈方式

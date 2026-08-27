@@ -22,16 +22,13 @@ iPhone UI 顯示 opt-in、cadence、`Background App Refresh`、last attempt/succ
 
 | Build / trigger | Policy | Contract |
 |---|---|---|
-| Debug background | `earliestBeginDate = now + 10 minutes`，identifier `com.shuk.iphonesync.ios.scheduled-sync.debug` | iOS 不會更早啟動；可能晚很多，也可能不啟動。 |
-| Debug foreground test | App active 時依 persisted `Eligible after` 檢查 | 未到期只等待剩餘時間；回到前景時若已到期便立即用相同 automatic runtime 驗證 flow。 |
-| Release 全部 outcome | `earliestBeginDate = now + 30 minutes` + `requiresExternalPower = true`，identifier `com.shuk.iphonesync.ios.scheduled-sync` | 每次 launch 都只是一次嘗試；成功與失敗以相同 interval 重新武裝，沒有每日配額。 |
-| Release power gate | `requiresExternalPower = true` | iPhone 未充電時 iOS 不啟動這個 task；沒有 App 端的電池判斷或倒數。 |
+| 全部 outcome | `earliestBeginDate = now + 30 minutes` + `requiresExternalPower = true`，唯一 identifier `com.shuk.iphonesync.ios.scheduled-sync` | 每次 launch 都只是一次嘗試；成功與失敗以相同 interval 重新武裝，沒有每日配額。 |
+| Power gate | `requiresExternalPower = true` | iPhone 未充電時 iOS 不啟動這個 task；沒有 App 端的電池判斷或倒數。 |
 | Manual | `Sync Now` | 前景立即嘗試，不受 background scheduler 時機控制。 |
 
-`BGProcessingTask` 是 best-effort system scheduling，不是 cron。`earliestBeginDate` 只限制「不得早於」，actual launch 與 runtime duration 由 iOS 決定。Eligibility 是 relative interval，不是 wall-clock appointment：persisted `Eligible after` 即使已過期也保持原值，重進 App 不得把它往後推。沒有 local day 概念，因此也沒有「今天已完成」這種 deferral。`BGTaskSchedulerPermittedIdentifiers` 必須同時包含 production 與 debug identifier；缺少時 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕 submit，scheduler 立即回滾 enabled intent 並 emit error，使用者切換會被視為「沒成功」。Debug scheduler 只在 `#if DEBUG` build 註冊與 reconcile，Release build 不暴露前景 10 分鐘測試迴圈。
+`BGProcessingTask` 是 best-effort system scheduling，不是 cron。`earliestBeginDate` 只限制「不得早於」，actual launch 與 runtime duration 由 iOS 決定。Eligibility 是 relative interval，不是 wall-clock appointment：persisted `Eligible after` 即使已過期也保持原值，重進 App 不得把它往後推。沒有 local day 概念，因此也沒有「今天已完成」這種 deferral。`BGTaskSchedulerPermittedIdentifiers` 必須包含這個唯一 identifier；缺少時 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕 submit，scheduler 立即回滾 enabled intent 並 emit error，使用者切換會被視為「沒成功」。只有這一條 automatic lane：沒有第二個 cadence、沒有第二個 identifier、也沒有前景測試迴圈。
 
-Startup 與 scene transition 以 lifecycle edge 為準，不因同一 active/background state 的重複 callback 再 reconcile。Reconcile 會先查詢同 identifier 的 pending request；既有 request 的 eligibility 相同或更早時直接保留，只有新目標更早時才 replacement submit。Debug persisted eligibility 已過期時，App 回到前景會立即執行 foreground test，而不是重新計算 `now + 10 minutes`。Debug lane 維持 `requiresExternalPower = false`，讓 launch path 不必接電源即可驗證。
-
+Startup 與 scene transition 以 lifecycle edge 為準，不因同一 active/background state 的重複 callback 再 reconcile。Reconcile 會先查詢同 identifier 的 pending request；既有 request 的 eligibility 相同或更早時直接保留，只有新目標更早時才 replacement submit。
 官方契約：
 
 - [Choosing Background Strategies for Your App](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)
@@ -52,7 +49,7 @@ Automatic run 只有在下列條件同時成立時才傳輸：
 
 ```mermaid
 flowchart TD
-    A["Sync Now / foreground Debug timer / BGProcessingTask"] -->|"SyncRunRequest"| B["IOSSyncRuntime single-flight"]
+    A["Sync Now / BGProcessingTask"] -->|"SyncRunRequest"| B["IOSSyncRuntime single-flight"]
     B -->|"Photos + selected albums + paired peer"| C["Prerequisite gate"]
     C -->|"exact paired receiverID"| D["Bonjour Wi-Fi discovery"]
     D -->|"TLS-PSK authentication"| E["IOSSyncCoordinator"]
@@ -64,9 +61,9 @@ flowchart TD
 
 | Component | Responsibility |
 |---|---|
-| `AutomaticSyncPolicy` | Debug 10-minute、Release local-midnight、retry 與 bounded-run policy。 |
+| `AutomaticSyncPolicy` | 單一 cadence：`+30 minutes` interval、`requiresExternalPower` 與 restore policy。 |
 | `IOSAutomaticSyncStore` | 保存 enabled intent、last attempt/success/outcome/message 與 next eligible time。 |
-| `AutomaticSyncScheduler` | 由 `iPhoneSyncApp.init()` 在 `MainActor` / main queue 註冊 production identifier `com.shuk.iphonesync.ios.scheduled-sync` 與（`#if DEBUG` only）debug identifier `com.shuk.iphonesync.ios.scheduled-sync.debug`，以 pending-request reconcile 與 execution gate 管理 idempotent request、expiration、single completion 與 reschedule。 |
+| `AutomaticSyncScheduler` | 由 `iPhoneSyncApp.init()` 在 `MainActor` / main queue 註冊唯一 identifier `com.shuk.iphonesync.ios.scheduled-sync`，以 pending-request reconcile 與 execution gate 管理 idempotent request、expiration、single completion 與 reschedule。 |
 | `IOSSyncRuntime` | Manual / automatic 共用 prerequisite reload、single-flight、run outcome、budget 與 cancellation。 |
 | `IOSSyncCoordinator` | 執行 PhotoKit → Bonjour → TLS → wire protocol；automatic 使用 bounded single discovery，manual 保留 foreground retries。 |
 | `ReceiverController` | 被動接收、listener retry、pairing-close restore、opening deadline 與 transfer session。 |
@@ -87,7 +84,7 @@ flowchart TD
 
 | Outcome | BG completion | Reschedule |
 |---|---|---|
-| completed / no changes | `true` | Debug `+10 minutes`；Release `+30 minutes` |
+| completed / no changes | `true` | `+30 minutes` |
 | Mac / network unavailable、already running | `true` | 同上；沒有獨立的 retry interval |
 | prerequisite / pairing needs attention | `true` | 同上，不自動 repair |
 | expiration / internal failure | `false` | 同上；未傳完的部分由 receiver checkpoint 續傳 |
@@ -109,7 +106,7 @@ Mac 仍必須醒著、App 已啟動、destination bookmark 有效且 normal list
 iOS target 宣告：
 
 - `UIBackgroundModes = [processing]`
-- `BGTaskSchedulerPermittedIdentifiers = [com.shuk.iphonesync.ios.scheduled-sync, com.shuk.iphonesync.ios.scheduled-sync.debug]`
+- `BGTaskSchedulerPermittedIdentifiers = [com.shuk.iphonesync.ios.scheduled-sync]`
 
 這兩項是 Info.plist capability declarations，不是 privacy prompt，也不是 sandbox entitlement。Photos Full Access 與 Local Network TCC 仍須在使用者可操作的前景流程先完成；automatic run 不顯示 pairing 或 permission UI。完整清單見 [README.permission.md](../../README.permission.md)。
 

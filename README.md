@@ -65,7 +65,7 @@ flowchart LR
 | `0:24` | 再按一次 `Sync Now`，摘要 `Added 0` / `Already 812`；帶到 `Automatic Sync` toggle | 「重跑只補新的。打開自動同步，之後不用再記得。」                  |
 | `0:29` | 回到 Mac menu bar 圖示，淡出                                                      | 「你的照片，你的硬碟。」                                          |
 
-錄影前置檢查 (pre-flight)：Mac 與 iPhone 同一 Wi-Fi、iPhone 已關閉勿擾以外的通知、備份目的地先清空、`Operation Log` 先 clear、Debug 卡片在 Release build 不會出現。
+錄影前置檢查 (pre-flight)：Mac 與 iPhone 同一 Wi-Fi、iPhone 已關閉勿擾以外的通知、備份目的地先清空、`Operation Log` 先 clear。
 
 ## 2. 使用方式 (How to Use)
 
@@ -83,7 +83,7 @@ flowchart LR
 
 1. 同步中可按 `Cancel`；同一時間只允許一個 run（single-flight）。
 2. 完成後 `LAST SYNC` 顯示 `Added` / `Already` / `Not local` / `Failed` 四項摘要。
-3. 若明確啟用 `Delete After Sync`，foreground sync 完成後 Photos 會要求確認刪除；background sync 只建立 pending list，回到 App 後按 `Delete N Synced Photos`。
+3. 若明確啟用 `Delete After Sync`，foreground sync 完成後 Photos 會要求確認刪除；background sync 只建立 pending list 並發通知提醒，回到 App 後按 `Delete N Synced Photos`。
 
 ### 檔案落點 (Storage Mode)
 
@@ -99,11 +99,10 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 
 ### Automatic Sync 的真實語意
 
-- Release：**iPhone 充電中每 30 分鐘嘗試一次**。沒有指定時間、沒有每日配額，成功與失敗都以相同的 30 分鐘重新排下一次。
+- **iPhone 充電中每 30 分鐘嘗試一次**。沒有指定時間、沒有每日配額，成功與失敗都以相同的 30 分鐘重新排下一次。
 - 未充電時 iOS 不會啟動 automatic sync。充電是換取較長背景執行視窗的條件，由 iOS 判斷，App 不讀取電池狀態。
 - 單次執行時間`不設上限`：iOS 給多久就傳多久，到點由系統中止，未傳完的部分由 Mac / Windows 的 checkpoint 續傳。
 - 上一次還在執行時，下一次啟動直接略過，並立刻重新排程，不會有兩條連線。
-- Debug：另有獨立的 `AUTOMATIC SYNC (DEBUG)` 卡片，最早為提交後 `10 分鐘`、不要求充電，並附前景測試迴圈；Release build 不註冊此迴圈。
 - 全部都只是 `earliestBeginDate`。iOS 不保證準時、不保證固定週期、不保證一定提供 runtime，實際執行可能晚很多。
 - App 啟動與 scene 切換會 reconcile 既有 pending request：同一 request 若不晚於目前目標便保留，不重複提交、不把 `Next attempt` 往後推。
 - Mac 不可達、系統未啟動 background task 或背景排程不可用時，請直接用 `Sync Now`。
@@ -112,8 +111,8 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 
 - `Delete After Sync` 是獨立、持久化且預設關閉的 toggle；關閉或按 `Forget` 時會清除 pending deletion IDs。
 - 刪除單位是整張 photo / video / Live Photo 對應的 `PHAsset`。每個 PhotoKit resource 都必須在每個已選相簿 session 收到 `committed` 或 `already present`；只要一個 resource 是 `Not local`、failed、cancelled 或尚未完成，整個 asset 都保留。
-- Foreground manual / Debug automatic run 完整成功後，App 以一個 PhotoKit change batch 請求刪除，iOS 仍顯示 system confirmation。使用者取消時不刪除，candidate 保留為 pending。
-- System-launched background run 無法安全顯示 foreground change confirmation，因此只保存 fully backed-up asset ID / `modificationDate` snapshots。回到 App 後，`AFTER SYNC` card 顯示數量與 `Delete N Synced Photos` button；刪除前版本已改變的 asset 會保留，必須等下一次完整同步。
+- Foreground manual run 完整成功後，App 以一個 PhotoKit change batch 請求刪除，iOS 仍顯示 system confirmation。使用者取消時不刪除，candidate 保留為 pending。
+- System-launched background run 無法安全顯示 foreground change confirmation，因此只保存 fully backed-up asset ID / `modificationDate` snapshots，並在取得通知授權時發出一則 local notification 告知有幾張照片等待確認。回到 App 後，`AFTER SYNC` card 顯示數量與 `Delete N Synced Photos` button；刪除前版本已改變的 asset 會保留，必須等下一次完整同步。通知只說數量，不含任何 asset identifier；完成刪除、關閉 toggle 或按 `Forget` 時撤回。
 - Photos deletion 會從整個 library 移除 asset，不是只從所選相簿移除；若使用 `iCloud Photos`，也會影響同 Apple Account 的其他裝置。Receiver 已 committed 的 Finder / Windows files 永遠保留。
 
 完整 contract 見 [Delete After Sync 規格](docs/specs/2026-07-27-delete-after-sync.md)。
@@ -128,7 +127,7 @@ iPhone 必須使用 Wi-Fi；Mac 可使用同一 LAN 的 Wi-Fi 或 Ethernet。Man
 
 ### Operation Log
 
-iPhone 主畫面與 Mac Setup 都有 `Operation Log` panel，以 `info`、`success`、`warning`、`error` 顯示 App、設定、Photos、相簿、配對、discovery、scheduler、listener、session、resource 與 sync outcome。兩端各保留本次 process 最新 `500` 筆並同步寫入 Apple Unified Logging；iPhone 可展開全部或清除，Mac 可 `Copy All` 或清除。為避免大型影片洗掉可讀事件，panel 記錄每個 resource lifecycle，不逐一記錄 1 MiB chunk。PSK、六位數 pairing code、cryptographic identity、source binding 與 content hash 不會進入 panel。
+iPhone 主畫面與 Mac Setup 都有 `Operation Log` panel，以 `info`、`success`、`warning`、`error` 顯示 App、設定、Photos、相簿、配對、discovery、scheduler、listener、session、resource 與 sync outcome。兩端各保留最新 `500` 筆並同步寫入 Apple Unified Logging；iPhone 可展開全部或清除，Mac 可 `Copy All` 或清除。iPhone 端的 timeline `跨 App 啟動保存`：背景 automatic run 是在 iOS 短暫喚醒、結束後即終止的 process 裡執行的，若只留在記憶體，那次 run 的所有事件（包含「有照片等待前景刪除確認」）會在 process 結束時消失，背景行為將無從稽核。Mac receiver 是常駐 process，維持 in-memory buffer。為避免大型影片洗掉可讀事件，panel 記錄每個 resource lifecycle，不逐一記錄 1 MiB chunk。PSK、六位數 pairing code、cryptographic identity、source binding 與 content hash 不會進入 panel。
 
 ## 3. 安裝與設定步驟 (Setup Step by Step)
 
@@ -222,9 +221,8 @@ iPhone sender：
 ./scripts/run-iphone.sh --console   # 重啟 App 並附掛 process console
 ```
 
-- 主畫面 `Operation Log` 展開後可看到 App、Photos、相簿、配對、discovery、scheduler、run、session 與每個 resource 的 levelled 事件。
-- Debug build 才有 `AUTOMATIC SYNC (DEBUG)` 卡片與 10 分鐘前景測試迴圈，用來驗證排程路徑而不必等到半夜。
-- `Delete After Sync` 的 pending count 與每次 request / success / cancel / skip 都記在 `Operation Log`；log 只記數量，不包含 Photos asset identifiers。
+- 主畫面 `Operation Log` 展開後可看到 App、Photos、相簿、配對、discovery、scheduler、run、session 與每個 resource 的 levelled 事件；背景 automatic run 的事件跨 App 啟動保存，可事後回查那次 run 到底做了什麼。
+- `Delete After Sync` 的 pending count 與每次 request / success / cancel / skip 都記在 `Operation Log`；log 只記數量，不包含 Photos asset identifiers。背景 run 留下 pending 時另發一則 local notification；若沒收到，先確認 iOS 設定裡本 App 的通知未被關閉，`Operation Log` 仍會留下同一筆紀錄。
 - 背景排程被系統拒絕時，`Background App Refresh` 文字與 `Operation Log` 會標示原因。
 - Control Center 觸發若無反應，先確認已配對且 prerequisites 齊全；不符合時 `Operation Log` 會記一筆 `Widget trigger ignored`。
 
@@ -235,7 +233,7 @@ iPhone sender：
 | `Find Mac` 找不到 Mac | 兩端同一 Wi-Fi、Mac 配對視窗仍在兩分鐘內、非 guest network / VLAN / VPN、router 未開 client isolation    |
 | 配對碼輸入失敗        | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone`                                              |
 | 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                   |
-| Automatic 從未執行    | `earliestBeginDate` 不是保證；先用 Debug 卡片驗證路徑，再用 `Sync Now` 作為 fallback                     |
+| Automatic 從未執行    | `earliestBeginDate` 不是保證；先確認 iPhone 在充電且 `Background App Refresh` 可用，再用 `Sync Now` 作為 fallback |
 | 已同步但尚未刪除      | Background run 只建立 pending list；回到 App，在 `AFTER SYNC` 按 `Delete N Synced Photos` 並確認         |
 | Mac 寫入被拒          | 目的地同名項目是檔案，或 symlink 解析不到資料夾，`Operation Log` 會標示；換一個 destination 或移除該項目 |
 
@@ -248,7 +246,7 @@ bash scripts/verify.sh                          # canonical 全量驗證（含 S
 swift test --package-path packages/SyncCore     # 只跑 Swift package tests
 ```
 
-驗證入口會執行 Swift package tests、重新產生 Xcode project、建置 macOS、iOS Simulator 與 `Release` generic iOS device targets、檢查 plist / entitlements / local-only source invariants，以及 tracked、staged、untracked whitespace checks。`Release` device build 會實際編譯 `#if DEBUG` 之外的 production cadence 分支。建置使用 `CODE_SIGNING_ALLOWED=NO`。
+驗證入口會執行 Swift package tests、重新產生 Xcode project、建置 macOS、iOS Simulator 與 `Release` generic iOS device targets、檢查 plist / entitlements / local-only source invariants，以及 tracked、staged、untracked whitespace checks。`Release` device build 會實際編譯上架用的組態。建置使用 `CODE_SIGNING_ALLOWED=NO`。
 
 Windows 11 receiver 端會額外跑 `scripts/verify-windows.sh`：49 個 vitest、SyncCore.Windows 與 apps/windows 兩個 TypeScript build、source-string invariants（HKDF labels、`IPS1` magic、`iPhoneSync` 容器、`TLS_PSK_WITH_AES_128_GCM_SHA256`、`powerMonitor` 等）。`npm run dist`（NSIS + portable）只在 Windows MSYS shell 觸發。
 
@@ -309,9 +307,10 @@ App 設定依資料敏感度使用 Apple 原生持久層，不集中到單一可
 | album mappings、完成狀態、續傳 checkpoint                                                  | SwiftData in App container `Application Support`                                 |
 | 開機自動執行                                                                               | `SMAppService.mainApp` login item registration                                   |
 | Setup window size/position、menu-bar item position                                         | AppKit autosave                                                                  |
-| iOS / macOS operation timeline                                                             | 各 App process 的 bounded in-memory buffer（最新 500 筆）+ Apple Unified Logging |
+| iOS operation timeline                                                                     | App container 內的 bounded on-disk log（最新 500 筆，跨啟動保存）+ Apple Unified Logging |
+| macOS operation timeline                                                                   | 常駐 App process 的 bounded in-memory buffer（最新 500 筆）+ Apple Unified Logging |
 
-`Automatic Sync` 預設關閉；關閉時取消 pending request 與 active automatic run，不刪除 pairing、相簿選擇、partial 或 manifest。`Delete After Sync` 也預設關閉；關閉時清除 pending deletion IDs 且不呼叫 PhotoKit deletion，receiver files 不受影響。`Launch at Login` 首次預設啟用，使用者關閉後保存該選擇。六位數 pairing code、active connection、active deletion request 與 panel 中的 operation timeline 是 transient runtime state，不跨重啟保存。
+`Automatic Sync` 預設關閉；關閉時取消 pending request 與 active automatic run，不刪除 pairing、相簿選擇、partial 或 manifest。`Delete After Sync` 也預設關閉；關閉時清除 pending deletion IDs 且不呼叫 PhotoKit deletion，receiver files 不受影響。`Launch at Login` 首次預設啟用，使用者關閉後保存該選擇。六位數 pairing code、active connection 與 active deletion request 是 transient runtime state，不跨重啟保存；Mac 的 operation timeline 同樣是 transient，iPhone 的則跨啟動保存。
 
 ### 安全與資料邊界 (Security Boundaries)
 
@@ -454,8 +453,7 @@ REQUIREMENTS
 | App Icon            | `1024 × 1024` 不透明 | `appstore/app-icon.png`（App 內為 `apps/ios/Sources/Assets.xcassets/AppIcon.appiconset`） |
 | App Preview 影片    | 選填，未製作         | 腳本見 [影片示範腳本](#影片示範腳本-video-demo-transcript)                                |
 
-截圖必須呈現實際 shipped 畫面；`AUTOMATIC SYNC (DEBUG)` 卡片只在 Debug build 出現，不得入鏡。
-目前四張仍是舊 Debug build 畫面，送審前必須以 Release build 在已配對 iPhone 重拍。
+截圖必須呈現實際 shipped 畫面。目前四張仍是舊畫面（含已移除的 `AUTOMATIC SYNC (DEBUG)` 卡片或舊名稱），送審前必須以 Release build 在已配對 iPhone 重拍。
 
 拍完一律跑一次：
 
@@ -501,7 +499,7 @@ transfer. Background processing is used only for the opt-in Automatic Sync.
 
 逐欄 evidence 與完整 gap 清單見 [docs/app-store-connect.md](docs/app-store-connect.md)。以下每一項都會影響能否通過審查或上傳，尚未完成：
 
-- **截圖仍是舊 Debug build 畫面**：四張都含 `AUTOMATIC SYNC (DEBUG)` 卡片或舊名稱，屬 `Guideline 2.3`。需以 Release build 在已配對 iPhone 重拍，再跑 `scripts/prepare-screenshots.sh`。
+- **截圖仍是舊畫面**：四張都含已移除的 `AUTOMATIC SYNC (DEBUG)` 卡片或舊名稱，屬 `Guideline 2.3`。需以 Release build 在已配對 iPhone 重拍，再跑 `scripts/prepare-screenshots.sh`。
 - **缺少 `PrivacyInfo.xcprivacy`**：iOS target 使用 `UserDefaults`（reason `CA92.1`）與 `FileManager.attributesOfItem`（file timestamp，reason `C617.1`）等 required-reason APIs，未附 privacy manifest 會在上傳後收到 `ITMS-91053` 通知。
 - **Receiver 下載路徑未定案**：description 與 review notes 都指向「release page」，但 `github.com/bizshuk/iphone_sync` 目前非公開（releases API 回 `404`），審查員拿不到 receiver，屬 `Guideline 2.1`。需確定對外的固定 URL 後回填。
 - **公開 policy 站台未重新發佈**：`appstore/*.html` 已改名為 `Photo Sync`，`bizshuk.github.io` 上的線上版本仍是舊文案。

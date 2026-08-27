@@ -47,7 +47,6 @@ private final class LiveAutomaticSyncRequestScheduler: AutomaticSyncRequestSched
 @MainActor
 final class AutomaticSyncScheduler {
     static let taskIdentifier = "com.shuk.iphonesync.ios.scheduled-sync"
-    static let debugTaskIdentifier = "com.shuk.iphonesync.ios.scheduled-sync.debug"
 
     private let runtime: IOSSyncRuntime
     private let store: IOSAutomaticSyncStore
@@ -62,7 +61,6 @@ final class AutomaticSyncScheduler {
     private let taskIdentifier: String
     private var isRegistered = false
     private var backgroundExecution: BackgroundExecution?
-    private var foregroundRunID: UUID?
     private var activeRunIDs: Set<UUID> = []
     private var scheduleReconcileIsActive = false
 
@@ -168,8 +166,7 @@ final class AutomaticSyncScheduler {
                 execution.forcedOutcome = .cancelled
                 execution.worker?.cancel()
             }
-            let runIDs = [foregroundRunID, backgroundExecution?.runID].compactMap { $0 }
-            for runID in runIDs {
+            if let runID = backgroundExecution?.runID {
                 Task {
                     await runtime.cancel(runID: runID, reason: .user)
                 }
@@ -232,56 +229,6 @@ final class AutomaticSyncScheduler {
             return false
         }
         return desiredDate < pendingDate
-    }
-
-    func runForegroundAutomatic() async -> SyncRunOutcome {
-        guard store.snapshot.isEnabled else {
-            return .cancelled
-        }
-        guard foregroundRunID == nil else {
-            return .deferred(.alreadyRunning)
-        }
-        let runID = UUID()
-        foregroundRunID = runID
-        let attemptDate = now()
-        emit(.info, "Starting a foreground automatic sync attempt.")
-        store.recordAttempt(at: attemptDate)
-        guard isPaired() else {
-            let outcome = SyncRunOutcome.deferred(.pairingRequired)
-            emit(.warning, "No iPhone paired; foreground automatic sync was skipped.")
-            record(outcome, at: attemptDate)
-            emitOutcome(outcome, trigger: "Foreground automatic sync")
-            _ = replaceSchedule(reason: scheduleReason(after: outcome))
-            publishSnapshot()
-            foregroundRunID = nil
-            return outcome
-        }
-        beginRun(runID)
-        publishSnapshot()
-        let runtime = runtime
-        let outcome = await withTaskCancellationHandler {
-            await runtime.run(SyncRunRequest(
-                id: runID,
-                trigger: .automaticForeground,
-                maximumElapsed: nil
-            ))
-        } onCancel: {
-            Task {
-                await runtime.cancel(
-                    runID: runID,
-                    reason: .sceneBackgrounded
-                )
-            }
-        }
-        if foregroundRunID == runID {
-            foregroundRunID = nil
-        }
-        endRun(runID)
-        record(outcome, at: now())
-        emitOutcome(outcome, trigger: "Foreground automatic sync")
-        _ = replaceSchedule(reason: scheduleReason(after: outcome))
-        publishSnapshot()
-        return outcome
     }
 
     private func launch(_ task: BGProcessingTask) {

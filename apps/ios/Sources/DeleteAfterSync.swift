@@ -173,6 +173,7 @@ struct PhotoAssetDeletionService: Sendable {
 final class IOSPostSyncDeletionController {
     private let store: IOSDeleteAfterSyncStore
     private let deletionService: PhotoAssetDeletionService
+    private let notifier: PendingDeletionNotifier
     private let onSnapshotChange: (IOSDeleteAfterSyncSnapshot) -> Void
     private let onOperation: (OperationLogEvent) -> Void
     private var isDeleting = false
@@ -180,11 +181,13 @@ final class IOSPostSyncDeletionController {
     init(
         store: IOSDeleteAfterSyncStore,
         deletionService: PhotoAssetDeletionService,
+        notifier: PendingDeletionNotifier = .disabled,
         onSnapshotChange: @escaping (IOSDeleteAfterSyncSnapshot) -> Void = { _ in },
         onOperation: @escaping (OperationLogEvent) -> Void = { _ in }
     ) {
         self.store = store
         self.deletionService = deletionService
+        self.notifier = notifier
         self.onSnapshotChange = onSnapshotChange
         self.onOperation = onOperation
     }
@@ -199,6 +202,14 @@ final class IOSPostSyncDeletionController {
         guard !isDeleting else { return }
         store.setEnabled(enabled)
         publishSnapshot()
+        let notifier = notifier
+        Task {
+            if enabled {
+                await notifier.requestAuthorization()
+            } else {
+                await notifier.clearPending()
+            }
+        }
         emit(
             .info,
             enabled
@@ -225,11 +236,13 @@ final class IOSPostSyncDeletionController {
         }
 
         if trigger == .automaticBackground {
+            let pendingCount = store.pendingAssetIDs.count
             emit(
                 .warning,
-                "\(store.pendingAssetIDs.count) synced photo(s) are waiting "
+                "\(pendingCount) synced photo(s) are waiting "
                     + "for foreground deletion confirmation."
             )
+            await notifier.notifyPending(pendingCount)
             return
         }
 
@@ -259,6 +272,7 @@ final class IOSPostSyncDeletionController {
         do {
             let result = try await deletionService.delete(pendingCandidates)
             store.resolve(result.resolvedAssetIDs)
+            await notifier.clearPending()
             if !result.deletedAssetIDs.isEmpty {
                 emit(
                     .success,

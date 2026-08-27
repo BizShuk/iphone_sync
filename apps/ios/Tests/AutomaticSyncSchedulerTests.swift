@@ -6,17 +6,17 @@ import XCTest
 
 @MainActor
 final class AutomaticSyncSchedulerTests: XCTestCase {
-    func testAppInfoPlistPermitsProductionAndDebugTaskIdentifiers() throws {
+    func testAppInfoPlistPermitsOnlyTheAutomaticSyncTaskIdentifier() throws {
         let permittedIdentifiers = try XCTUnwrap(
             Bundle.main.object(
                 forInfoDictionaryKey: "BGTaskSchedulerPermittedIdentifiers"
             ) as? [String]
         )
 
-        XCTAssertTrue(Set([
-            AutomaticSyncScheduler.taskIdentifier,
-            AutomaticSyncScheduler.debugTaskIdentifier,
-        ]).isSubset(of: Set(permittedIdentifiers)))
+        XCTAssertEqual(
+            permittedIdentifiers,
+            [AutomaticSyncScheduler.taskIdentifier]
+        )
     }
 
     func testNotPermittedSubmissionDisablesAutomaticSync() async {
@@ -140,7 +140,6 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         let (scheduler, store, defaults) = makeScheduler(
             now: now,
             requestScheduler: requestScheduler,
-            policy: AutomaticSyncPolicy(cadence: .thirtyMinutesWhileCharging)
         )
         defer {
             defaults.removePersistentDomain(forName: defaultsSuiteName)
@@ -160,27 +159,6 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         XCTAssertEqual(store.snapshot.nextEligibleAt, elapsedDate)
     }
 
-    func testDebugScheduleDoesNotRequireExternalPower() async {
-        let now = Date(timeIntervalSince1970: 1_774_300_000)
-        let requestScheduler = FakeAutomaticSyncRequestScheduler()
-        let (scheduler, store, defaults) = makeScheduler(
-            now: now,
-            requestScheduler: requestScheduler
-        )
-        defer {
-            defaults.removePersistentDomain(forName: defaultsSuiteName)
-        }
-        store.setEnabled(true)
-
-        await scheduler.ensureScheduled()
-
-        XCTAssertEqual(requestScheduler.submittedExternalPowerFlags, [false])
-        XCTAssertEqual(
-            store.snapshot.nextEligibleAt,
-            now.addingTimeInterval(10 * 60)
-        )
-    }
-
     private var defaultsSuiteName: String {
         "AutomaticSyncSchedulerTests"
     }
@@ -188,7 +166,7 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
     private func makeScheduler(
         now: Date,
         requestScheduler: FakeAutomaticSyncRequestScheduler,
-        policy: AutomaticSyncPolicy = AutomaticSyncPolicy(cadence: .tenMinutes)
+        policy: AutomaticSyncPolicy = AutomaticSyncPolicy()
     ) -> (
         scheduler: AutomaticSyncScheduler,
         store: IOSAutomaticSyncStore,

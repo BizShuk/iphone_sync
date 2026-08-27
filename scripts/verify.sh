@@ -106,7 +106,10 @@ xcodebuild -quiet \
     build
 
 test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.0 raw -o - apps/ios/Info.plist)" = "com.shuk.iphonesync.ios.scheduled-sync"
-test "$(plutil -extract BGTaskSchedulerPermittedIdentifiers.1 raw -o - apps/ios/Info.plist)" = "com.shuk.iphonesync.ios.scheduled-sync.debug"
+if plutil -extract BGTaskSchedulerPermittedIdentifiers.1 raw -o - apps/ios/Info.plist \
+    >/dev/null 2>&1; then
+    exit 1
+fi
 test "$(plutil -extract UIBackgroundModes.0 raw -o - apps/ios/Info.plist)" = "processing"
 test "$(plutil -extract NSPhotoLibraryUsageDescription raw -o - apps/ios/Info.plist)" \
     = "Select albums, back up their original resources, and optionally delete fully backed-up photos after confirmation."
@@ -131,6 +134,11 @@ rg -F 'candidate.modificationDate == asset.modificationDate' apps/ios/Sources/Ph
 rg -F 'case assetFinished(' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
 rg -F 'guard store.isEnabled else { return }' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
 rg -F 'trigger == .automaticBackground' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
+rg -F 'await notifier.notifyPending(pendingCount)' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
+rg -F 'await notifier.clearPending()' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
+rg -F 'operationLogStore.loadEntries()' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'operationLogStore.append(entry)' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'FileProtectionType.completeUntilFirstUserAuthentication' apps/ios/Sources/PersistentOperationLog.swift >/dev/null
 rg -F 'parameters.includePeerToPeer = false' packages/SyncCore/Sources/SyncCore >/dev/null
 rg -F 'TLS_PSK_WITH_AES_128_GCM_SHA256' packages/SyncCore/Sources/SyncCore/PSKTLSParameters.swift >/dev/null
 rg -F 'private static let receiverRetryDelays: [UInt64] = [0, 1, 2, 4]' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
@@ -149,9 +157,7 @@ rg -F 'restoredRequestDate(' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev
 rg -F 'requestScheduler.pendingRequests()' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
 rg -F 'guard !isSceneActive else { return }' apps/ios/Sources/IOSAppModel.swift >/dev/null
 rg -F 'guard isSceneActive else { return }' apps/ios/Sources/IOSAppModel.swift >/dev/null
-rg -F 'nextEligibleAt: self.automaticDebugSync.nextEligibleAt' apps/ios/Sources/IOSAppModel.swift >/dev/null
-rg -F 'await automaticProductionScheduler.ensureScheduled()' apps/ios/Sources/IOSAppModel.swift >/dev/null
-rg -F 'await automaticDebugScheduler.ensureScheduled()' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'await automaticScheduler.ensureScheduled()' apps/ios/Sources/IOSAppModel.swift >/dev/null
 rg -F 'await activeClient.cancel()' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
 rg -F 'cancelDataRequest' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
 rg -F 'defaultOpeningTimeout: Duration = .seconds(15)' packages/SyncCore/Sources/MacReceiverKit/SyncServerSession.swift >/dev/null
@@ -172,6 +178,12 @@ rg -F 'statusItem.isVisible = true' apps/macos/Sources/iPhoneSyncMacApp.swift >/
 rg -F 'item.observe(\.isVisible' apps/macos/Sources/iPhoneSyncMacApp.swift >/dev/null
 rg -F 'maximumListenerRetryAttempts = 5' apps/macos/Sources/ReceiverController.swift >/dev/null
 rg -F 'NSWorkspace.didWakeNotification' apps/macos/Sources/MacAppModel.swift >/dev/null
+if rg -F 'aps-environment' apps/ios >/dev/null; then
+    exit 1
+fi
+if rg -F 'scheduled-sync.debug' apps/ios project.yml >/dev/null; then
+    exit 1
+fi
 if rg -F 'MenuBarExtra(' apps/macos/Sources >/dev/null; then
     exit 1
 fi

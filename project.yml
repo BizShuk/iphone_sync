@@ -46,7 +46,6 @@ targets:
               - iphonesync
         BGTaskSchedulerPermittedIdentifiers:
           - com.shuk.iphonesync.ios.scheduled-sync
-          - com.shuk.iphonesync.ios.scheduled-sync.debug
         LSRequiresIPhoneOS: true
         NSBonjourServices:
           - _iphonesync._tcp

@@ -2,17 +2,17 @@
 
 ## Current Status
 
-MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels` 已實作：包含原生 iOS sender、原生 macOS menu-bar receiver、多相簿選取與對應資料夾、manual / automatic single-flight runtime、best-effort `BGProcessingTask` scheduling、opt-in foreground-confirmed Photos deletion、Mac receiver recovery、iOS / Mac semantic operation timeline、typed persistent settings、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。Canonical gate 已通過 61 個 Swift package tests、39 個 iOS unit tests、49 個 Windows vitest、unsigned Mac / generic iOS Simulator / `Release` generic iOS device builds、兩個 TypeScript builds、generated plist / entitlement / local-only / deletion invariants 與 whitespace checks。Signed physical-device deletion、background launch、expiration、overnight timing 與完整 LAN failure matrix 仍以 [README.todo](README.todo) 為準。
+MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels` 已實作：包含原生 iOS sender、原生 macOS menu-bar receiver、多相簿選取與對應資料夾、manual / automatic single-flight runtime、best-effort `BGProcessingTask` scheduling、opt-in foreground-confirmed Photos deletion、Mac receiver recovery、iOS / Mac semantic operation timeline、typed persistent settings、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。Canonical gate 已通過 61 個 Swift package tests、41 個 iOS unit tests、49 個 Windows vitest、unsigned Mac / generic iOS Simulator / `Release` generic iOS device builds、兩個 TypeScript builds、generated plist / entitlement / local-only / deletion invariants 與 whitespace checks。Signed physical-device deletion、background launch、expiration、overnight timing 與完整 LAN failure matrix 仍以 [README.todo](README.todo) 為準。
 
 ## Automatic LAN Sync
 
-使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Release cadence 固定為 `earliestBeginDate = now + 30 分鐘` 加上 `requiresExternalPower = true`：iPhone 充電中才會被啟動，成功與失敗以相同 interval 重新武裝，沒有指定時間、沒有每日配額、也沒有獨立的 retry interval。Debug 額外暴露獨立的 10 分鐘測試 scheduler（不要求充電），僅在 `#if DEBUG` 建置下註冊與 reconcile。兩者均為 `earliestBeginDate`，不是準時或必定執行保證。單次 run 不設 application budget，window 長度由 iOS 決定，`BGProcessingTask` expiration handler 是唯一上限；被中止時取消 outer operation 與 active client，未傳完的部分由 receiver checkpoint 續傳。Background launch 撞上進行中的 run 時略過該次 launch 並立刻重排下一個 interval。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；eligibility 是 relative interval 而非 wall-clock appointment，已到期的值不因重進 App 被往後推。`Sync Now` 保留為 immediate fallback。`BGTaskSchedulerPermittedIdentifiers` 同時包含 production 與 debug identifier，防止 iOS 以 `BGTaskSchedulerErrorDomain` code `3` 拒絕尚未宣告的 identifier 並回滾使用者意圖。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
+使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Cadence 固定為 `earliestBeginDate = now + 30 分鐘` 加上 `requiresExternalPower = true`：iPhone 充電中才會被啟動，成功與失敗以相同 interval 重新武裝，沒有指定時間、沒有每日配額、也沒有獨立的 retry interval。只有這`一條` automatic lane：沒有第二個 cadence、沒有第二個 task identifier、也沒有前景測試迴圈。`earliestBeginDate` 不是準時或必定執行保證。單次 run 不設 application budget，window 長度由 iOS 決定，`BGProcessingTask` expiration handler 是唯一上限；被中止時取消 outer operation 與 active client，未傳完的部分由 receiver checkpoint 續傳。Background launch 撞上進行中的 run 時略過該次 launch 並立刻重排下一個 interval。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；eligibility 是 relative interval 而非 wall-clock appointment，已到期的值不因重進 App 被往後推。`Sync Now` 保留為 immediate fallback。`BGTaskSchedulerPermittedIdentifiers` 必須包含唯一的 automatic sync identifier，否則 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕並回滾使用者意圖。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
 
 ## Product Invariants
 
 - iPhone sync 可由前景 `Sync Now` 手動觸發，或由使用者預先 opt in、再由 iOS best-effort 啟動 automatic run；background runtime 不得被描述為固定 cron。
 - Automatic run 只有在 `iPhone Wi-Fi + exact paired receiverID Bonjour visible + TLS-PSK authentication` 同時成立時才傳輸；不得以 SSID、IP subnet 或 `requiresNetworkConnectivity` 取代此 gate。
-- Automatic cadence 是固定的「充電中每 30 分鐘嘗試一次」：power condition 一律交給 `requiresExternalPower`，不得由 App 讀取電池狀態；不得重新引入指定時間、每日配額或獨立 retry interval。
+- Automatic cadence 是固定的「充電中每 30 分鐘嘗試一次」，且只有這一條 lane：power condition 一律交給 `requiresExternalPower`，不得由 App 讀取電池狀態；不得重新引入指定時間、每日配額、獨立 retry interval，或第二個 cadence / task identifier / 前景測試迴圈。
 - Scheduled run 不得設定 application budget；window 長度由 iOS 決定，只有 expiration handler 是上限。已有 run 進行中時，新的 background launch 必須略過並重排，不得開第二條 connection。
 - 同一時間只綁定一組使用者選取的來源相簿、一部 iPhone 與一部 Mac；來源相簿可多選。
 - 使用者選擇的 Finder folder 是 destination root；若它是 symbolic link，選擇時先解析並保存實際 target folder。每個 album 的 resource 一律寫入 resolved root 的固定 `iPhoneSync` 容器下；`iPhoneSync` 容器、相簿資料夾與日期子資料夾若是 symbolic link，只要解析後是實際存在的資料夾就當一般資料夾使用（允許 target 位於 destination root 之外，實際寫入仍受 sandbox 授權限制），不解析為資料夾者拒絕。已存在的真實資料夾安全重用，同名的不同 album 以 `名稱 (2)`、`名稱 (3)` 穩定區分；檔案層級的 symlink 一律拒絕，維持絕不覆寫既有檔案。
@@ -20,6 +20,8 @@ MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels
 - `Delete After Sync` 預設關閉；關閉時所有同步入口都不得 enqueue 或呼叫 Photos deletion，disable 與 forget receiver 會清除 pending deletion IDs。
 - 刪除單位是整個 `PHAsset`。只有 asset 的每個本機 resource 在每個已選相簿 occurrence 都由 receiver 回覆 committed / already present，且完整 multi-album run 成功時才可成為 candidate；任何 not-local resource、failure、cancel 或 expiration 都必須保留 asset。
 - Foreground run 可對 candidates 發出單一 PhotoKit change request；background run 只能保存 pending IDs，使用者回到 App 後以 `Delete N Synced Photos` 觸發 system confirmation。Receiver committed files 永不因來源刪除而改變。
+- Background run 留下 pending deletion 時必須發出 local notification 告知`數量`；通知不得包含 asset identifier，也不得成為刪除的必要條件（授權被拒仍須照常排隊）。完成刪除、關閉 toggle 或 forget receiver 時撤回該通知。
+- iOS operation timeline 必須落地保存並在啟動時還原。Background run 的 process 結束後事件不得消失，否則 automatic sync 與 pending deletion 皆無從稽核。timeline 仍受 500 筆上限，且不得寫入 PSK、pairing code、identity、source binding、content hash 或 asset identifier。
 - iPhone 傳輸只能使用 Bonjour 可見的 Wi-Fi 區域網路；Mac listener 可位於同一 LAN 的 Wi-Fi 或 Ethernet。`includePeerToPeer` 固定為 `false`。
 - PhotoKit resource request 固定使用 `isNetworkAccessAllowed = false`。
 - Foreground run 進行中 iPhone 不得自動鎖定；scene 進入背景時必須先取得 background task assertion，讓 cancellation 真的關閉 TLS 連線後才結束執行。
@@ -43,7 +45,7 @@ iphone_sync/
 ├── iPhoneSync.xcodeproj/        # committed generated project
 ├── apps/
 │   ├── ios/
-│   │   ├── Sources/             # PhotoKit、pairing、runtime、post-sync deletion、BG scheduler、operation panel、sender UI
+│   │   ├── Sources/             # PhotoKit、pairing、runtime、post-sync deletion、BG scheduler、persisted operation log、pending-deletion notification、sender UI
 │   │   ├── Sources/Intents/     # AppShortcutsProvider for the 1x1 Sync Now shortcut
 │   │   ├── Shared/              # SyncNowIntent + Darwin bridge shared with the extension
 │   │   ├── ControlCenter/       # iPhoneSyncControlCenter control widget extension
@@ -112,14 +114,14 @@ MacReceiverKit ─────────→ SyncCore
 | Integrity | SHA-256 |
 | Resume checkpoint | 16 MiB durable checkpoint |
 | Session liveness | Receiver 15 秒 opening deadline + 45 秒 idle deadline；iOS foreground run 期間持有 idle-timer hold，背景化時以 background task assertion 完成關閉 |
-| Automatic schedule | iOS `BGProcessingTask`; Release earliest `+30 minutes` + `requiresExternalPower`，Debug earliest `+10 minutes` 不要求充電並由獨立 identifier 註冊；pending request idempotent reconcile |
+| Automatic schedule | iOS `BGProcessingTask`; single lane, earliest `+30 minutes` + `requiresExternalPower`; pending request idempotent reconcile |
 | Automatic runtime | `IOSSyncRuntime` single-flight + OS expiration（無 application budget）+ PhotoKit/discovery/active-client hard cancellation |
-| Post-sync deletion | Default-off `Delete After Sync`; asset-level all-resource eligibility + persistent ID / `modificationDate` candidates + foreground `PHAssetChangeRequest.deleteAssets` confirmation |
+| Post-sync deletion | Default-off `Delete After Sync`; asset-level all-resource eligibility + persistent ID / `modificationDate` candidates + foreground `PHAssetChangeRequest.deleteAssets` confirmation + best-effort `UNUserNotificationCenter` pending prompt |
 | Manifest | SwiftData in Mac App container |
 | Destination | Resolved user-selected Finder root + fixed `iPhoneSync` folder + same-name album subfolder with security-scoped bookmark |
 | Preferences | Typed `MacSettingsStore` backed by sandbox `UserDefaults` |
 | Auto-start | `SMAppService.mainApp` with persistent requested intent |
-| Operation diagnostics | Semantic events、latest 500 entries per App process、Apple Unified Logging |
+| Operation diagnostics | Semantic events、latest 500 entries（iOS 跨啟動保存、macOS per process）、Apple Unified Logging |
 | Desktop release packaging | 單一 `release.yml`：macOS universal (arm64 + x86_64) DMG + PKG via `scripts/package-mac.sh`（預設 ad-hoc，env 升級 Developer ID + notarization）；Windows NSIS + portable via electron-builder；同一 GitHub Release |
 
 ## Runtime Ownership
@@ -139,15 +141,16 @@ MacReceiverKit ─────────→ SyncCore
 | Source binding、album/folder mapping | `ManifestStore` | SwiftData `SourceRecord` + `AlbumRecord` |
 | Album-scoped resource status、hash、size、checkpoint、final path | `ManifestStore` | SwiftData `TransferRecord` |
 | Partial media bytes | `DestinationWriter` | destination `iPhoneSync/<safe-album-name>/<year>/<month>/<name>.partial` |
-| iOS / macOS operation timeline | 各 App model | bounded in-memory list（最新 500 筆）+ Apple Unified Logging |
+| iOS operation timeline | `PersistentOperationLogStore` + `IOSAppModel` | App container 內的 bounded JSONL log（最新 500 筆，跨啟動還原）+ Apple Unified Logging |
+| macOS operation timeline | `MacAppModel` | bounded in-memory list（最新 500 筆）+ Apple Unified Logging |
 
-Mac bootstrap 先依 `launchAtLoginRequested` reconcile `SMAppService`，再讀取 Keychain paired peer、解析 security-scoped destination bookmark、開啟 SwiftData store，最後在必要狀態齊全時自動啟動 receiver。Normal listener failure 使用 capped exponential backoff；Mac wake、network path recovery 與 pairing 關閉後會 reconcile listener，incoming connection 另有 opening deadline。既有 `receiverID`、`sourceBindingID` 與 `destinationBookmark` keys 保持不變，加入 typed store 不需要 migration。Pairing code、active session、last summary、兩端 UI operation timeline 與 automatic active run ID 是 transient state，不得放入 durable preferences。
+Mac bootstrap 先依 `launchAtLoginRequested` reconcile `SMAppService`，再讀取 Keychain paired peer、解析 security-scoped destination bookmark、開啟 SwiftData store，最後在必要狀態齊全時自動啟動 receiver。Normal listener failure 使用 capped exponential backoff；Mac wake、network path recovery 與 pairing 關閉後會 reconcile listener，incoming connection 另有 opening deadline。既有 `receiverID`、`sourceBindingID` 與 `destinationBookmark` keys 保持不變，加入 typed store 不需要 migration。Pairing code、active session、last summary、Mac UI operation timeline 與 automatic active run ID 是 transient state，不得放入 durable preferences；iOS operation timeline 有自己的 on-disk log，同樣不進 preferences。
 
 同一 `sourceBindingID` 代表一部 iPhone 對一個 destination 的來源集合，可登錄多個 album ID；不同 binding 仍必須拒絕。`AlbumRecord` 保存每個 album 的穩定 destination folder，`TransferRecord` 以 album scope 區分同一 PhotoKit resource 出現在多個相簿的完成狀態。使用者在 Mac 明確執行 `Reset Source` 或更換 destination 時才產生新的 binding；既有 committed Finder files 不刪除。
 
 `SyncServerSession` 通過 source/album binding 後，才由 `DestinationWriter.prepareAlbumDirectory(named:)` 建立或重用固定 `iPhoneSync` 容器及相簿子資料夾。一般相簿名稱原樣保留；斜線、反斜線、控制字元與隱藏 path injection 由 `AlbumFolderPolicy` 轉為安全的單一 path component。Manifest 的 `finalRelativePath` 以使用者選擇的 destination root 為基準，格式為 `iPhoneSync/<album-folder>/<resource-path>`。舊版 committed path 保留原位；舊版未完成的 per-album partial 可安全搬入新容器續傳。Session 透過 optional event callback 回報 open / accept / complete 與 resource offer / receive / resume / skip / commit / fail；不逐 chunk 產生 UI event。
 
-`PhotoLibrarySource` 在每個 asset 的 resource stream 結尾回報 asset-level completeness 與 `modificationDate`；`PhotoDeletionCandidateAccumulator` 對同一 asset 在多個 selected albums 的結果做 AND merge，版本在 run 中改變即失去資格。`IOSPostSyncDeletionController` 只在整個 run 成功後讀取 default-off intent：foreground 以單一 `performChanges` batch 請求刪除，system-launched background run 則將 ID / modification snapshot 保存為 pending。刪除前重新 fetch 並比對 `modificationDate`，同步後又被編輯的 asset 必須保留。關閉功能或忘記 receiver 會清 pending；operation log 只記數量，不記 asset local identifiers。Current contract 見 [Delete After Sync spec](docs/specs/2026-07-27-delete-after-sync.md)。
+`PhotoLibrarySource` 在每個 asset 的 resource stream 結尾回報 asset-level completeness 與 `modificationDate`；`PhotoDeletionCandidateAccumulator` 對同一 asset 在多個 selected albums 的結果做 AND merge，版本在 run 中改變即失去資格。`IOSPostSyncDeletionController` 只在整個 run 成功後讀取 default-off intent：foreground 以單一 `performChanges` batch 請求刪除，system-launched background run 則將 ID / modification snapshot 保存為 pending。刪除前重新 fetch 並比對 `modificationDate`，同步後又被編輯的 asset 必須保留。關閉功能或忘記 receiver 會清 pending 並撤回提示通知；background enqueue 另發一則只含數量的 local notification，授權被拒時流程不變。operation log 只記數量，不記 asset local identifiers，並由 `PersistentOperationLogStore` 落地保存，讓背景 run 的事件在 process 結束後仍可回查。Current contract 見 [Delete After Sync spec](docs/specs/2026-07-27-delete-after-sync.md)。
 
 ## Build and Verification
 
