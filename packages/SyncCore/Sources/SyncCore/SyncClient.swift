@@ -6,6 +6,12 @@ public enum ClientResourceResult: Equatable, Sendable {
     case failed(code: TransferFailureCode, message: String, retryable: Bool)
 }
 
+/// Receiver verdict for an offer whose bytes have not been sent yet.
+public enum ClientOfferDecision: Equatable, Sendable {
+    case skip
+    case transfer(requestID: UUID, startOffset: Int64)
+}
+
 public enum SyncClientError: Error, Equatable, Sendable {
     case invalidLocalFile
     case noOpenSession
@@ -55,37 +61,81 @@ public actor SyncClient {
         fileURL: URL,
         progress: (@Sendable (_ sentBytes: Int64, _ totalBytes: Int64) -> Void)? = nil
     ) async throws -> ClientResourceResult {
-        guard sessionIsOpen, !finished else { throw SyncClientError.noOpenSession }
+        // The receiver starts its idle deadline the moment it accepts an
+        // offer, and hashing a large video takes longer than that deadline
+        // allows — so the local file must be verified before offering, never
+        // between the acceptance and the first chunk.
+        try validateLocalFile(fileURL, descriptor: offer.descriptor)
+        switch try await offerResource(offer) {
+        case .skip:
+            return .skipped
+        case let .transfer(requestID, startOffset):
+            return try await sendBody(
+                offer,
+                fileURL: fileURL,
+                requestID: requestID,
+                startOffset: startOffset,
+                progress: progress
+            )
+        }
+    }
+
+    private func validateLocalFile(
+        _ fileURL: URL,
+        descriptor: ResourceDescriptor
+    ) throws {
         let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         guard (attributes[FileAttributeKey.size] as? NSNumber)?.int64Value
-                == offer.descriptor.expectedSize,
-              try FileHasher.sha256(url: fileURL) == offer.descriptor.contentHash
+                == descriptor.expectedSize,
+              try FileHasher.sha256(url: fileURL) == descriptor.contentHash
         else {
             throw SyncClientError.invalidLocalFile
         }
+    }
 
+    /// Sends only the offer and reports the receiver's decision.
+    ///
+    /// Splitting the offer from the body lets a sender that already knows a
+    /// resource's identity from an earlier confirmed transfer ask whether the
+    /// receiver still holds it *before* paying to materialise the bytes.
+    public func offerResource(
+        _ offer: ResourceOffer
+    ) async throws -> ClientOfferDecision {
+        guard sessionIsOpen, !finished else { throw SyncClientError.noOpenSession }
         let requestID = UUID()
         try await connection.send(try SyncFrame.control(
             .offer(offer),
             requestID: requestID
         ))
         let response = try await receiveControl(requestID: requestID, kind: .decision)
-        let startOffset: Int64
         switch response {
         case .decision(.skip):
-            return .skipped
+            return .skip
         case let .decision(.start(offset)):
             guard offset == 0 else { throw SyncClientError.protocolViolation }
-            startOffset = offset
+            return .transfer(requestID: requestID, startOffset: offset)
         case let .decision(.resume(offset)):
             guard offset >= 0, offset <= offer.descriptor.expectedSize else {
                 throw SyncClientError.protocolViolation
             }
-            startOffset = offset
+            return .transfer(requestID: requestID, startOffset: offset)
         default:
             throw SyncClientError.protocolViolation
         }
+    }
 
+    /// Streams the bytes for an offer the receiver has already accepted.
+    ///
+    /// Only ever called with a file that has already been verified, because
+    /// the receiver is counting the seconds between its acceptance and the
+    /// first chunk.
+    private func sendBody(
+        _ offer: ResourceOffer,
+        fileURL: URL,
+        requestID: UUID,
+        startOffset: Int64,
+        progress: (@Sendable (_ sentBytes: Int64, _ totalBytes: Int64) -> Void)? = nil
+    ) async throws -> ClientResourceResult {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { try? handle.close() }
         try handle.seek(toOffset: UInt64(startOffset))

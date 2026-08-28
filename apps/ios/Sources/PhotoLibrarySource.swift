@@ -6,6 +6,7 @@ enum PhotoLibrarySourceError: Error, LocalizedError {
     case albumNotFound
     case fullAccessRequired
     case notEnoughSpace
+    case resourceNotLocal
 
     var errorDescription: String? {
         switch self {
@@ -15,21 +16,91 @@ enum PhotoLibrarySourceError: Error, LocalizedError {
             return "Full Photos access is required to guarantee a complete album backup."
         case .notEnoughSpace:
             return "There is not enough iPhone storage to stage this original resource."
+        case .resourceNotLocal:
+            return "This original resource is not stored on this iPhone."
         }
     }
 }
 
 enum PhotoResourceEvent: Sendable {
-    case staged(StagedPhotoResource)
+    /// A resource the consumer may either offer from a remembered descriptor
+    /// or export on demand; the walk pauses until the consumer finishes it.
+    case candidate(PhotoResourceCandidate)
     case skippedNotLocal(
         assetLocalIdentifier: String,
         resourceName: String
     )
     case assetFinished(
         assetLocalIdentifier: String,
+        creationDate: Date?,
         modificationDate: Date?,
         fullyBackedUp: Bool
     )
+}
+
+/// One resource offered to the consumer without its bytes.
+///
+/// Exporting an original costs a full write plus a SHA-256 pass, so the walk
+/// hands over metadata first and materialises the file only when `stage()` is
+/// called. The consumer must call `finish(_:)` exactly once, which both
+/// releases the walk and reports whether the resource turned out to be absent
+/// from this iPhone.
+struct PhotoResourceCandidate: Sendable {
+    let identity: PhotoResourceIdentity
+    let resourceName: String
+    private let stageOperation: @Sendable () async throws -> StagedPhotoResource
+    private let handoff: ResourceHandoff
+
+    init(
+        identity: PhotoResourceIdentity,
+        resourceName: String,
+        handoff: ResourceHandoff,
+        stageOperation: @escaping @Sendable () async throws -> StagedPhotoResource
+    ) {
+        self.identity = identity
+        self.resourceName = resourceName
+        self.handoff = handoff
+        self.stageOperation = stageOperation
+    }
+
+    /// Exports the original to a temporary file and hashes it.
+    ///
+    /// Throws `PhotoLibrarySourceError.resourceNotLocal` when the bytes only
+    /// exist in iCloud.
+    func stage() async throws -> StagedPhotoResource {
+        try await stageOperation()
+    }
+
+    func finish(_ outcome: ResourceHandoff.Outcome) async {
+        await handoff.finish(outcome)
+    }
+}
+
+/// Back-pressure gate between the album walk and its consumer.
+actor ResourceHandoff {
+    enum Outcome: Sendable {
+        case handled
+        case notLocal
+    }
+
+    private var outcome: Outcome?
+    private var continuation: CheckedContinuation<Outcome, Never>?
+
+    func wait() async -> Outcome {
+        if let outcome { return outcome }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation = $0 }
+        } onCancel: {
+            Task { await self.finish(.handled) }
+        }
+    }
+
+    func finish(_ outcome: Outcome) {
+        guard self.outcome == nil else { return }
+        self.outcome = outcome
+        continuation?.resume(returning: outcome)
+        continuation = nil
+    }
 }
 
 struct StagedPhotoResource: Sendable {
@@ -45,10 +116,6 @@ struct StagedPhotoResource: Sendable {
 
     func cleanup() async {
         await lease.consume()
-    }
-
-    fileprivate func waitUntilConsumed() async {
-        await lease.wait()
     }
 }
 
@@ -77,6 +144,12 @@ actor StagingLease {
         continuation?.resume()
         continuation = nil
     }
+}
+
+/// Carries PhotoKit's non-`Sendable` handles into the lazy staging closure.
+private struct PhotoResourceBox: @unchecked Sendable {
+    let resource: PHAssetResource
+    let asset: PHAsset
 }
 
 private final class PhotoResourceDataRequest: @unchecked Sendable {
@@ -283,7 +356,15 @@ final class PhotoLibrarySource: @unchecked Sendable {
         }
     }
 
-    func resources(albumID: String) -> AsyncThrowingStream<PhotoResourceEvent, any Error> {
+    /// Walks an album oldest first, handing each resource over as metadata.
+    ///
+    /// Passing `resumingAfter` starts the walk at the interrupted position
+    /// instead of the oldest asset, which is what lets a background window
+    /// that ran out of time continue rather than repeat itself.
+    func resources(
+        albumID: String,
+        resumingAfter cursor: AlbumSyncCursor? = nil
+    ) -> AsyncThrowingStream<PhotoResourceEvent, any Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
                 do {
@@ -302,6 +383,12 @@ final class PhotoLibrarySource: @unchecked Sendable {
                         key: "creationDate",
                         ascending: true
                     )]
+                    if let cursor {
+                        options.predicate = NSPredicate(
+                            format: "creationDate >= %@",
+                            cursor.assetCreationDate as NSDate
+                        )
+                    }
                     let result = PHAsset.fetchAssets(in: collection, options: options)
 
                     for assetIndex in 0..<result.count {
@@ -315,17 +402,31 @@ final class PhotoLibrarySource: @unchecked Sendable {
                             let key = "\(resource.type.rawValue)\u{0}\(resource.originalFilename)"
                             let duplicateOrdinal = duplicateCounts[key, default: 0]
                             duplicateCounts[key] = duplicateOrdinal + 1
-                            do {
-                                let staged = try await self.stage(
-                                    resource,
-                                    asset: asset,
-                                    duplicateOrdinal: duplicateOrdinal
-                                )
-                                continuation.yield(.staged(staged))
-                                await staged.waitUntilConsumed()
-                            } catch let error as NSError
-                                where error.domain == PHPhotosErrorDomain
-                                    && error.code == PHPhotosError.networkAccessRequired.rawValue {
+                            let identity = PhotoResourceIdentity(
+                                assetLocalIdentifier: asset.localIdentifier,
+                                assetCreationDate: asset.creationDate,
+                                assetModificationDate: asset.modificationDate,
+                                resourceType: self.resourceTypeName(resource.type),
+                                originalFilename: resource.originalFilename,
+                                duplicateOrdinal: duplicateOrdinal,
+                                role: self.resourceRole(resource.type)
+                            )
+                            let handoff = ResourceHandoff()
+                            let box = PhotoResourceBox(resource: resource, asset: asset)
+                            continuation.yield(.candidate(PhotoResourceCandidate(
+                                identity: identity,
+                                resourceName: resource.originalFilename,
+                                handoff: handoff,
+                                stageOperation: { [weak self] in
+                                    guard let self else { throw CancellationError() }
+                                    return try await self.stage(
+                                        box.resource,
+                                        asset: box.asset,
+                                        duplicateOrdinal: duplicateOrdinal
+                                    )
+                                }
+                            )))
+                            if case .notLocal = await handoff.wait() {
                                 allResourcesAreLocal = false
                                 continuation.yield(.skippedNotLocal(
                                     assetLocalIdentifier: asset.localIdentifier,
@@ -335,6 +436,7 @@ final class PhotoLibrarySource: @unchecked Sendable {
                         }
                         continuation.yield(.assetFinished(
                             assetLocalIdentifier: asset.localIdentifier,
+                            creationDate: asset.creationDate,
                             modificationDate: asset.modificationDate,
                             fullyBackedUp: !resources.isEmpty && allResourcesAreLocal
                         ))
@@ -441,6 +543,11 @@ final class PhotoLibrarySource: @unchecked Sendable {
             try? FileManager.default.removeItem(at: fileURL)
             if isNotEnoughSpace(error) {
                 throw PhotoLibrarySourceError.notEnoughSpace
+            }
+            let nsError = error as NSError
+            if nsError.domain == PHPhotosErrorDomain,
+               nsError.code == PHPhotosError.networkAccessRequired.rawValue {
+                throw PhotoLibrarySourceError.resourceNotLocal
             }
             throw error
         }

@@ -132,6 +132,14 @@ rg -F 'options.isNetworkAccessAllowed = false' apps/ios/Sources/PhotoLibrarySour
 rg -F 'PHAssetChangeRequest.deleteAssets' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
 rg -F 'candidate.modificationDate == asset.modificationDate' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
 rg -F 'case assetFinished(' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
+rg -F 'resumingAfter cursor: AlbumSyncCursor?' apps/ios/Sources/PhotoLibrarySource.swift >/dev/null
+rg -F 'ledger.confirmedDescriptor(' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'client.offerResource(offer)' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'try validateLocalFile(fileURL, descriptor: offer.descriptor)' packages/SyncCore/Sources/SyncCore/SyncClient.swift >/dev/null
+rg -F 'cursorStore.clear(albumID: album.id)' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'ledger.clear()' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'FileProtectionType.completeUntilFirstUserAuthentication' apps/ios/Sources/SyncedResourceLedger.swift >/dev/null
+rg -F 'FileProtectionType.completeUntilFirstUserAuthentication' apps/ios/Sources/AlbumSyncCursorStore.swift >/dev/null
 rg -F 'guard store.isEnabled else { return }' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
 rg -F 'trigger == .automaticBackground' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
 rg -F 'await notifier.notifyPending(pendingCount)' apps/ios/Sources/DeleteAfterSync.swift >/dev/null

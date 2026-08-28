@@ -93,8 +93,14 @@ enum SyncRunOutcome: Equatable, Sendable {
         switch self {
         case .failed(let failure):
             failure.kind == .needsUserAction
-        case .budgetExhausted, .cancelled:
+        case .cancelled:
             false
+        // Running out of the window iOS granted is the expected end of a large
+        // batch, not a failure of the handler. Reporting it as one makes iOS
+        // shrink this app's future scheduling budget, which is exactly the
+        // wrong response to a batch that needs more windows.
+        case .budgetExhausted:
+            true
         default:
             true
         }
@@ -309,6 +315,14 @@ actor IOSSyncRuntime {
                     kind: .needsUserAction,
                     message: error.localizedDescription,
                     shouldRetrySoon: false
+                ))
+            case .resourceNotLocal:
+                // The album walk reports these per resource and carries on, so
+                // one reaching here means the session ended on it.
+                return .failed(SyncRunFailure(
+                    kind: .internalFailure,
+                    message: error.localizedDescription,
+                    shouldRetrySoon: true
                 ))
             }
         } catch let error as SyncClientError {

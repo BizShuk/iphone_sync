@@ -2,11 +2,11 @@
 
 ## Current Status
 
-MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels` 已實作：包含原生 iOS sender、原生 macOS menu-bar receiver、多相簿選取與對應資料夾、manual / automatic single-flight runtime、best-effort `BGProcessingTask` scheduling、opt-in foreground-confirmed Photos deletion、Mac receiver recovery、iOS / Mac semantic operation timeline、typed persistent settings、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。Canonical gate 已通過 61 個 Swift package tests、41 個 iOS unit tests、49 個 Windows vitest、unsigned Mac / generic iOS Simulator / `Release` generic iOS device builds、兩個 TypeScript builds、generated plist / entitlement / local-only / deletion invariants 與 whitespace checks。Signed physical-device deletion、background launch、expiration、overnight timing 與完整 LAN failure matrix 仍以 [README.todo](README.todo) 為準。
+MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels` 已實作：包含原生 iOS sender、原生 macOS menu-bar receiver、多相簿選取與對應資料夾、manual / automatic single-flight runtime、best-effort `BGProcessingTask` scheduling、opt-in foreground-confirmed Photos deletion、Mac receiver recovery、iOS / Mac semantic operation timeline、typed persistent settings、`SyncCore`/`MacReceiverKit` Swift package、XcodeGen project、edge-case tests 與 `scripts/verify.sh`。Canonical gate 已通過 64 個 Swift package tests、50 個 iOS unit tests、49 個 Windows vitest、unsigned Mac / generic iOS Simulator / `Release` generic iOS device builds、兩個 TypeScript builds、generated plist / entitlement / local-only / deletion invariants 與 whitespace checks。Signed physical-device deletion、background launch、expiration、overnight timing 與完整 LAN failure matrix 仍以 [README.todo](README.todo) 為準。
 
 ## Automatic LAN Sync
 
-使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Cadence 固定為 `earliestBeginDate = now + 30 分鐘` 加上 `requiresExternalPower = true`：iPhone 充電中才會被啟動，成功與失敗以相同 interval 重新武裝，沒有指定時間、沒有每日配額、也沒有獨立的 retry interval。只有這`一條` automatic lane：沒有第二個 cadence、沒有第二個 task identifier、也沒有前景測試迴圈。`earliestBeginDate` 不是準時或必定執行保證。單次 run 不設 application budget，window 長度由 iOS 決定，`BGProcessingTask` expiration handler 是唯一上限；被中止時取消 outer operation 與 active client，未傳完的部分由 receiver checkpoint 續傳。Background launch 撞上進行中的 run 時略過該次 launch 並立刻重排下一個 interval。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；eligibility 是 relative interval 而非 wall-clock appointment，已到期的值不因重進 App 被往後推。`Sync Now` 保留為 immediate fallback。`BGTaskSchedulerPermittedIdentifiers` 必須包含唯一的 automatic sync identifier，否則 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕並回滾使用者意圖。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
+使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Cadence 固定為 `earliestBeginDate = now + 30 分鐘` 加上 `requiresExternalPower = true`：iPhone 充電中才會被啟動，成功與失敗以相同 interval 重新武裝，沒有指定時間、沒有每日配額、也沒有獨立的 retry interval。只有這`一條` automatic lane：沒有第二個 cadence、沒有第二個 task identifier、也沒有前景測試迴圈。`earliestBeginDate` 不是準時或必定執行保證。單次 run 不設 application budget，window 長度由 iOS 決定，`BGProcessingTask` expiration handler 是唯一上限；被中止時取消 outer operation 與 active client，未傳完的部分由 receiver checkpoint 續傳。Background launch 撞上進行中的 run 時略過該次 launch 並立刻重排下一個 interval。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；eligibility 是 relative interval 而非 wall-clock appointment，已到期的值不因重進 App 被往後推。單次 window 內不得重複付出已完成工作的成本：`SyncedResourceLedger` 保存每個已被 receiver 確認的 resource descriptor，下一輪先用它 offer、由 Mac 決定是否需要 bytes，只有 receiver 真的要才 export 與 hash；`AlbumSyncCursorStore` 保存每個相簿的續傳位置，被 expiration 中止的 pass 從中斷處接續，走完整個相簿才清除 cursor。`Sync Now` 保留為 immediate fallback。`BGTaskSchedulerPermittedIdentifiers` 必須包含唯一的 automatic sync identifier，否則 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕並回滾使用者意圖。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
 
 ## Product Invariants
 
@@ -14,6 +14,10 @@ MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels
 - Automatic run 只有在 `iPhone Wi-Fi + exact paired receiverID Bonjour visible + TLS-PSK authentication` 同時成立時才傳輸；不得以 SSID、IP subnet 或 `requiresNetworkConnectivity` 取代此 gate。
 - Automatic cadence 是固定的「充電中每 30 分鐘嘗試一次」，且只有這一條 lane：power condition 一律交給 `requiresExternalPower`，不得由 App 讀取電池狀態；不得重新引入指定時間、每日配額、獨立 retry interval，或第二個 cadence / task identifier / 前景測試迴圈。
 - Scheduled run 不得設定 application budget；window 長度由 iOS 決定，只有 expiration handler 是上限。已有 run 進行中時，新的 background launch 必須略過並重排，不得開第二條 connection。
+- Scheduled run 用完 window 是預期結果，不是 handler 失敗：`budgetExhausted` 必須以 `setTaskCompleted(success: true)` 回報，否則 iOS 會逐步縮減本 app 的 background 額度。只有 `cancelled` 與真正的 internal failure 才回報失敗。
+- 已被 receiver 確認過的 resource 必須先 offer 再決定是否 export：ledger 只保存 descriptor，`永遠不是` 完成狀態的 authoritative source，Mac manifest 才是。
+- receiver 一旦 accept offer 就開始計 idle deadline，因此 offer 與第一個 chunk 之間`不得`插入 export 或 hash 這類長工作。本機檔案的 size / SHA-256 驗證一律在送出 offer `之前`完成；ledger offer 收到 `.transfer` 時丟掉該 entry 並以 retryable failure 結束，由下一輪正常 stage 重建，不得在 receiver 等待期間才去 export。
+- ledger entry 以 destination `sourceBindingID` 為 key；`Forget` receiver 必須清空 ledger 與所有 album cursors。asset `modificationDate` 改變即失效。
 - 同一時間只綁定一組使用者選取的來源相簿、一部 iPhone 與一部 Mac；來源相簿可多選。
 - 使用者選擇的 Finder folder 是 destination root；若它是 symbolic link，選擇時先解析並保存實際 target folder。每個 album 的 resource 一律寫入 resolved root 的固定 `iPhoneSync` 容器下；`iPhoneSync` 容器、相簿資料夾與日期子資料夾若是 symbolic link，只要解析後是實際存在的資料夾就當一般資料夾使用（允許 target 位於 destination root 之外，實際寫入仍受 sandbox 授權限制），不解析為資料夾者拒絕。已存在的真實資料夾安全重用，同名的不同 album 以 `名稱 (2)`、`名稱 (3)` 穩定區分；檔案層級的 symlink 一律拒絕，維持絕不覆寫既有檔案。
 - 同步只能新增，永不因來源變動刪除或覆寫 Mac 既有檔案。
@@ -141,6 +145,8 @@ MacReceiverKit ─────────→ SyncCore
 | Source binding、album/folder mapping | `ManifestStore` | SwiftData `SourceRecord` + `AlbumRecord` |
 | Album-scoped resource status、hash、size、checkpoint、final path | `ManifestStore` | SwiftData `TransferRecord` |
 | Partial media bytes | `DestinationWriter` | destination `iPhoneSync/<safe-album-name>/<year>/<month>/<name>.partial` |
+| 已由 receiver 確認的 resource descriptor | `SyncedResourceLedger` | App container 內的 append-only JSONL（compaction、`completeUntilFirstUserAuthentication`） |
+| 每個相簿的續傳位置 | `AlbumSyncCursorStore` | App container 內的小型 JSON（批次寫入，pass 走完即清除） |
 | iOS operation timeline | `PersistentOperationLogStore` + `IOSAppModel` | App container 內的 bounded JSONL log（最新 500 筆，跨啟動還原）+ Apple Unified Logging |
 | macOS operation timeline | `MacAppModel` | bounded in-memory list（最新 500 筆）+ Apple Unified Logging |
 
@@ -239,6 +245,7 @@ GitHub Actions 自動 release：
 - Automatic LAN Sync 實作計畫：[plans/2026-07-23-automatic-lan-sync.md](plans/2026-07-23-automatic-lan-sync.md)
 - Operation Log Panels 架構計畫：[plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)
 - 待辦：[README.todo](README.todo)
+- Background sync 續傳與 ledger：[docs/memory/2026-08-28-background-sync-resume.md](docs/memory/2026-08-28-background-sync-resume.md)
 - 歷史操作與決策：[docs/memory/README.md](docs/memory/README.md)
 
 結構、business scope 或技術決策變更時，必須同步上述 canonical files。

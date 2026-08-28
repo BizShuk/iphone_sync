@@ -142,7 +142,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
         let outcome = await run.value
         XCTAssertEqual(outcome, .budgetExhausted)
         XCTAssertTrue(outcome.shouldRetrySoon)
-        XCTAssertFalse(outcome.backgroundTaskSucceeded)
+        XCTAssertTrue(outcome.backgroundTaskSucceeded)
     }
 
     func testCancellationWinsOverGenericCleanupError() async {
@@ -258,7 +258,10 @@ final class IOSSyncRuntimeTests: XCTestCase {
         XCTAssertTrue(outcome.shouldRetrySoon)
         XCTAssertFalse(outcome.backgroundTaskSucceeded)
         XCTAssertTrue(SyncRunOutcome.budgetExhausted.shouldRetrySoon)
-        XCTAssertFalse(SyncRunOutcome.budgetExhausted.backgroundTaskSucceeded)
+        // A batch that needs another window is not a handler failure; telling
+        // iOS otherwise shrinks the app's future scheduling budget.
+        XCTAssertTrue(SyncRunOutcome.budgetExhausted.backgroundTaskSucceeded)
+        XCTAssertFalse(SyncRunOutcome.cancelled.backgroundTaskSucceeded)
     }
 
     private func request(

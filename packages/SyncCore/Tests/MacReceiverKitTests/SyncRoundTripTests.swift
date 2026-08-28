@@ -210,6 +210,200 @@ func roundTripSecondSyncSkipsCommittedResource() async throws {
 }
 
 @Test
+func offerAloneSkipsCommittedResourceWithoutLocalBytes() async throws {
+    let bytes = Data(repeating: 0x5a, count: SyncConstants.chunkSize + 5)
+    let harness = try ReceiverHarness(bytes: bytes)
+    let sourceURL = harness.directory.appendingPathComponent("source.bin")
+    try bytes.write(to: sourceURL)
+
+    let psk = Data(repeating: 0x42, count: 32)
+    let identity = Data("phone-1".utf8)
+    let listener = try SyncTestListener(
+        parameters: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .server,
+            requireWiFi: false
+        ),
+        manifest: harness.manifest,
+        destinationRoot: harness.directory
+    )
+    let port = try await listener.start()
+    defer { Task { await listener.stop() } }
+
+    let first = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+    let binding = try await first.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: nil
+    )
+    _ = try await first.sendResource(harness.offer, fileURL: sourceURL)
+    _ = try await first.finish()
+
+    // The sender that already knows this resource must be able to ask whether
+    // the receiver still holds it without exporting the original again.
+    try FileManager.default.removeItem(at: sourceURL)
+
+    let second = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+    _ = try await second.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: binding
+    )
+    #expect(try await second.offerResource(harness.offer) == .skip)
+    #expect(
+        try await second.finish()
+            == SyncSummary(added: 0, existing: 1, notLocal: 0, failed: 0)
+    )
+    #expect(await listener.recordedFailures().isEmpty)
+}
+
+@Test
+func offerReportsTransferWhenTheReceiverLostTheFile() async throws {
+    let bytes = Data("recoverable photo".utf8)
+    let harness = try ReceiverHarness(bytes: bytes)
+    let sourceURL = harness.directory.appendingPathComponent("source.bin")
+    try bytes.write(to: sourceURL)
+
+    let psk = Data(repeating: 0x42, count: 32)
+    let identity = Data("phone-1".utf8)
+    let listener = try SyncTestListener(
+        parameters: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .server,
+            requireWiFi: false
+        ),
+        manifest: harness.manifest,
+        destinationRoot: harness.directory
+    )
+    let port = try await listener.start()
+    defer { Task { await listener.stop() } }
+
+    let first = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+    let binding = try await first.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: nil
+    )
+    guard case let .committed(relativePath) = try await first.sendResource(
+        harness.offer,
+        fileURL: sourceURL
+    ) else {
+        Issue.record("first transfer did not commit")
+        return
+    }
+    _ = try await first.finish()
+
+    try FileManager.default.removeItem(
+        at: harness.directory.appendingPathComponent(relativePath)
+    )
+
+    let second = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+    _ = try await second.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: binding
+    )
+    guard case let .transfer(_, startOffset) = try await second.offerResource(
+        harness.offer
+    ) else {
+        Issue.record("receiver did not ask for the bytes it lost")
+        return
+    }
+    #expect(startOffset == 0)
+}
+
+/// The receiver starts its idle deadline the moment it accepts an offer, so
+/// hashing the local file must happen before the offer goes out — otherwise a
+/// large video stalls the receiver past that deadline and the transfer dies
+/// mid-stream.
+@Test
+func localFileIsVerifiedBeforeTheOfferIsSent() async throws {
+    let harness = try ReceiverHarness(bytes: Data("expected photo".utf8))
+    let sourceURL = harness.directory.appendingPathComponent("source.bin")
+    try Data("different bytes entirely".utf8).write(to: sourceURL)
+
+    let psk = Data(repeating: 0x42, count: 32)
+    let identity = Data("phone-1".utf8)
+    let listener = try SyncTestListener(
+        parameters: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .server,
+            requireWiFi: false
+        ),
+        manifest: harness.manifest,
+        destinationRoot: harness.directory
+    )
+    let port = try await listener.start()
+    defer { Task { await listener.stop() } }
+
+    let client = SyncClient(connection: FramedConnection(NWConnection(
+        host: "127.0.0.1",
+        port: port,
+        using: PSKTLSParameters.make(
+            psk: psk,
+            identity: identity,
+            role: .client,
+            requireWiFi: false
+        )
+    )))
+    _ = try await client.openSession(
+        albumID: "album-1",
+        albumName: "Camera Roll",
+        sourceBindingID: nil
+    )
+
+    await #expect(throws: SyncClientError.invalidLocalFile) {
+        _ = try await client.sendResource(harness.offer, fileURL: sourceURL)
+    }
+
+    // An empty summary proves the receiver never saw the offer.
+    #expect(
+        try await client.finish()
+            == SyncSummary(added: 0, existing: 0, notLocal: 0, failed: 0)
+    )
+    #expect(await listener.recordedFailures().isEmpty)
+}
+
+@Test
 func roundTripEmitsSessionAndResourceOperations() async throws {
     let bytes = Data("logged photo".utf8)
     let harness = try ReceiverHarness(bytes: bytes)

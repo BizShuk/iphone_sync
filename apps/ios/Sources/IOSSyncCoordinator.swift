@@ -54,6 +54,8 @@ actor IOSSyncCoordinator {
     private static let receiverRetryDelays: [UInt64] = [0, 1, 2, 4]
 
     private let photoSource: PhotoLibrarySource
+    private let ledger: SyncedResourceLedger
+    private let cursorStore: AlbumSyncCursorStore
     private let keychain = KeychainSecretStore()
     private let deviceID: String
     private let onProgress: @Sendable (IOSSyncProgress?) -> Void
@@ -67,10 +69,14 @@ actor IOSSyncCoordinator {
     init(
         photoSource: PhotoLibrarySource,
         deviceID: String,
+        ledger: SyncedResourceLedger = SyncedResourceLedger(),
+        cursorStore: AlbumSyncCursorStore = AlbumSyncCursorStore(),
         onProgress: @escaping @Sendable (IOSSyncProgress?) -> Void,
         onOperation: @escaping @Sendable (OperationLogEvent) async -> Void = { _ in }
     ) {
         self.photoSource = photoSource
+        self.ledger = ledger
+        self.cursorStore = cursorStore
         self.deviceID = deviceID
         self.onProgress = onProgress
         self.onOperation = onOperation
@@ -160,6 +166,9 @@ actor IOSSyncCoordinator {
 
     func forgetPeer() throws {
         try keychain.delete(account: Self.pairedPeerAccount)
+        // Nothing the previous Mac confirmed can be trusted for the next one.
+        ledger.clear()
+        cursorStore.clearAll()
     }
 
     func sync(albums: [PhotoAlbum]) async throws -> SyncSummary {
@@ -294,7 +303,22 @@ actor IOSSyncCoordinator {
 
             var notLocal = 0
             var deletionCandidates = PhotoDeletionCandidateAccumulator()
-            for try await event in photoSource.resources(albumID: album.id) {
+            let resumeCursor = cursorStore.cursor(albumID: album.id)
+            if resumeCursor != nil {
+                await emit(
+                    .info,
+                    category: "Album",
+                    message: "Resuming “\(album.title)” where the previous run stopped."
+                )
+            }
+            defer {
+                cursorStore.flush()
+                ledger.flush()
+            }
+            for try await event in photoSource.resources(
+                albumID: album.id,
+                resumingAfter: resumeCursor
+            ) {
                 try Task.checkCancellation()
                 if cancelRequested { throw CancellationError() }
                 switch event {
@@ -305,24 +329,25 @@ actor IOSSyncCoordinator {
                         category: "Resource",
                         message: "Skipped “\(resourceName)”; it is not stored on this iPhone."
                     )
-                case let .staged(staged):
-                    transferringResource = true
+                case let .candidate(candidate):
                     do {
-                        try await send(
-                            staged,
+                        try await handle(
+                            candidate,
                             albumName: album.title,
                             bindingID: sourceBindingID,
                             client: client
                         )
+                    } catch PhotoLibrarySourceError.resourceNotLocal {
+                        await candidate.finish(.notLocal)
+                        continue
                     } catch {
-                        await staged.cleanup()
-                        transferringResource = false
+                        await candidate.finish(.handled)
                         throw error
                     }
-                    await staged.cleanup()
-                    transferringResource = false
+                    await candidate.finish(.handled)
                 case let .assetFinished(
                     assetLocalIdentifier,
+                    creationDate,
                     modificationDate,
                     fullyBackedUp
                 ):
@@ -331,10 +356,22 @@ actor IOSSyncCoordinator {
                         modificationDate: modificationDate,
                         fullyBackedUp: fullyBackedUp
                     )
+                    if let creationDate {
+                        cursorStore.advance(
+                            albumID: album.id,
+                            to: AlbumSyncCursor(
+                                assetLocalIdentifier: assetLocalIdentifier,
+                                assetCreationDate: creationDate
+                            )
+                        )
+                    }
                 }
             }
             try Task.checkCancellation()
             if cancelRequested { throw CancellationError() }
+            // The walk reached the end of the album, so the next run starts a
+            // fresh pass and picks up assets imported with an older date.
+            cursorStore.clear(albumID: album.id)
             var summary = try await client.finish()
             summary.notLocal = notLocal
             return (summary, peer, deletionCandidates)
@@ -359,8 +396,80 @@ actor IOSSyncCoordinator {
         )
     }
 
+    /// Decides how one candidate reaches the Mac.
+    ///
+    /// A resource the Mac confirmed earlier is offered from its remembered
+    /// descriptor, so the common case — a photo that is already backed up —
+    /// costs one round trip instead of a full export plus SHA-256 pass. Only
+    /// an unknown resource, or one the receiver has since lost, is exported.
+    private func handle(
+        _ candidate: PhotoResourceCandidate,
+        albumName: String,
+        bindingID: String,
+        client: SyncClient
+    ) async throws {
+        if let remembered = ledger.confirmedDescriptor(
+            for: candidate.identity,
+            sourceBindingID: bindingID
+        ) {
+            let offer = ResourceOffer(
+                resourceID: ResourceIdentity.make(
+                    sourceBindingID: bindingID,
+                    descriptor: remembered
+                ),
+                descriptor: remembered
+            )
+            switch try await client.offerResource(offer) {
+            case .skip:
+                await emit(
+                    .info,
+                    category: "Resource",
+                    message: "Skipped “\(candidate.resourceName)”; "
+                        + "already present on the Mac."
+                )
+            case .transfer:
+                // The Mac wants the bytes back, but it is already counting
+                // the seconds until the first chunk and exporting an original
+                // can outlast that deadline. Drop the stale entry and let the
+                // next run rebuild this resource the ordinary way.
+                ledger.forget(candidate.identity, sourceBindingID: bindingID)
+                await emit(
+                    .warning,
+                    category: "Resource",
+                    message: "The Mac no longer holds “\(candidate.resourceName)”; "
+                        + "it will be sent again on the next run."
+                )
+                throw IOSSyncCoordinatorError.resourceFailed(
+                    code: .destinationUnavailable,
+                    message: "“\(candidate.resourceName)” must be sent to the Mac again.",
+                    retryable: true
+                )
+            }
+            return
+        }
+
+        let staged = try await candidate.stage()
+        transferringResource = true
+        do {
+            try await send(
+                staged,
+                identity: candidate.identity,
+                albumName: albumName,
+                bindingID: bindingID,
+                client: client
+            )
+        } catch {
+            await staged.cleanup()
+            transferringResource = false
+            throw error
+        }
+        await staged.cleanup()
+        transferringResource = false
+    }
+
     private func send(
         _ staged: StagedPhotoResource,
+        identity: PhotoResourceIdentity,
         albumName: String,
         bindingID: String,
         client: SyncClient
@@ -377,14 +486,10 @@ actor IOSSyncCoordinator {
             message: "Sending “\(resourceName)” "
                 + "(\(staged.descriptor.expectedSize) bytes)."
         )
-        let progress: @Sendable (Int64, Int64) -> Void = { [onProgress] sent, total in
-            onProgress(IOSSyncProgress(
-                albumName: albumName,
-                resourceName: staged.descriptor.originalFilename,
-                sentBytes: sent,
-                totalBytes: total
-            ))
-        }
+        let progress = progressReporter(
+            albumName: albumName,
+            descriptor: staged.descriptor
+        )
         var result = try await client.sendResource(
             offer,
             fileURL: staged.fileURL,
@@ -410,20 +515,40 @@ actor IOSSyncCoordinator {
         }
         try Task.checkCancellation()
         if cancelRequested { throw CancellationError() }
+        try await record(
+            result,
+            identity: identity,
+            descriptor: staged.descriptor,
+            bindingID: bindingID,
+            resourceName: resourceName
+        )
+    }
+
+    /// Turns the receiver's verdict into a log line and a ledger entry.
+    private func record(
+        _ result: ClientResourceResult,
+        identity: PhotoResourceIdentity,
+        descriptor: ResourceDescriptor,
+        bindingID: String,
+        resourceName: String
+    ) async throws {
         switch result {
         case .skipped:
+            ledger.record(descriptor, for: identity, sourceBindingID: bindingID)
             await emit(
                 .info,
                 category: "Resource",
                 message: "Skipped “\(resourceName)”; already present on the Mac."
             )
         case let .committed(relativePath):
+            ledger.record(descriptor, for: identity, sourceBindingID: bindingID)
             await emit(
                 .success,
                 category: "Resource",
                 message: "Sent “\(resourceName)” to “\(relativePath)”."
             )
         case let .failed(code, message, retryable):
+            ledger.forget(identity, sourceBindingID: bindingID)
             await emit(
                 .error,
                 category: "Resource",
@@ -434,6 +559,22 @@ actor IOSSyncCoordinator {
                 message: message,
                 retryable: retryable
             )
+        }
+    }
+
+    private func progressReporter(
+        albumName: String,
+        descriptor: ResourceDescriptor
+    ) -> @Sendable (Int64, Int64) -> Void {
+        let onProgress = onProgress
+        let resourceName = descriptor.originalFilename
+        return { sent, total in
+            onProgress(IOSSyncProgress(
+                albumName: albumName,
+                resourceName: resourceName,
+                sentBytes: sent,
+                totalBytes: total
+            ))
         }
     }
 
