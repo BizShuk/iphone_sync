@@ -1,75 +1,27 @@
 # TODO
 
-## 文件審閱 (Documentation Review)
-
-- [ ] 閱讀並 review [實作計畫](plans/2026-07-19-local-album-sync.md) 與 [系統設計](docs/specs/2026-07-19-local-album-sync-design.md)
-- [ ] 閱讀並 review [Automatic LAN Sync 架構計畫](plans/2026-07-23-automatic-lan-sync.md)
-- [ ] 閱讀並 review [Operation Log Panels 架構計畫](plans/2026-07-23-operation-log-panels.md)
-
 ## 實機驗收 (Live-device Acceptance)
 
 - [ ] 驗證 iCloud-only resource 跳過、RAW+JPEG、Live Photo、adjustment data 與大型影片
 - [ ] 在 signed 實體 iPhone 驗證 `Delete After Sync` 預設關閉、enable warning、Photos allow / cancel、disable 清 pending 與 App relaunch persistence
-- [ ] 驗證 mixed-resource asset（Live Photo / RAW+JPEG / adjustment / iCloud-only）只有全部 resource confirmed 才刪除，且 `iCloud Photos` 跨裝置與 `Recently Deleted` 行為符合警告
 - [ ] 驗證 background sync 只保存 pending IDs，App relaunch 後由 foreground `Delete N Synced Photos` confirmation 完成或安全取消
-- [ ] 在 signed 實體 iPhone 驗證背景 automatic run 留下 pending 時會送出 local notification，且完成刪除 / 關閉 toggle / `Forget` 後通知被撤回；拒絕通知授權時排隊與刪除行為不變
 - [ ] 驗證背景 automatic run 的 `Operation Log` 事件在 App process 被系統終止後仍可於下次開啟時回查，且 500 筆上限與 clear 行為正確
 - [ ] 驗證中斷續傳、iPhone 進入背景、Mac sleep、VPN、router isolation 與磁碟空間不足
-- [ ] 在實機驗證長片段同步期間 iPhone 不自動鎖定，手動鎖定後 receiver 於 45 秒內回到 `Ready` 且下一次從 checkpoint 續傳
-- [ ] 決定簽署、公證 (notarization) 與安裝/發佈方式
 
 ## Automatic LAN Sync
 
-- [ ] 在 signed 實體 iPhone / Mac 驗證 simulated launch/expiration、same/different LAN、sleep/wake、resume 與 overnight delay
 - [ ] 驗證充電 cadence：接電後 iOS 會實際啟動 30 分鐘 request、拔電後不再啟動、單次 run 由 OS expiration 中止且下次從 checkpoint 續傳
-- [ ] 驗證前一次 run 未結束時的 background launch 被略過，且 `Next attempt` 有立即重排
 - [ ] 在 signed 實體 iPhone 驗證背景 window 不再重新 export 舊照片：`Operation Log` 應顯示既有照片以 `already present on the Mac` 一行帶過，且 `Last success` 由 background run 推進
 - [ ] 驗證被 expiration 中止的 pass 於下一個 window 從中斷處接續，走完整個相簿後下一輪重新完整走訪
-- [ ] 驗證 Mac 端手動刪除已同步檔案後，下一輪 offer 會要求重送並成功 commit
 - [ ] 驗證 `Forget` receiver 後 ledger 與 album cursors 被清空，重新配對從完整 pass 開始
 
 ## Windows 11 Receiver
 
-- [x] 建立專案骨架（apps/windows/ + packages/SyncCore.Windows/ + Electron + vitest + TypeScript） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] 設計 wire protocol 對齊既有 Swift 端（protocolVersion 維持 1，不 bump） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] Phase 2: SyncCore.Windows protocol + crypto + resource 實作（FrameCodec, PairingCrypto, ResourceIdentity, FilenamePolicy, FileHasher, OperationLog） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] Phase 3: Receiver 核心（BonjourBrowse, BonjourAdvertise, PairingServer, TlsPskServer, ReceiverController, SecretStore） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] Phase 4: Manifest + DestinationWriter + SyncServerSession（SQLite + SHA-256 + atomic rename + albumFolderPolicy） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] Phase 5: Electron main process 串接 SyncCore.Windows（ModelRoot + IPC） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] Phase 6: Setup UI skeleton（setup.html + pairing.html + app.css + renderer） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] Phase 7: Canonical docs 同步（README + plan + spec） @2026-07-25_08:24:00 @Completed @Windows_11_Receiver
-- [x] Phase 8: GitHub Actions `windows-latest` runner 自動 release（`v*` tag → Public Release, `workflow_dispatch` → Draft） @2026-07-25_19:00:00 @Completed
 - [ ] Phase 8: iPhone 端驗證 iOS → Windows 互通（配對、SAS、Sync Now、Automatic LAN 場景）
-- [ ] Phase 8: Listener retry 完整行為（powerMonitor + network change 注入測試）
 - [ ] Phase 8: 中斷續傳、partial 磁碟、調整 storage mode、launch at login 驗證
-- [ ] Backlog: 在 Windows 11 22H2+ 開發機本地執行 `npm run dist` 驗證手動 packaging
-- [ ] Backlog: MSIX 封裝 + SmartScreen 信任
-- [ ] Backlog: 公證 / Store 發佈
 
 ## 打包與發佈 (Packaging & Release)
 
-- [x] 統一 release CI：`release.yml` 一個 `v*` tag 同時產 macOS universal DMG + PKG（`scripts/package-mac.sh`）與 Windows NSIS + portable，單一 publish job 掛同一個 GitHub Release @2026-08-04_01:30:00 @Completed @Packaging_Release
 - [ ] 設定 Apple Developer ID secrets（`MAC_SIGN_IDENTITY` + `MAC_NOTARY_*`）讓 CI 產出公證後的 DMG/PKG，移除 Gatekeeper bypass 步驟
 - [ ] Windows Authenticode / Azure Trusted Signing 簽章，消除 SmartScreen 警告
 - [ ] 跑一次 `workflow_dispatch` draft release，於乾淨的 Mac 與 Windows 實機下載驗證一鍵安裝與首次啟動
-
-## Archive
-
-- [x] 加入預設關閉的 `Delete After Sync`、跨相簿 all-resource asset eligibility、foreground PhotoKit confirmation、background pending queue、disable/forget 清 pending 與權限/文件/測試 invariants @2026-07-27_12:03:00 @Completed @Delete_After_Sync
-- [x] 修正 Automatic Sync lifecycle 重複提交、Debug eligibility 被 re-entry 往後推與前景 timer 重置；pending request 改為 idempotent reconcile @2026-07-23_16:13:46 @Completed @Automatic_LAN_Sync
-- [x] 將 Mac `Error Log` 擴充為 iOS / Mac 兩端 `Operation Log` panels，涵蓋 App、設定、配對、discovery、scheduler、listener、session、album 與 resource lifecycle，並保留最新 500 筆 @2026-07-23_15:25:06 @Completed @Operation_Log_Panels
-- [x] 加入 Debug 最早 10 分鐘與 Release 最早 local midnight 的 `BGProcessingTask` schedule、typed state 與 iPhone UI @2026-07-23_13:23:11 @Completed @Automatic_LAN_Sync
-- [x] 補強 Mac listener retry、wake/path reconcile、pairing 結束恢復與 unauthenticated opening deadline @2026-07-23_13:23:11 @Completed @Automatic_LAN_Sync
-- [x] 實作 manual / automatic 共用的 single-flight runtime、完整 active-client cancellation 與 bounded run outcome @2026-07-23_13:23:11 @Completed @Automatic_LAN_Sync
-- [x] 驗證對應資料夾已存在時安全重用、兩個 Photos 相簿名稱相同時使用 `名稱 (2)`，且兩者既有內容皆不被覆寫 @2026-07-23*12:31:01 @Completed @實機驗收*(Live-device_Acceptance)
-- [x] 驗證 iPhone Wi-Fi → Mac Wi-Fi 及 iPhone Wi-Fi → Mac Ethernet 的完整多相簿同步，並確認每個相簿位於 `<selected-folder>/iPhoneSync/<album-name>/` @2026-07-23*12:30:51 @Completed @實機驗收*(Live-device_Acceptance)
-- [x] 完整重新啟動 Mac，確認 `iPhone Sync` 於登入後自動執行，並恢復 receiver ID、source binding、paired iPhone、destination bookmark、album manifest 與 Ready listener @2026-07-23*12:30:41 @Completed @實機驗收*(Live-device_Acceptance)
-- [x] 觸發 receiver、pairing 與 destination 錯誤，確認 Mac Setup `Error Log` 可顯示、複製、清除且最多保留 100 筆 @2026-07-22*00:49:32 @Completed @實機驗收*(Live-device_Acceptance)
-- [x] 驗證 Photos Full Access、Local Network prompt、多相簿選擇與六位數配對流程 @2026-07-22*00:49:04 @Completed @實機驗收*(Live-device_Acceptance)
-- [x] 設定 Apple Development signing，在實體 iPhone 與 Mac 安裝並完成首次啟動 @2026-07-22*00:49:00 @Completed @實機驗收*(Live-device_Acceptance)
-- [x] 建立 Xcode project、iOS App、native macOS App 與 `SyncCore`/`MacReceiverKit` Swift package
-- [x] 實作 Bonjour discovery、TLS 1.2 PSK transport 與六位數安全配對
-- [x] 實作 PhotoKit local-only 原始 resource staging
-- [x] 實作 framed transfer、SwiftData manifest、16 MiB 續傳與 atomic commit
-- [x] 加入 malformed frame、錯誤 PSK/proof、配對逾時、碰撞、不覆寫與 integrity retry edge tests
-- [x] 建立 `scripts/verify.sh` 作為 canonical automated verification
