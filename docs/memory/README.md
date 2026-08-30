@@ -9,6 +9,7 @@
 
 ## Entries
 
+- [2026-08-30 Automatic Sync 移除充電條件](2026-08-30-automatic-sync-drop-charging-gate.md)
 - [2026-08-28 Background Sync Resume](2026-08-28-background-sync-resume.md)
 - [2026-08-27 Background Deletion Observability](2026-08-27-background-deletion-observability.md)
 - [2026-08-04 Release CI — macOS + Windows](2026-08-04-release-ci-mac-windows.md)

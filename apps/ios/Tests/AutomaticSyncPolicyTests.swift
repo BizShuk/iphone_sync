@@ -19,7 +19,7 @@ final class AutomaticSyncPolicyTests: XCTestCase {
 
     /// There is no daily quota and no wall-clock appointment: a successful run
     /// re-arms on exactly the same interval as a failed one, so the iPhone
-    /// keeps checking while it stays on the charger.
+    /// keeps checking on battery as well as on the charger.
     func testEveryReasonSchedulesThirtyMinutesLater() {
         let policy = AutomaticSyncPolicy()
         let now = date(year: 2026, month: 7, day: 23, hour: 20, minute: 34)
@@ -32,10 +32,6 @@ final class AutomaticSyncPolicyTests: XCTestCase {
                 "Unexpected schedule for \(reason)"
             )
         }
-    }
-
-    func testScheduleAlwaysRequiresExternalPower() {
-        XCTAssertTrue(AutomaticSyncPolicy().requiresExternalPower)
     }
 
     func testRestorePreservesFutureEligibility() {

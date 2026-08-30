@@ -130,10 +130,10 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         ))
     }
 
-    /// The charging cadence never recomputes a wall-clock appointment, so an
-    /// elapsed eligibility survives an app relaunch untouched and iOS gets to
-    /// launch as soon as the iPhone is charging again.
-    func testChargingRestoreKeepsElapsedEligibilityAndAsksForExternalPower() async {
+    /// The cadence never recomputes a wall-clock appointment, so an elapsed
+    /// eligibility survives an app relaunch untouched and iOS gets to launch
+    /// as soon as it allows, with or without external power.
+    func testRestoreKeepsElapsedEligibilityAndNeverAsksForExternalPower() async {
         let now = Date(timeIntervalSince1970: 1_774_300_000)
         let elapsedDate = now.addingTimeInterval(-4 * 60)
         let requestScheduler = FakeAutomaticSyncRequestScheduler()
@@ -153,7 +153,7 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
             requestScheduler.submittedRequests.map(\.earliestBeginDate),
             [elapsedDate]
         )
-        XCTAssertEqual(requestScheduler.submittedExternalPowerFlags, [true])
+        XCTAssertEqual(requestScheduler.submittedExternalPowerFlags, [false])
         XCTAssertEqual(requestScheduler.submittedNetworkFlags, [true])
         XCTAssertEqual(requestScheduler.cancelledIdentifiers, [])
         XCTAssertEqual(store.snapshot.nextEligibleAt, elapsedDate)

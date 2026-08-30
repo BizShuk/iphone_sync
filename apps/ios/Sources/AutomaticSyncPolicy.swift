@@ -16,11 +16,6 @@ struct AutomaticSyncPolicy: Sendable {
     /// same fixed interval ahead, whatever the previous outcome was.
     var interval: TimeInterval { Self.interval }
 
-    /// Charging is the gate that makes iOS willing to grant long processing
-    /// windows, so the schedule asks for it and accepts that the iPhone
-    /// simply does not sync while running on battery.
-    var requiresExternalPower: Bool { true }
-
     func nextRequestDate(
         after now: Date,
         reason: AutomaticSyncScheduleReason

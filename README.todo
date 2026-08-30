@@ -10,7 +10,7 @@
 
 ## Automatic LAN Sync
 
-- [ ] 驗證充電 cadence：接電後 iOS 會實際啟動 30 分鐘 request、拔電後不再啟動、單次 run 由 OS expiration 中止且下次從 checkpoint 續傳
+- [ ] 驗證 30 分鐘 cadence：電池供電（未接電）時 iOS 仍會實際啟動 request、單次 run 由 OS expiration 中止且下次從 checkpoint 續傳
 - [ ] 在 signed 實體 iPhone 驗證背景 window 不再重新 export 舊照片：`Operation Log` 應顯示既有照片以 `already present on the Mac` 一行帶過，且 `Last success` 由 background run 推進
 - [ ] 驗證被 expiration 中止的 pass 於下一個 window 從中斷處接續，走完整個相簿後下一輪重新完整走訪
 - [ ] 驗證 `Forget` receiver 後 ledger 與 album cursors 被清空，重新配對從完整 pass 開始

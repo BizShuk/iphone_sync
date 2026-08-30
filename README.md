@@ -99,8 +99,8 @@ Mac Setup 的 `Storage Mode` 決定 `iPhoneSync` 容器內的版面，固定容�
 
 ### Automatic Sync 的真實語意
 
-- **iPhone 充電中每 30 分鐘嘗試一次**。沒有指定時間、沒有每日配額，成功與失敗都以相同的 30 分鐘重新排下一次。
-- 未充電時 iOS 不會啟動 automatic sync。充電是換取較長背景執行視窗的條件，由 iOS 判斷，App 不讀取電池狀態。
+- **每 30 分鐘嘗試一次**。沒有指定時間、沒有每日配額，成功與失敗都以相同的 30 分鐘重新排下一次。
+- 不要求充電：電池供電時 iOS 一樣可能啟動 automatic sync。實際啟動時機與視窗長度由 iOS 判斷，App 不讀取電池狀態。
 - 單次執行時間`不設上限`：iOS 給多久就傳多久，到點由系統中止，未傳完的部分由 Mac / Windows 的 checkpoint 續傳。
 - 上一次還在執行時，下一次啟動直接略過，並立刻重新排程，不會有兩條連線。
 - 全部都只是 `earliestBeginDate`。iOS 不保證準時、不保證固定週期、不保證一定提供 runtime，實際執行可能晚很多。
@@ -233,7 +233,7 @@ iPhone sender：
 | `Find Mac` 找不到 Mac | 兩端同一 Wi-Fi、Mac 配對視窗仍在兩分鐘內、非 guest network / VLAN / VPN、router 未開 client isolation    |
 | 配對碼輸入失敗        | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone`                                              |
 | 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                   |
-| Automatic 從未執行    | `earliestBeginDate` 不是保證；先確認 iPhone 在充電且 `Background App Refresh` 可用，再用 `Sync Now` 作為 fallback |
+| Automatic 從未執行    | `earliestBeginDate` 不是保證；先確認 `Background App Refresh` 可用，再用 `Sync Now` 作為 fallback |
 | 已同步但尚未刪除      | Background run 只建立 pending list；回到 App，在 `AFTER SYNC` 按 `Delete N Synced Photos` 並確認         |
 | Mac 寫入被拒          | 目的地同名項目是檔案，或 symlink 解析不到資料夾，`Operation Log` 會標示；換一個 destination 或移除該項目 |
 

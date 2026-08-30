@@ -6,13 +6,13 @@ MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels
 
 ## Automatic LAN Sync
 
-使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Cadence 固定為 `earliestBeginDate = now + 30 分鐘` 加上 `requiresExternalPower = true`：iPhone 充電中才會被啟動，成功與失敗以相同 interval 重新武裝，沒有指定時間、沒有每日配額、也沒有獨立的 retry interval。只有這`一條` automatic lane：沒有第二個 cadence、沒有第二個 task identifier、也沒有前景測試迴圈。`earliestBeginDate` 不是準時或必定執行保證。單次 run 不設 application budget，window 長度由 iOS 決定，`BGProcessingTask` expiration handler 是唯一上限；被中止時取消 outer operation 與 active client，未傳完的部分由 receiver checkpoint 續傳。Background launch 撞上進行中的 run 時略過該次 launch 並立刻重排下一個 interval。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；eligibility 是 relative interval 而非 wall-clock appointment，已到期的值不因重進 App 被往後推。單次 window 內不得重複付出已完成工作的成本：`SyncedResourceLedger` 保存每個已被 receiver 確認的 resource descriptor，下一輪先用它 offer、由 Mac 決定是否需要 bytes，只有 receiver 真的要才 export 與 hash；`AlbumSyncCursorStore` 保存每個相簿的續傳位置，被 expiration 中止的 pass 從中斷處接續，走完整個相簿才清除 cursor。`Sync Now` 保留為 immediate fallback。`BGTaskSchedulerPermittedIdentifiers` 必須包含唯一的 automatic sync identifier，否則 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕並回滾使用者意圖。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
+使用者 opt in `Automatic Sync` 後，iOS 若實際啟動 scheduled handler，runtime 才重新載入 prerequisites、透過 Bonjour 尋找 exact paired `receiverID`，並以保存的 PSK authentication。Cadence 固定為 `earliestBeginDate = now + 30 分鐘` 加上 `requiresExternalPower = false`：不要求充電，電池供電時一樣可能被啟動，成功與失敗以相同 interval 重新武裝，沒有指定時間、沒有每日配額、也沒有獨立的 retry interval。只有這`一條` automatic lane：沒有第二個 cadence、沒有第二個 task identifier、也沒有前景測試迴圈。`earliestBeginDate` 不是準時或必定執行保證。單次 run 不設 application budget，window 長度由 iOS 決定，`BGProcessingTask` expiration handler 是唯一上限；被中止時取消 outer operation 與 active client，未傳完的部分由 receiver checkpoint 續傳。Background launch 撞上進行中的 run 時略過該次 launch 並立刻重排下一個 interval。App lifecycle reconcile 會查詢既有 pending request，保留相同或更早的 eligibility；eligibility 是 relative interval 而非 wall-clock appointment，已到期的值不因重進 App 被往後推。單次 window 內不得重複付出已完成工作的成本：`SyncedResourceLedger` 保存每個已被 receiver 確認的 resource descriptor，下一輪先用它 offer、由 Mac 決定是否需要 bytes，只有 receiver 真的要才 export 與 hash；`AlbumSyncCursorStore` 保存每個相簿的續傳位置，被 expiration 中止的 pass 從中斷處接續，走完整個相簿才清除 cursor。`Sync Now` 保留為 immediate fallback。`BGTaskSchedulerPermittedIdentifiers` 必須包含唯一的 automatic sync identifier，否則 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕並回滾使用者意圖。Current contract 見 [automatic LAN sync spec](docs/specs/2026-07-23-automatic-lan-sync.md)，落地脈絡見 [implementation plan](plans/2026-07-23-automatic-lan-sync.md)。
 
 ## Product Invariants
 
 - iPhone sync 可由前景 `Sync Now` 手動觸發，或由使用者預先 opt in、再由 iOS best-effort 啟動 automatic run；background runtime 不得被描述為固定 cron。
 - Automatic run 只有在 `iPhone Wi-Fi + exact paired receiverID Bonjour visible + TLS-PSK authentication` 同時成立時才傳輸；不得以 SSID、IP subnet 或 `requiresNetworkConnectivity` 取代此 gate。
-- Automatic cadence 是固定的「充電中每 30 分鐘嘗試一次」，且只有這一條 lane：power condition 一律交給 `requiresExternalPower`，不得由 App 讀取電池狀態；不得重新引入指定時間、每日配額、獨立 retry interval，或第二個 cadence / task identifier / 前景測試迴圈。
+- Automatic cadence 是固定的「每 30 分鐘嘗試一次」，不設 power gate（`requiresExternalPower = false`），且只有這一條 lane：不得由 App 讀取電池狀態，也不得重新引入充電條件、指定時間、每日配額、獨立 retry interval，或第二個 cadence / task identifier / 前景測試迴圈。
 - Scheduled run 不得設定 application budget；window 長度由 iOS 決定，只有 expiration handler 是上限。已有 run 進行中時，新的 background launch 必須略過並重排，不得開第二條 connection。
 - Scheduled run 用完 window 是預期結果，不是 handler 失敗：`budgetExhausted` 必須以 `setTaskCompleted(success: true)` 回報，否則 iOS 會逐步縮減本 app 的 background 額度。只有 `cancelled` 與真正的 internal failure 才回報失敗。
 - 已被 receiver 確認過的 resource 必須先 offer 再決定是否 export：ledger 只保存 descriptor，`永遠不是` 完成狀態的 authoritative source，Mac manifest 才是。
@@ -118,7 +118,7 @@ MacReceiverKit ─────────→ SyncCore
 | Integrity | SHA-256 |
 | Resume checkpoint | 16 MiB durable checkpoint |
 | Session liveness | Receiver 15 秒 opening deadline + 45 秒 idle deadline；iOS foreground run 期間持有 idle-timer hold，背景化時以 background task assertion 完成關閉 |
-| Automatic schedule | iOS `BGProcessingTask`; single lane, earliest `+30 minutes` + `requiresExternalPower`; pending request idempotent reconcile |
+| Automatic schedule | iOS `BGProcessingTask`; single lane, earliest `+30 minutes`, 不要求充電 (`requiresExternalPower = false`); pending request idempotent reconcile |
 | Automatic runtime | `IOSSyncRuntime` single-flight + OS expiration（無 application budget）+ PhotoKit/discovery/active-client hard cancellation |
 | Post-sync deletion | Default-off `Delete After Sync`; asset-level all-resource eligibility + persistent ID / `modificationDate` candidates + foreground `PHAssetChangeRequest.deleteAssets` confirmation + best-effort `UNUserNotificationCenter` pending prompt |
 | Manifest | SwiftData in Mac App container |

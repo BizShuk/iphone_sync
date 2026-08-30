@@ -629,7 +629,7 @@ private struct AutomaticSyncCard: View {
             statRow("Last success", value: formattedDate(snapshot.lastSuccessAt))
             statRow("Next attempt", value: formattedDate(snapshot.nextEligibleAt))
 
-            statRow("Cadence", value: "Every 30 minutes while charging")
+            statRow("Cadence", value: "Every 30 minutes")
 
         }
         .padding(Tokens.Layout.cardPadding)
@@ -642,7 +642,7 @@ private struct AutomaticSyncCard: View {
             Button("OK", role: .cancel) { showTimingInfo = false }
         } message: {
             Text("iOS controls the actual background execution time. "
-                + "Automatic sync is only attempted while the iPhone is "
+                + "Automatic sync is attempted on battery as well as while "
                 + "charging, and each attempt may still be delayed or "
                 + "shortened by device conditions.")
         }

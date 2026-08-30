@@ -380,7 +380,7 @@ final class AutomaticSyncScheduler {
         let request = BGProcessingTaskRequest(identifier: taskIdentifier)
         request.earliestBeginDate = date
         request.requiresNetworkConnectivity = true
-        request.requiresExternalPower = policy.requiresExternalPower
+        request.requiresExternalPower = false
         do {
             try requestScheduler.submit(request)
             store.recordNextEligibleAt(date)

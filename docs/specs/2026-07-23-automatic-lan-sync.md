@@ -1,6 +1,6 @@
 # Automatic LAN Sync
 
-`Status:` Implemented on `2026-07-23`，charging cadence 於 `2026-08-20` 取代 daily schedule；canonical tests/builds/source invariants 已通過，包含 `Release` generic iOS device build。Mac recovery 與 BG adapter 目前只有部分 behavior tests、platform compilation / source-invariant evidence，不是完整 lifecycle behavior tests。Signed physical-device background scheduling 仍須依 [README.todo](../../README.todo) 驗收。
+`Status:` Implemented on `2026-07-23`，30-minute cadence 於 `2026-08-20` 取代 daily schedule，charging gate 於 `2026-08-30` 移除；canonical tests/builds/source invariants 已通過，包含 `Release` generic iOS device build。Mac recovery 與 BG adapter 目前只有部分 behavior tests、platform compilation / source-invariant evidence，不是完整 lifecycle behavior tests。Signed physical-device background scheduling 仍須依 [README.todo](../../README.todo) 驗收。
 
 本規格是 `automatic-lan-sync` 的 current behavior。它擴充、但不回寫 [2026-07-19 local album sync design](2026-07-19-local-album-sync-design.md)；後者保留當時 foreground-only MVP 的歷史決策。
 
@@ -12,7 +12,7 @@
 - 開啟 `Automatic Sync`，讓 iOS 在可用時提供 automatic run。
 - 關閉 `Automatic Sync` 取消 pending request 與 active automatic run；pairing、相簿選擇、Mac manifest、partial 與 committed Finder files 全部保留。
 
-`Automatic Sync` 預設為 `off`，只有一個 on/off 開關：不提供 interval、指定時間或 SSID allowlist。Cadence 固定為「充電中每 30 分鐘嘗試一次」，power condition 由 `requiresExternalPower` 交給 iOS 判斷，不由 App 讀取電池狀態。`Sync Now` 永遠保留為 background scheduling 不可用、延遲或 Mac 不可達時的 deterministic fallback。
+`Automatic Sync` 預設為 `off`，只有一個 on/off 開關：不提供 interval、指定時間或 SSID allowlist。Cadence 固定為「每 30 分鐘嘗試一次」，不設 power gate（`requiresExternalPower = false`），也不由 App 讀取電池狀態。`Sync Now` 永遠保留為 background scheduling 不可用、延遲或 Mac 不可達時的 deterministic fallback。
 
 iPhone UI 顯示 opt-in、cadence、`Background App Refresh`、last attempt/success/outcome 與 `Eligible after`。`Eligible after` 只呈現 submitted request 的 earliest date，不得解讀為 guaranteed next run。iPhone `Operation Log` 另記錄 background handler registration、request submission、actual launch、expiration、outcome 與 reschedule operation，屬本次 process 的 bounded diagnostics，不是 durable execution guarantee。
 
@@ -22,8 +22,8 @@ iPhone UI 顯示 opt-in、cadence、`Background App Refresh`、last attempt/succ
 
 | Build / trigger | Policy | Contract |
 |---|---|---|
-| 全部 outcome | `earliestBeginDate = now + 30 minutes` + `requiresExternalPower = true`，唯一 identifier `com.shuk.iphonesync.ios.scheduled-sync` | 每次 launch 都只是一次嘗試；成功與失敗以相同 interval 重新武裝，沒有每日配額。 |
-| Power gate | `requiresExternalPower = true` | iPhone 未充電時 iOS 不啟動這個 task；沒有 App 端的電池判斷或倒數。 |
+| 全部 outcome | `earliestBeginDate = now + 30 minutes` + `requiresExternalPower = false`，唯一 identifier `com.shuk.iphonesync.ios.scheduled-sync` | 每次 launch 都只是一次嘗試；成功與失敗以相同 interval 重新武裝，沒有每日配額。 |
+| Power gate | `requiresExternalPower = false` | 不要求充電；電池供電時 iOS 一樣可以啟動這個 task，實際時機仍由系統決定。 |
 | Manual | `Sync Now` | 前景立即嘗試，不受 background scheduler 時機控制。 |
 
 `BGProcessingTask` 是 best-effort system scheduling，不是 cron。`earliestBeginDate` 只限制「不得早於」，actual launch 與 runtime duration 由 iOS 決定。Eligibility 是 relative interval，不是 wall-clock appointment：persisted `Eligible after` 即使已過期也保持原值，重進 App 不得把它往後推。沒有 local day 概念，因此也沒有「今天已完成」這種 deferral。`BGTaskSchedulerPermittedIdentifiers` 必須包含這個唯一 identifier；缺少時 iOS 會以 `BGTaskSchedulerErrorDomain` code `3` 拒絕 submit，scheduler 立即回滾 enabled intent 並 emit error，使用者切換會被視為「沒成功」。只有這一條 automatic lane：沒有第二個 cadence、沒有第二個 identifier、也沒有前景測試迴圈。
@@ -61,7 +61,7 @@ flowchart TD
 
 | Component | Responsibility |
 |---|---|
-| `AutomaticSyncPolicy` | 單一 cadence：`+30 minutes` interval、`requiresExternalPower` 與 restore policy。 |
+| `AutomaticSyncPolicy` | 單一 cadence：`+30 minutes` interval 與 restore policy；不含 power gate。 |
 | `IOSAutomaticSyncStore` | 保存 enabled intent、last attempt/success/outcome/message 與 next eligible time。 |
 | `AutomaticSyncScheduler` | 由 `iPhoneSyncApp.init()` 在 `MainActor` / main queue 註冊唯一 identifier `com.shuk.iphonesync.ios.scheduled-sync`，以 pending-request reconcile 與 execution gate 管理 idempotent request、expiration、single completion 與 reschedule。 |
 | `IOSSyncRuntime` | Manual / automatic 共用 prerequisite reload、single-flight、run outcome、budget 與 cancellation。 |
@@ -115,7 +115,7 @@ iOS target 宣告：
 Canonical `bash scripts/verify.sh` 的 automated evidence 範圍：
 
 - 61 個 Swift package tests 與 39 個 iOS unit tests 通過；
-- iOS tests 覆蓋 charging cadence、external-power flag、elapsed eligibility、pending-request idempotence、typed store persistence、runtime prerequisite gate、single-flight、cancellation 與 TLS failure mapping；
+- iOS tests 覆蓋 cadence、external-power flag 為 `false`、elapsed eligibility、pending-request idempotence、typed store persistence、runtime prerequisite gate、single-flight、cancellation 與 TLS failure mapping；
 - generated plist 含 background processing mode 與 permitted identifier；
 - unsigned Mac、generic iOS Simulator 與 `Release` generic iOS device builds 成功；
 - generated plist / entitlement / local-only / hard-cancellation / Mac recovery / Operation Log source invariants，以及 tracked、staged、untracked whitespace checks 通過。
