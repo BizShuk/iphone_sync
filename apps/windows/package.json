@@ -4,7 +4,7 @@
   "private": true,
   "description": "iPhone Sync Windows 11 desktop receiver (Electron + Node.js).",
   "author": "shuk",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN ../../LICENSE",
   "main": "dist/main/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",

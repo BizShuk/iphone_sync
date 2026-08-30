@@ -502,7 +502,17 @@ transfer. Background processing is used only for the opt-in Automatic Sync.
 
 - **截圖仍是舊畫面**：四張都含已移除的 `AUTOMATIC SYNC (DEBUG)` 卡片或舊名稱，屬 `Guideline 2.3`。需以 Release build 在已配對 iPhone 重拍，再跑 `scripts/prepare-screenshots.sh`。
 - **缺少 `PrivacyInfo.xcprivacy`**：iOS target 使用 `UserDefaults`（reason `CA92.1`）與 `FileManager.attributesOfItem`（file timestamp，reason `C617.1`）等 required-reason APIs，未附 privacy manifest 會在上傳後收到 `ITMS-91053` 通知。
-- **Receiver 下載路徑未定案**：description 與 review notes 都指向「release page」，但 `github.com/bizshuk/iphone_sync` 目前非公開（releases API 回 `404`），審查員拿不到 receiver，屬 `Guideline 2.1`。需確定對外的固定 URL 後回填。
+- ~~**Receiver 下載路徑未定案**~~：repo 已轉為 public，四個 receiver 安裝檔固定掛在 `https://github.com/BizShuk/iphone_sync/releases/latest/download/`（`iPhoneSync-Mac.dmg` / `.pkg`、`iPhoneSync-Setup.exe` / `iPhoneSync-Portable.exe`），審查員可直接取得。
 - **公開 policy 站台未重新發佈**：`appstore/*.html` 已改名為 `Photo Sync`，`bizshuk.github.io` 上的線上版本仍是舊文案。
 - **App Store Connect app record 與 distribution 憑證未齊備**：`npm run release:ios` 在未設定 `DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 時會在 archive 前失敗（見 [CLAUDE.md](CLAUDE.md)）。
 - **實機驗收未完成**：signed 裝置上的 `Delete After Sync` confirmation、background launch 與完整 LAN failure matrix 仍列於 [README.todo](README.todo)。
+
+## 6. 授權 (License)
+
+本專案採用 [PolyForm Noncommercial License 1.0.0](LICENSE)：`個人與非商業用途完全開放`，可以自由使用、修改與散布；`商業用途則不在授權範圍內`，需要另行向 BizShuk 取得授權。
+
+- 允許：個人備份自己的照片、學習研究、業餘專案、慈善／教育／公立研究／公共安全衛生／環保組織與政府機關的使用。
+- 不允許：任何以營利為目的之使用，包含把本 App 或其衍生作品當作商品或服務的一部分販售、內部商業營運，或提供付費託管服務。
+- 散布義務：轉散布時必須一併附上 [LICENSE](LICENSE) 或其網址，以及其中的 `Required Notice:` 行。
+
+App Store 上架時對`終端使用者`另外適用 `Apple Standard EULA`（見 5.5 節）；那份 EULA 規範的是安裝後的使用行為，與本節規範原始碼的授權條款是兩件事。

@@ -276,10 +276,10 @@ img{max-width:100%}
         <div class="card">
           <span class="label">Receiver · macOS</span>
           <h3>直接下載安裝</h3>
-          <p>Universal binary, Apple Silicon 與 Intel 共用. DMG 拖進 <code>Applications</code>; PKG 雙擊就裝.</p>
+          <p>Universal binary, Apple Silicon 與 Intel 共用. DMG 拖進 <code>Applications</code>; PKG 雙擊就裝. 這兩個檔就放在本站上, 不必繞去 GitHub.</p>
           <div class="dl">
-            <a class="btn" href="https://github.com/BizShuk/iphone_sync/releases/latest/download/iPhoneSync-Mac.dmg">DMG 拖拉安裝 <span>~4 MB</span></a>
-            <a class="btn ghost" href="https://github.com/BizShuk/iphone_sync/releases/latest/download/iPhoneSync-Mac.pkg">PKG 一鍵安裝 <span>~4 MB</span></a>
+            <a class="btn" href="/download/iPhoneSync-Mac.dmg" download>DMG 拖拉安裝 <span>~4 MB</span></a>
+            <a class="btn ghost" href="/download/iPhoneSync-Mac.pkg" download>PKG 一鍵安裝 <span>~4 MB</span></a>
           </div>
         </div>
         <div class="card">
@@ -289,7 +289,7 @@ img{max-width:100%}
           <pre>npm run deploy:ios</pre>
         </div>
       </div>
-      <p class="note">兩個 receiver 的安裝檔都由 GitHub Actions 產出, 掛在 <a href="https://github.com/BizShuk/iphone_sync/releases">GitHub Releases</a>; 上面的按鈕固定指向<b class="hl">最新一版</b>, 不需要挑版號. 原始碼在 <a href="https://github.com/bizshuk/iphone_sync">bizshuk/iphone_sync</a>. Mac 端目前是 ad-hoc 簽章, 首次開啟會被 Gatekeeper 攔下, 到<b class="hl">系統設定 → 隱私權與安全性</b>按<b class="hl">強制打開</b>; Windows 端未簽 Authenticode 前, SmartScreen 會要你按<b class="hl">其他資訊 → 仍要執行</b>.</p>
+      <p class="note">Mac 的兩個安裝檔<b class="hl">由本站直接提供</b>, 隨這一頁一起發佈; Windows 的兩個檔則掛在 <a href="https://github.com/BizShuk/iphone_sync/releases">GitHub Releases</a>, 按鈕固定指向最新一版, 不需要挑版號. 原始碼在 <a href="https://github.com/bizshuk/iphone_sync">bizshuk/iphone_sync</a>. Mac 端目前是 ad-hoc 簽章, 首次開啟會被 Gatekeeper 攔下, 到<b class="hl">系統設定 → 隱私權與安全性</b>按<b class="hl">強制打開</b>; Windows 端未簽 Authenticode 前, SmartScreen 會要你按<b class="hl">其他資訊 → 仍要執行</b>.</p>
     </section>
 
     <section id="setup">
@@ -474,11 +474,12 @@ img{max-width:100%}
 
 <footer>
   <div class="foot-in">
-    <span>Photo Sync · 你的照片, 你的硬碟.</span>
+    <span>Photo Sync · 你的照片, 你的硬碟. 個人與非商業用途免費, 商業使用需另行取得授權.</span>
     <div>
       <a href="https://github.com/bizshuk/iphone_sync">GitHub</a>
       <a href="https://github.com/BizShuk/iphone_sync/releases/latest">Releases</a>
       <a href="https://bizshuk.github.io/pkg/iphone_sync/privacy.html">Privacy</a>
+      <a href="https://github.com/bizshuk/iphone_sync/blob/master/LICENSE">License</a>
     </div>
   </div>
 </footer>

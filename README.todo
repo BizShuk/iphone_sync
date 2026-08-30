@@ -24,6 +24,5 @@
 
 - [ ] 設定 Apple Developer ID secrets（`MAC_SIGN_IDENTITY` + `MAC_NOTARY_*`）讓 CI 產出公證後的 DMG/PKG，移除 Gatekeeper bypass 步驟
 - [ ] Windows Authenticode / Azure Trusted Signing 簽章，消除 SmartScreen 警告
-- [ ] 決定 release artifact 的公開通路：repo 目前是 private，[web/index.html](web/index.html) 上的 GitHub 下載連結對外一律 404（v0.0.12 的舊連結同樣如此）。要嘛把 repo 轉 public，要嘛把四個安裝檔改放在別的 host
-- [ ] 重建並部署上手指南站的 image（`docker-registry.local:5000/projects-iphone-sync:latest`），讓 liva 上的 iphone-sync.shuks.dev 換成新的下載按鈕
+- [ ] 在 `bizshuk/iphone_sync` 註冊 push webhook（liva 的 `inf/hosts/liva/webhooks/register.sh`，需 `~/.config/webhook/.env` 的 `GITHUB_WEBHOOK_SECRET`）：目前 repo hooks 是空的，所以 master push 不會觸發 liva 重建 iphone-sync image，站台停在舊版
 - [ ] 於乾淨的 Mac 與 Windows 實機下載 v0.0.33 的四個 artifact，驗證一鍵安裝與首次啟動

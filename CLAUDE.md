@@ -87,7 +87,8 @@ iphone_sync/
 │   └── specs/
 ├── plans/
 ├── scripts/                     # verify.sh、verify-windows.sh、package-mac.sh、run-mac.sh、run-server.sh、run-simulator.sh、run-iphone.sh、release.sh
-├── web/                         # 上手指南站的內容：index.html（自足單頁）+ nginx.conf
+├── web/                         # 上手指南站的內容：index.html（單頁）+ nginx.conf
+│   └── download/                # 站台自己端出的 Mac DMG / PKG（進版控，由 build:mac staging）
 ├── Dockerfile                   # 把 web/ 烤成 nginx image，部署在 liva（iphone-sync.shuks.dev）
 ├── README.md
 ├── README.permission.md         # iOS/macOS permissions and purpose
@@ -214,8 +215,9 @@ Windows 11 開發機：
 macOS 打包（本機與 CI 共用同一腳本）：
 
 ```bash
-bash scripts/package-mac.sh      # universal Release build → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
-bash scripts/run-mac.sh          # Release build → /Applications/iPhone Sync.app → 啟動（不產生 DMG/PKG）
+bash scripts/package-mac.sh          # universal Release build → build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}
+bash scripts/stage-mac-download.sh  # 上一步的產物 → web/download/iPhoneSync-Mac.{dmg,pkg}（進版控）
+bash scripts/run-mac.sh             # Release build → /Applications/iPhone Sync.app → 啟動（不產生 DMG/PKG）
 ```
 
 預設 ad-hoc 簽章；設定 `MAC_SIGN_IDENTITY`（Developer ID Application）加上 `MAC_NOTARY_PROFILE` 或 `MAC_NOTARY_APPLE_ID`/`MAC_NOTARY_TEAM_ID`/`MAC_NOTARY_PASSWORD` 後，同一腳本升級為 Developer ID 簽章 + notarization + stapling；`MAC_INSTALLER_IDENTITY` 另外簽 PKG。
@@ -223,7 +225,9 @@ bash scripts/run-mac.sh          # Release build → /Applications/iPhone Sync.a
 GitHub Actions 自動 release：
 - `.github/workflows/release.yml` 同一次 run：`prepare` job 先建立（或重用）該 tag 的 GitHub Release（`v*` tag = public、workflow_dispatch = draft），`macos-latest` 跑 SyncCore package tests + `scripts/package-mac.sh`（DMG + PKG）、`windows-latest` 跑 vitest + `npm run dist`（NSIS + portable），兩個 build job 各自以 `gh release upload --clobber` 把產物掛上同一個 Release。
 - Build job `不得`改用 `actions/upload-artifact` 當跨 job 傳遞：artifact storage quota 一滿就整條 release 失敗，`v0.0.13` ~ `v0.0.32` 全部卡在這個 `Failed to CreateArtifact: Artifact storage quota has been hit`，二十個 tag 沒有任何 release 產出。
-- Release asset 檔名`不含版號`且固定為 `iPhoneSync-Mac.dmg` / `iPhoneSync-Mac.pkg` / `iPhoneSync-Setup.exe` / `iPhoneSync-Portable.exe`，讓 [web/index.html](web/index.html) 的下載按鈕可以固定連 `/releases/latest/download/<name>`，發新版不必改網站。版號由 Release tag 表達。
+- Release asset 檔名`不含版號`且固定為 `iPhoneSync-Mac.dmg` / `iPhoneSync-Mac.pkg` / `iPhoneSync-Setup.exe` / `iPhoneSync-Portable.exe`，讓連結可以固定寫 `/releases/latest/download/<name>`，發新版不必改連結。版號由 Release tag 表達。
+- 站台的下載按鈕`兩端來源不同`：Windows 連 GitHub Releases，macOS 則由站台`自己端出` `web/download/` 裡那兩個進版控的檔案。理由是 image 在 liva（Linux）上建，那裡沒有 Xcode，只能 COPY 一份在 macOS 上先做好的產物；代價是每次改版都在 git 留下約 8 MB 的 blob，所以只在要發佈新版站台時才跑 `npm run build:mac`。
+- `web/download/` 裡的產物必須是 `ad-hoc` 簽章（`MAC_SIGN_IDENTITY=-`）。`package-mac.sh` 預設會抓 Keychain 裡第一個 Apple Development identity，那種簽章在`別台機器上會被 Gatekeeper 直接拒絕`且無法公證，比 ad-hoc 更糟——對外散布的那一份不能用它。
 - `v*` tag 版本仍會 stamp 進 macOS `MARKETING_VERSION`/`CFBundleVersion` 與 Windows `package.json`。
 
 驗證腳本使用 `CODE_SIGNING_ALLOWED=NO` 建置 `iPhoneSyncMac`、generic iOS Simulator 與 `Release` generic iOS device；Release build 必須編譯 production cadence 分支。腳本也檢查 `BGTaskSchedulerPermittedIdentifiers`、`UIBackgroundModes = processing`、PhotoKit deletion usage string、default-off guard、hard-cancellation、Mac recovery 與兩端 Operation Log source invariants。這些 checks 證明 source contract 與 platform compilation，不是 Photos system confirmation、listener recovery、OS launch/expiration 或 signed network behavior tests。

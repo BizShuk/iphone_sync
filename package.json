@@ -15,7 +15,7 @@
 
     "build": "npx npm-run-all --parallel build:*",
     "build:ios": "./scripts/run-iphone.sh --build-only",
-    "build:mac": "./scripts/package-mac.sh",
+    "build:mac": "./scripts/package-mac.sh && ./scripts/stage-mac-download.sh",
     "build:windows": "cd packages/SyncCore.Windows && npm ci && npm run build && cd ../../apps/windows && npm ci && npm run build && npm run dist",
 
     "deploy": "npx npm-run-all --parallel deploy:*",
