@@ -15,14 +15,57 @@ permissions:
   contents: write
 
 jobs:
+  # 先把 release 建好, 兩個 build job 再各自把自己的 artifact 直接 upload 上去.
+  # 不經過 actions/upload-artifact —— 那條路徑會吃 artifact storage quota,
+  # quota 滿了就整條 release 失敗 (v0.0.13 ~ v0.0.32 全部卡在這裡).
+  prepare:
+    name: Create or reuse the GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Resolve tag name
+        id: resolve
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="${{ github.event.inputs.tag }}"
+            [ -n "$tag" ] || tag="manual-${{ github.run_number }}"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create release if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.resolve.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists; reusing it"
+            exit 0
+          fi
+          draft_flag=""
+          [ "$GITHUB_EVENT_NAME" = "push" ] || draft_flag="--draft"
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --generate-notes \
+            $draft_flag
+
   macos:
     name: SyncCore tests + iPhoneSyncMac (DMG + PKG)
+    needs: prepare
     runs-on: macos-latest
     timeout-minutes: 45
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -46,31 +89,41 @@ jobs:
       - name: Package DMG + PKG
         env:
           MAC_BUILD_NUMBER: ${{ github.run_number }}
+          TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           version_flag=""
-          case "$GITHUB_REF" in
-            refs/tags/v*) version_flag="--version ${GITHUB_REF_NAME#v}" ;;
+          case "$TAG" in
+            v[0-9]*) version_flag="--version ${TAG#v}" ;;
           esac
           bash scripts/package-mac.sh $version_flag
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: iPhoneSync-macOS
-          path: |
-            build/mac-dist/*.dmg
-            build/mac-dist/*.pkg
-          if-no-files-found: error
-          retention-days: 30
+      # 網站直接連 /releases/latest/download/<name>, 所以檔名必須是`不含版號`的固定值.
+      - name: Normalize asset names
+        run: |
+          cd build/mac-dist
+          mv -- *.dmg iPhoneSync-Mac.dmg
+          mv -- *.pkg iPhoneSync-Mac.pkg
+          ls -l
+
+      - name: Upload to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release upload "$TAG" \
+            build/mac-dist/iPhoneSync-Mac.dmg \
+            build/mac-dist/iPhoneSync-Mac.pkg \
+            --clobber
 
   windows:
     name: SyncCore.Windows + electron-builder (NSIS + portable)
+    needs: prepare
     runs-on: windows-latest
     timeout-minutes: 30
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -104,12 +157,15 @@ jobs:
           node scripts/copy-sync-core.js
 
       - name: Stamp release version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          cd apps/windows
-          $version = $env:GITHUB_REF_NAME -replace '^v', ''
-          npm version $version --no-git-tag-version --allow-same-version
+          if ($env:TAG -match '^v[0-9]') {
+            cd apps/windows
+            $version = $env:TAG -replace '^v', ''
+            npm version $version --no-git-tag-version --allow-same-version
+          }
 
       - name: Produce NSIS installer + portable .exe
         shell: pwsh
@@ -117,52 +173,22 @@ jobs:
           cd apps/windows
           npm run dist
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: iPhoneSync-Windows-x64
-          path: |
-            apps/windows/dist-installer/win-unpacked/**/*
-            apps/windows/dist-installer/*.exe
-          if-no-files-found: error
-          retention-days: 30
+      # 同上: 固定檔名, 讓 /releases/latest/download/ 永遠指得到.
+      - name: Normalize asset names
+        shell: pwsh
+        run: |
+          cd apps/windows/dist-installer
+          Move-Item -Force (Get-ChildItem iPhoneSync-Setup-*.exe)[0].FullName iPhoneSync-Setup.exe
+          Move-Item -Force (Get-ChildItem iPhoneSync-Portable-*.exe)[0].FullName iPhoneSync-Portable.exe
+          Get-ChildItem *.exe
 
-  publish:
-    name: Publish GitHub Release
-    needs: [macos, windows]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          merge-multiple: true
-
-      - name: List release assets
-        run: ls -lR release-assets
-
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            release-assets/*.exe
-            release-assets/*.dmg
-            release-assets/*.pkg
-          generate_release_notes: true
-          fail_on_unmatched_files: true
-
-      - name: Publish draft GitHub Release (manual)
-        if: github.event_name == 'workflow_dispatch'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.tag || format('manual-{0}', github.run_number) }}
-          files: |
-            release-assets/*.exe
-            release-assets/*.dmg
-            release-assets/*.pkg
-          draft: true
-          generate_release_notes: true
-          fail_on_unmatched_files: true
+      - name: Upload to release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          gh release upload $env:TAG `
+            apps/windows/dist-installer/iPhoneSync-Setup.exe `
+            apps/windows/dist-installer/iPhoneSync-Portable.exe `
+            --clobber

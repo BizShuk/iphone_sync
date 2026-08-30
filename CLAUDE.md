@@ -221,8 +221,10 @@ bash scripts/run-mac.sh          # Release build → /Applications/iPhone Sync.a
 預設 ad-hoc 簽章；設定 `MAC_SIGN_IDENTITY`（Developer ID Application）加上 `MAC_NOTARY_PROFILE` 或 `MAC_NOTARY_APPLE_ID`/`MAC_NOTARY_TEAM_ID`/`MAC_NOTARY_PASSWORD` 後，同一腳本升級為 Developer ID 簽章 + notarization + stapling；`MAC_INSTALLER_IDENTITY` 另外簽 PKG。
 
 GitHub Actions 自動 release：
-- `.github/workflows/release.yml` 同一次 run：`macos-latest` 跑 SyncCore package tests + `scripts/package-mac.sh`（DMG + PKG）、`windows-latest` 跑 vitest + `npm run dist`（NSIS + portable），最後由單一 `publish` job 把 `.dmg` / `.pkg` / `.exe` 掛上同一個 GitHub Release（`v*` tag = public、workflow_dispatch = draft）。
-- `v*` tag 版本會 stamp 進 macOS `MARKETING_VERSION`/`CFBundleVersion` 與 Windows `package.json`，兩端 artifact 檔名一致對應 tag。
+- `.github/workflows/release.yml` 同一次 run：`prepare` job 先建立（或重用）該 tag 的 GitHub Release（`v*` tag = public、workflow_dispatch = draft），`macos-latest` 跑 SyncCore package tests + `scripts/package-mac.sh`（DMG + PKG）、`windows-latest` 跑 vitest + `npm run dist`（NSIS + portable），兩個 build job 各自以 `gh release upload --clobber` 把產物掛上同一個 Release。
+- Build job `不得`改用 `actions/upload-artifact` 當跨 job 傳遞：artifact storage quota 一滿就整條 release 失敗，`v0.0.13` ~ `v0.0.32` 全部卡在這個 `Failed to CreateArtifact: Artifact storage quota has been hit`，二十個 tag 沒有任何 release 產出。
+- Release asset 檔名`不含版號`且固定為 `iPhoneSync-Mac.dmg` / `iPhoneSync-Mac.pkg` / `iPhoneSync-Setup.exe` / `iPhoneSync-Portable.exe`，讓 [web/index.html](web/index.html) 的下載按鈕可以固定連 `/releases/latest/download/<name>`，發新版不必改網站。版號由 Release tag 表達。
+- `v*` tag 版本仍會 stamp 進 macOS `MARKETING_VERSION`/`CFBundleVersion` 與 Windows `package.json`。
 
 驗證腳本使用 `CODE_SIGNING_ALLOWED=NO` 建置 `iPhoneSyncMac`、generic iOS Simulator 與 `Release` generic iOS device；Release build 必須編譯 production cadence 分支。腳本也檢查 `BGTaskSchedulerPermittedIdentifiers`、`UIBackgroundModes = processing`、PhotoKit deletion usage string、default-off guard、hard-cancellation、Mac recovery 與兩端 Operation Log source invariants。這些 checks 證明 source contract 與 platform compilation，不是 Photos system confirmation、listener recovery、OS launch/expiration 或 signed network behavior tests。
 
