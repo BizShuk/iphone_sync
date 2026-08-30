@@ -74,12 +74,12 @@ flowchart LR
 1. Mac 保持登入即可，menu-bar receiver 會自動恢復 destination、配對與 manifest。
 2. iPhone 端有四種觸發同步的入口：
 
-| 入口             | 位置                                        | 行為                                                |
-| ---------------- | ------------------------------------------- | --------------------------------------------------- |
-| `Sync Now`       | iPhone 主畫面 Mac 卡片                      | 立即前景同步，永遠可用的 fallback                   |
-| Control widget   | 控制中心自訂項目 `Sync Now`                 | 不開啟 App，透過 `SyncNowIntent` 觸發既有 sync 入口 |
-| 1x1 shortcut     | Shortcuts / Siri：`Sync now in Photo Sync`  | 同上，走同一個 `handleIncomingURL` 路徑             |
-| `Automatic Sync` | 主畫面 `AUTOMATIC SYNC` 區                  | opt-in 後由 iOS `BGProcessingTask` best-effort 啟動 |
+| 入口             | 位置                                       | 行為                                                |
+| ---------------- | ------------------------------------------ | --------------------------------------------------- |
+| `Sync Now`       | iPhone 主畫面 Mac 卡片                     | 立即前景同步，永遠可用的 fallback                   |
+| Control widget   | 控制中心自訂項目 `Sync Now`                | 不開啟 App，透過 `SyncNowIntent` 觸發既有 sync 入口 |
+| 1x1 shortcut     | Shortcuts / Siri：`Sync now in Photo Sync` | 同上，走同一個 `handleIncomingURL` 路徑             |
+| `Automatic Sync` | 主畫面 `AUTOMATIC SYNC` 區                 | opt-in 後由 iOS `BGProcessingTask` best-effort 啟動 |
 
 1. 同步中可按 `Cancel`；同一時間只允許一個 run（single-flight）。
 2. 完成後 `LAST SYNC` 顯示 `Added` / `Already` / `Not local` / `Failed` 四項摘要。
@@ -233,7 +233,7 @@ iPhone sender：
 | `Find Mac` 找不到 Mac | 兩端同一 Wi-Fi、Mac 配對視窗仍在兩分鐘內、非 guest network / VLAN / VPN、router 未開 client isolation    |
 | 配對碼輸入失敗        | 碼已逾時（120 秒）或嘗試次數用盡，回 Mac 重新 `Pair iPhone`                                              |
 | 大量 `Not local`      | 該資源只在 iCloud，App 固定 `isNetworkAccessAllowed = false`，需先在 Photos 下載到本機                   |
-| Automatic 從未執行    | `earliestBeginDate` 不是保證；先確認 `Background App Refresh` 可用，再用 `Sync Now` 作為 fallback |
+| Automatic 從未執行    | `earliestBeginDate` 不是保證；先確認 `Background App Refresh` 可用，再用 `Sync Now` 作為 fallback        |
 | 已同步但尚未刪除      | Background run 只建立 pending list；回到 App，在 `AFTER SYNC` 按 `Delete N Synced Photos` 並確認         |
 | Mac 寫入被拒          | 目的地同名項目是檔案，或 symlink 解析不到資料夾，`Operation Log` 會標示；換一個 destination 或移除該項目 |
 
@@ -256,17 +256,17 @@ Windows 11 receiver 端會額外跑 `scripts/verify-windows.sh`：49 個 vitest�
 
 所有本機建置產物都落在 repo 根目錄的 `build/`（已被 `.gitignore` 忽略），Windows 端則落在各自的 package 目錄下。`npm run clean` 會清掉 `build/`、TypeScript `dist/` 與 Swift package build。
 
-| 指令                   | 腳本 / 工具        | 產物                                        | 位置                                                                    |
-| ---------------------- | ------------------ | ------------------------------------------- | ----------------------------------------------------------------------- |
-| `npm run dev:ios`      | `run-simulator.sh` | Simulator `.app`                            | `build/simulator/Build/Products/Debug-iphonesimulator/iPhone Sync.app`  |
-| `npm run deploy:ios`   | `run-iphone.sh`    | 已簽署 archive（安裝到實機）                | `build/iphone/iPhoneSync.xcarchive`（derived data 在 `build/iphone/DerivedData`） |
-| `npm run build:ios`    | `run-iphone.sh`    | 同上，只建置不安裝                          | `build/iphone/iPhoneSync.xcarchive/Products/Applications/iPhone Sync.app` |
-| `npm run release:ios`| `release.sh`       | App Store archive + `.ipa`                  | `build/appstore/iPhoneSync.xcarchive`、`build/appstore/ipa/*.ipa`       |
-| `npm run dev:mac`      | `run-server.sh`    | Debug `.app`（原地啟動）                    | `build/mac/DerivedData/Build/Products/Debug/iPhone Sync.app`            |
-| `npm run deploy:mac`   | `run-mac.sh`       | Release `.app`（安裝後啟動）                | 建置於 `build/mac-install-derived/`，安裝至 `/Applications/iPhone Sync.app` |
-| `npm run build:mac`    | `package-mac.sh`   | universal DMG + PKG                         | `build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}`（中繼在 `build/mac-release-derived/`） |
-| `npm run build:windows`| `electron-builder` | NSIS installer + portable `.exe`            | `apps/windows/dist-installer/iPhoneSync-{Setup,Portable}-<version>.exe` |
-| `npm run build:windows`| `tsc`              | 編譯後的 JavaScript                         | `packages/SyncCore.Windows/dist/`、`apps/windows/dist/`                  |
+| 指令                    | 腳本 / 工具        | 產物                             | 位置                                                                                       |
+| ----------------------- | ------------------ | -------------------------------- | ------------------------------------------------------------------------------------------ |
+| `npm run dev:ios`       | `run-simulator.sh` | Simulator `.app`                 | `build/simulator/Build/Products/Debug-iphonesimulator/iPhone Sync.app`                     |
+| `npm run deploy:ios`    | `run-iphone.sh`    | 已簽署 archive（安裝到實機）     | `build/iphone/iPhoneSync.xcarchive`（derived data 在 `build/iphone/DerivedData`）          |
+| `npm run build:ios`     | `run-iphone.sh`    | 同上，只建置不安裝               | `build/iphone/iPhoneSync.xcarchive/Products/Applications/iPhone Sync.app`                  |
+| `npm run release:ios`   | `release.sh`       | App Store archive + `.ipa`       | `build/appstore/iPhoneSync.xcarchive`、`build/appstore/ipa/*.ipa`                          |
+| `npm run dev:mac`       | `run-server.sh`    | Debug `.app`（原地啟動）         | `build/mac/DerivedData/Build/Products/Debug/iPhone Sync.app`                               |
+| `npm run deploy:mac`    | `run-mac.sh`       | Release `.app`（安裝後啟動）     | 建置於 `build/mac-install-derived/`，安裝至 `/Applications/iPhone Sync.app`                |
+| `npm run build:mac`     | `package-mac.sh`   | universal DMG + PKG              | `build/mac-dist/iPhoneSync-Mac-<version>.{dmg,pkg}`（中繼在 `build/mac-release-derived/`） |
+| `npm run build:windows` | `electron-builder` | NSIS installer + portable `.exe` | `apps/windows/dist-installer/iPhoneSync-{Setup,Portable}-<version>.exe`                    |
+| `npm run build:windows` | `tsc`              | 編譯後的 JavaScript              | `packages/SyncCore.Windows/dist/`、`apps/windows/dist/`                                    |
 
 `INSTALL_DIR` 可改 `deploy:mac` 的安裝目的地；`BUILD_ROOT`、`DERIVED_DATA_PATH`、`APP_PATH` 可覆寫各腳本的建置根目錄。
 
@@ -297,18 +297,18 @@ bash scripts/verify-windows.sh      # 49 tests + 2 builds + invariants pass
 
 App 設定依資料敏感度使用 Apple 原生持久層，不集中到單一可讀檔案：
 
-| Data                                                                                       | Persistent Store                                                                 |
-| ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| automatic sync enablement、last attempt/success/outcome、next eligible time、schedule time | iOS sandbox `UserDefaults`，由 `IOSAutomaticSyncStore` 管理                      |
-| delete-after-sync enablement、pending Photos asset ID / `modificationDate` snapshots       | iOS sandbox `UserDefaults`，由 `IOSDeleteAfterSyncStore` 管理                    |
-| receiver ID、source binding、storage mode、launch-at-login intent                          | sandbox `UserDefaults`，由 `MacSettingsStore` 管理                               |
-| Finder destination permission                                                              | security-scoped bookmark in sandbox preferences                                  |
-| paired iPhone PSK、opaque identity                                                         | login Keychain                                                                   |
-| album mappings、完成狀態、續傳 checkpoint                                                  | SwiftData in App container `Application Support`                                 |
-| 開機自動執行                                                                               | `SMAppService.mainApp` login item registration                                   |
-| Setup window size/position、menu-bar item position                                         | AppKit autosave                                                                  |
+| Data                                                                                       | Persistent Store                                                                         |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| automatic sync enablement、last attempt/success/outcome、next eligible time、schedule time | iOS sandbox `UserDefaults`，由 `IOSAutomaticSyncStore` 管理                              |
+| delete-after-sync enablement、pending Photos asset ID / `modificationDate` snapshots       | iOS sandbox `UserDefaults`，由 `IOSDeleteAfterSyncStore` 管理                            |
+| receiver ID、source binding、storage mode、launch-at-login intent                          | sandbox `UserDefaults`，由 `MacSettingsStore` 管理                                       |
+| Finder destination permission                                                              | security-scoped bookmark in sandbox preferences                                          |
+| paired iPhone PSK、opaque identity                                                         | login Keychain                                                                           |
+| album mappings、完成狀態、續傳 checkpoint                                                  | SwiftData in App container `Application Support`                                         |
+| 開機自動執行                                                                               | `SMAppService.mainApp` login item registration                                           |
+| Setup window size/position、menu-bar item position                                         | AppKit autosave                                                                          |
 | iOS operation timeline                                                                     | App container 內的 bounded on-disk log（最新 500 筆，跨啟動保存）+ Apple Unified Logging |
-| macOS operation timeline                                                                   | 常駐 App process 的 bounded in-memory buffer（最新 500 筆）+ Apple Unified Logging |
+| macOS operation timeline                                                                   | 常駐 App process 的 bounded in-memory buffer（最新 500 筆）+ Apple Unified Logging       |
 
 `Automatic Sync` 預設關閉；關閉時取消 pending request 與 active automatic run，不刪除 pairing、相簿選擇、partial 或 manifest。`Delete After Sync` 也預設關閉；關閉時清除 pending deletion IDs 且不呼叫 PhotoKit deletion，receiver files 不受影響。`Launch at Login` 首次預設啟用，使用者關閉後保存該選擇。六位數 pairing code、active connection 與 active deletion request 是 transient runtime state，不跨重啟保存；Mac 的 operation timeline 同樣是 transient，iPhone 的則跨啟動保存。
 
@@ -331,23 +331,23 @@ MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、def
 
 ### 文件索引 (Documentation Index)
 
-| 文件                                                                                                         | 內容                                     |
-| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| [CLAUDE.md](CLAUDE.md)                                                                                       | 技術脈絡、架構、依賴方向、已核准技術選擇 |
-| [README.permission.md](README.permission.md)                                                                 | iOS / macOS 權限與能力逐項說明           |
-| [README.todo](README.todo)                                                                                   | 待辦與實機驗收清單                       |
+| 文件                                                                                                         | 內容                                           |
+| ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| [CLAUDE.md](CLAUDE.md)                                                                                       | 技術脈絡、架構、依賴方向、已核准技術選擇       |
+| [README.permission.md](README.permission.md)                                                                 | iOS / macOS 權限與能力逐項說明                 |
+| [README.todo](README.todo)                                                                                   | 待辦與實機驗收清單                             |
 | [web/index.html](web/index.html)                                                                             | 對外上手指南站，部署於 `iphone-sync.shuks.dev` |
-| [apps/ios/README.md](apps/ios/README.md)                                                                     | iPhone sender 的 flow 與邊界             |
-| [apps/macos/README.md](apps/macos/README.md)                                                                 | Mac receiver 的 flow 與邊界              |
-| [apps/windows/README.md](apps/windows/README.md)                                                             | Windows 11 receiver 的 flow 與邊界       |
-| [packages/SyncCore/README.md](packages/SyncCore/README.md)                                                   | 傳輸協定、crypto、manifest 與 writer     |
-| [docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md)         | 原始 MVP 設計                            |
-| [docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md)                   | Automatic LAN sync 規格                  |
-| [docs/specs/2026-07-24-ui-redesign.md](docs/specs/2026-07-24-ui-redesign.md)                                 | UI design tokens 與版面規格              |
-| [docs/specs/2026-07-25-windows-11-desktop-receiver.md](docs/specs/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 desktop receiver 設計         |
-| [docs/specs/2026-07-27-delete-after-sync.md](docs/specs/2026-07-27-delete-after-sync.md)                     | 同步後 optional Photos deletion contract |
-| [plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)                         | Operation timeline contract              |
-| [plans/2026-07-25-windows-11-desktop-receiver.md](plans/2026-07-25-windows-11-desktop-receiver.md)           | Windows 11 port 實作計畫                 |
+| [apps/ios/README.md](apps/ios/README.md)                                                                     | iPhone sender 的 flow 與邊界                   |
+| [apps/macos/README.md](apps/macos/README.md)                                                                 | Mac receiver 的 flow 與邊界                    |
+| [apps/windows/README.md](apps/windows/README.md)                                                             | Windows 11 receiver 的 flow 與邊界             |
+| [packages/SyncCore/README.md](packages/SyncCore/README.md)                                                   | 傳輸協定、crypto、manifest 與 writer           |
+| [docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md)         | 原始 MVP 設計                                  |
+| [docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md)                   | Automatic LAN sync 規格                        |
+| [docs/specs/2026-07-24-ui-redesign.md](docs/specs/2026-07-24-ui-redesign.md)                                 | UI design tokens 與版面規格                    |
+| [docs/specs/2026-07-25-windows-11-desktop-receiver.md](docs/specs/2026-07-25-windows-11-desktop-receiver.md) | Windows 11 desktop receiver 設計               |
+| [docs/specs/2026-07-27-delete-after-sync.md](docs/specs/2026-07-27-delete-after-sync.md)                     | 同步後 optional Photos deletion contract       |
+| [plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)                         | Operation timeline contract                    |
+| [plans/2026-07-25-windows-11-desktop-receiver.md](plans/2026-07-25-windows-11-desktop-receiver.md)           | Windows 11 port 實作計畫                       |
 
 ## 5. App Store 送審必填資訊 (App Store Submission)
 
@@ -357,7 +357,7 @@ MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、def
 
 | App Store Connect 欄位  | 值                           | 佐證                                                                     |
 | ----------------------- | ---------------------------- | ------------------------------------------------------------------------ |
-| Name（≤30）             | `Photo Sync`                 | `project.yml` iOS target `CFBundleDisplayName` / `CFBundleName`         |
+| Name（≤30）             | `Photo Sync`                 | `project.yml` iOS target `CFBundleDisplayName` / `CFBundleName`          |
 | Subtitle（≤30）         | `Album backup over your LAN` | 26 字元                                                                  |
 | Bundle ID               | `com.shuk.iphonesync.ios`    | `project.yml` `PRODUCT_BUNDLE_IDENTIFIER`                                |
 | SKU                     | `iphone-sync-ios`            | 內部識別，不對外顯示                                                     |
