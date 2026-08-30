@@ -336,6 +336,7 @@ MVP、多相簿同步、`Automatic Sync` scheduler / single-flight runtime、def
 | [CLAUDE.md](CLAUDE.md)                                                                                       | 技術脈絡、架構、依賴方向、已核准技術選擇 |
 | [README.permission.md](README.permission.md)                                                                 | iOS / macOS 權限與能力逐項說明           |
 | [README.todo](README.todo)                                                                                   | 待辦與實機驗收清單                       |
+| [web/index.html](web/index.html)                                                                             | 對外上手指南站，部署於 `iphone-sync.shuks.dev` |
 | [apps/ios/README.md](apps/ios/README.md)                                                                     | iPhone sender 的 flow 與邊界             |
 | [apps/macos/README.md](apps/macos/README.md)                                                                 | Mac receiver 的 flow 與邊界              |
 | [apps/windows/README.md](apps/windows/README.md)                                                             | Windows 11 receiver 的 flow 與邊界       |

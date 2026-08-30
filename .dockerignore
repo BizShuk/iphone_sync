@@ -1,0 +1,5 @@
+# 這顆 image 只需要 web/。Xcode 專案, Swift packages, build/ 與 6 GB 的
+# derived data 一律不進 build context——否則每次 build 都要把整個 repo
+# 打包送給 daemon, 而其中沒有一個位元組會出現在 image 裡。
+*
+!web

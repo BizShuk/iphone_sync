@@ -87,6 +87,8 @@ iphone_sync/
 │   └── specs/
 ├── plans/
 ├── scripts/                     # verify.sh、verify-windows.sh、package-mac.sh、run-mac.sh、run-server.sh、run-simulator.sh、run-iphone.sh、release.sh
+├── web/                         # 上手指南站的內容：index.html（自足單頁）+ nginx.conf
+├── Dockerfile                   # 把 web/ 烤成 nginx image，部署在 liva（iphone-sync.shuks.dev）
 ├── README.md
 ├── README.permission.md         # iOS/macOS permissions and purpose
 ├── CLAUDE.md
@@ -245,6 +247,7 @@ GitHub Actions 自動 release：
 - Automatic LAN Sync 實作計畫：[plans/2026-07-23-automatic-lan-sync.md](plans/2026-07-23-automatic-lan-sync.md)
 - Operation Log Panels 架構計畫：[plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)
 - 待辦：[README.todo](README.todo)
+- 對外上手指南站：[web/index.html](web/index.html)，image 由本 repo 根目錄的 `Dockerfile` 建，服務定義在 `platform/inf/hosts/liva/docker-compose.yml`
 - Background sync 續傳與 ledger：[docs/memory/2026-08-28-background-sync-resume.md](docs/memory/2026-08-28-background-sync-resume.md)
 - 歷史操作與決策：[docs/memory/README.md](docs/memory/README.md)
 
