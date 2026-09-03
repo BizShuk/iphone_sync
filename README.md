@@ -254,7 +254,7 @@ Windows 11 receiver 端會額外跑 `scripts/verify-windows.sh`：49 個 vitest�
 
 ### 建置產物位置 (Build Output Locations)
 
-所有本機建置產物都落在 repo 根目錄的 `build/`（已被 `.gitignore` 忽略），Windows 端則落在各自的 package 目錄下。`npm run clean` 會清掉 `build/`、TypeScript `dist/` 與 Swift package build。
+所有本機建置產物都落在 repo 根目錄的 `build/`（已被 `.gitignore` 忽略），Windows 端則落在各自的 package 目錄下。`npm run clean` 會清掉 `build/`、Swift package `.build`、TypeScript `dist/`、Windows installer 輸出，以及 Windows 端 `node_modules`。`web/download/` 的上架用安裝檔不在範圍內。
 
 | 指令                    | 腳本 / 工具        | 產物                             | 位置                                                                                       |
 | ----------------------- | ------------------ | -------------------------------- | ------------------------------------------------------------------------------------------ |

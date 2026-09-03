@@ -32,8 +32,8 @@
 
     "clean": "npx npm-run-all --parallel clean:*",
     "clean:build": "rm -rf build dist",
-    "clean:swift": "swift package --package-path packages/SyncCore clean",
-    "clean:windows": "rm -rf packages/SyncCore.Windows/dist apps/windows/dist apps/windows/release",
+    "clean:swift": "rm -rf packages/SyncCore/.build packages/SyncCore/.swiftpm",
+    "clean:windows": "rm -rf packages/SyncCore.Windows/dist packages/SyncCore.Windows/node_modules apps/windows/dist apps/windows/dist-installer apps/windows/node_modules",
 
     "destroy": "npx npm-run-all --parallel destroy:*",
     "destroy:mac": "pkill -f 'iPhone Sync' || true",
