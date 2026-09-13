@@ -70,10 +70,21 @@ xcrun swiftc \
 swift test --package-path packages/SyncCore
 xcodegen generate
 
-ios_test_device_id="$(
+# `isAvailable 會說謊`：CoreSimulator 的 Devices 目錄被清掉之後，那幾台仍是
+# available，但 boot 一律回 cannot be located on disk，而 xcodebuild 對它的
+# 說法是 Channel disconnected —— 看起來像測試壞了，其實是機器壞了。
+# 因此再確認一次資料目錄真的在。本工作區只維護一台 iPhone 17 Pro Max，
+# 規則見 iphone/CLAUDE.md。
+ios_test_device_id=""
+for candidate in $(
     xcrun simctl list devices available -j \
-        | jq -r '[.devices[][] | select(.isAvailable and (.name | startswith("iPhone")))] | first | .udid // empty'
-)"
+        | jq -r '[.devices[][] | select(.isAvailable and (.name | startswith("iPhone")))] | .[].udid'
+); do
+    if [[ -d "$HOME/Library/Developer/CoreSimulator/Devices/$candidate" ]]; then
+        ios_test_device_id="$candidate"
+        break
+    fi
+done
 test -n "$ios_test_device_id"
 
 xcodebuild -quiet \
