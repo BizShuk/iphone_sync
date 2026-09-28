@@ -1,6 +1,13 @@
 #!/bin/bash
 #
-# pre-push: 自動建立並推送 release tag。
+# pre-push: 推 master 時做兩件事 ——
+#
+#   1. 自動建立並推送 release tag (下述)。
+#   2. 把部署交給 `inf deploy hook` (platform/inf): git 沒有 post-push, 它在背景
+#      等這次 push 落地, 再依 liva compose 決定要不要 build + 推 registry + ssh
+#      rollout; 不在部署範圍的 repo 什麼都不做。沒裝 inf 的機器直接略過。
+#
+# 以下是 release tag 的規則。
 #
 # 每次把新 commit 推上 release branch，就從下列候選取最高版本，打在
 # 即將送出的 commit 上，並直接推到 remote：
@@ -70,7 +77,7 @@ version_greater_than() {
 highest_tag_version() {
 	local tag version highest="0.0.0"
 	while IFS= read -r tag; do
-		version="${tag#${TAG_PREFIX}}"
+		version="${tag#"${TAG_PREFIX}"}"
 		is_version "$version" || continue
 		if version_greater_than "$version" "$highest"; then
 			highest="$version"
@@ -119,7 +126,10 @@ next_release_tag() {
 
 remote="${1:-origin}"
 
-while read -r local_ref local_sha remote_ref remote_sha; do
+# stdin 只能讀一次, 兩件事都要: 先整份收下。
+updates="$(cat)"
+
+while read -r local_ref local_sha _remote_ref remote_sha; do
 	# 只處理 branch push。tag push（含本 hook 自己推的那次）由此跳過，
 	# 這同時就是遞迴防護。
 	case "$local_ref" in
@@ -165,6 +175,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 	else
 		note "推送 ${tag} 失敗；tag 留在本地，可稍後手動 git push ${remote} ${tag}"
 	fi
-done
+done <<<"$updates"
+
+# 部署交接。$PPID 是 git push 本身, 背景的部署等它結束才判斷 push 有沒有落地。
+# `|| true`: 舊版或壞掉的 inf 也不能擋下 push。
+if command -v inf >/dev/null 2>&1; then
+	printf '%s\n' "$updates" | inf deploy hook --git-pid "$PPID" "$@" || true
+fi
 
 exit 0
