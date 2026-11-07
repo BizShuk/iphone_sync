@@ -92,8 +92,7 @@ iphone_sync/
 ├── Dockerfile                   # 把 web/ 烤成 nginx image，部署在 liva（iphone-sync.shuks.dev）
 ├── README.md
 ├── README.permission.md         # iOS/macOS permissions and purpose
-├── CLAUDE.md
-├── AGENTS.md -> CLAUDE.md
+├── AGENTS.md
 └── README.todo
 ```
 
