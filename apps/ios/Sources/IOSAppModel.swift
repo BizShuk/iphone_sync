@@ -20,8 +20,7 @@ final class IOSAppModel {
     var state: State = .setup
     var authorizationStatus: PHAuthorizationStatus
     var albums: [PhotoAlbum] = []
-    var selectedAlbums: [PhotoAlbum] = []
-    var pairedPeer: PairedPeer?
+    var receiverProfiles: [ReceiverProfile] = []
     var receivers: [DiscoveredReceiver] = []
     var pairingCode = ""
     var pairingError: String?
@@ -35,7 +34,7 @@ final class IOSAppModel {
     var operationLog: [OperationLogEntry] = []
 
     @ObservationIgnored private let photoSource: PhotoLibrarySource
-    @ObservationIgnored private let albumStore: AlbumSelectionStore
+    @ObservationIgnored private let profileStore: ReceiverProfileStore
     @ObservationIgnored private let automaticStore: IOSAutomaticSyncStore
     @ObservationIgnored private let deleteAfterSyncStore: IOSDeleteAfterSyncStore
     @ObservationIgnored private let logger = Logger(
@@ -57,14 +56,14 @@ final class IOSAppModel {
 
     init() {
         let photoSource = PhotoLibrarySource()
-        let albumStore = AlbumSelectionStore()
+        let profileStore = ReceiverProfileStore()
         // The persisted key keeps its original name so an installed app does
         // not lose the user's automatic-sync intent.
         let automaticStore = IOSAutomaticSyncStore(prefix: "automaticSyncProduction")
         let deleteAfterSyncStore = IOSDeleteAfterSyncStore()
         let policy = AutomaticSyncPolicy()
         self.photoSource = photoSource
-        self.albumStore = albumStore
+        self.profileStore = profileStore
         self.automaticStore = automaticStore
         self.deleteAfterSyncStore = deleteAfterSyncStore
         automaticSync = automaticStore.snapshot
@@ -82,6 +81,7 @@ final class IOSAppModel {
         coordinator = IOSSyncCoordinator(
             photoSource: photoSource,
             deviceID: deviceID,
+            profileStore: profileStore,
             onProgress: { [weak self] progress in
                 Task { @MainActor in self?.progress = progress }
             },
@@ -91,6 +91,17 @@ final class IOSAppModel {
         )
         postSyncDeletionController = IOSPostSyncDeletionController(
             store: deleteAfterSyncStore,
+            registry: AssetBackupRegistry(),
+            eligibilityInput: {
+                let profiles = profileStore.load()
+                let albumIDs = Set(profiles.flatMap { $0.albums.map(\.id) })
+                return DeletionEligibilityInput(
+                    profiles: profiles,
+                    assetIDsByAlbumID: try photoSource.assetIDsByAlbumID(
+                        albumIDs: albumIDs
+                    )
+                )
+            },
             deletionService: PhotoAssetDeletionService { candidates in
                 try await photoSource.deleteAssets(candidates: candidates)
             },
@@ -104,7 +115,7 @@ final class IOSAppModel {
         )
         runtime = IOSSyncRuntime(
             photoSource: photoSource,
-            albumStore: albumStore,
+            profileStore: profileStore,
             coordinator: coordinator,
             postSyncDeletionController: postSyncDeletionController
         )
@@ -113,7 +124,7 @@ final class IOSAppModel {
             store: automaticStore,
             policy: policy,
             taskIdentifier: AutomaticSyncScheduler.taskIdentifier,
-            isPaired: { [weak self] in self?.pairedPeer != nil },
+            isPaired: { [weak self] in !(self?.receiverProfiles.isEmpty ?? true) },
             onSnapshotChange: { [weak self] snapshot in
                 self?.automaticSync = snapshot
             },
@@ -142,17 +153,21 @@ final class IOSAppModel {
         authorizationStatus == .authorized
     }
 
+    /// At least one paired receiver has an album to receive.
+    var hasSyncableReceiver: Bool {
+        receiverProfiles.contains { !$0.albums.isEmpty }
+    }
+
     var canSync: Bool {
         hasFullPhotoAccess
-            && !selectedAlbums.isEmpty
-            && pairedPeer != nil
+            && hasSyncableReceiver
             && state != .syncing
             && !automaticRunIsActive
             && !deleteAfterSync.isDeleting
     }
 
     var canEnableAutomaticSync: Bool {
-        hasFullPhotoAccess && !selectedAlbums.isEmpty
+        hasFullPhotoAccess && hasSyncableReceiver
     }
 
     var isAnySyncRunning: Bool {
@@ -171,12 +186,12 @@ final class IOSAppModel {
         }
     }
 
-    var selectedAlbumsText: String {
-        switch selectedAlbums.count {
-        case 0: "Not selected"
-        case 1: selectedAlbums[0].title
-        default: "\(selectedAlbums.count) selected"
-        }
+    func isStale(_ profile: ReceiverProfile) -> Bool {
+        DeletionEligibilityPolicy.isStale(profile, now: Date())
+    }
+
+    private var idleState: State {
+        hasFullPhotoAccess && hasSyncableReceiver ? .ready : .setup
     }
 
     func bootstrap() async {
@@ -186,21 +201,18 @@ final class IOSAppModel {
             message: "Loading saved albums, pairing, and automatic sync state."
         )
         do {
-            pairedPeer = try await coordinator.loadPairedPeer()
+            receiverProfiles = profileStore.load()
             if hasFullPhotoAccess {
                 try loadAlbums()
             }
-            state = hasFullPhotoAccess && !selectedAlbums.isEmpty && pairedPeer != nil
-                ? .ready
-                : .setup
+            state = idleState
             automaticSync = automaticStore.snapshot
             deleteAfterSync = postSyncDeletionController.snapshot
             await ensureAutomaticSchedulerScheduled()
             recordOperation(
                 .success,
                 category: "App",
-                message: "Startup completed; \(selectedAlbums.count) album(s) selected"
-                    + (pairedPeer == nil ? " and no Mac is paired." : " and the Mac is paired.")
+                message: "Startup completed; \(receiverProfiles.count) receiver(s) paired."
             )
         } catch {
             recordFailure(error.localizedDescription, category: "Startup")
@@ -230,7 +242,7 @@ final class IOSAppModel {
             )
             do {
                 try loadAlbums()
-                state = selectedAlbums.isEmpty || pairedPeer == nil ? .setup : .ready
+                state = idleState
                 refreshAutomaticScheduler()
             } catch {
                 recordFailure(error.localizedDescription, category: "Photos")
@@ -238,19 +250,24 @@ final class IOSAppModel {
         }
     }
 
-    func selectAlbums(_ albums: [PhotoAlbum]) {
-        guard !isAnySyncRunning else { return }
-        selectedAlbums = albums
-        albumStore.save(albums)
+    func selectAlbums(_ albums: [PhotoAlbum], receiverID: String) {
+        guard !isAnySyncRunning,
+              let profile = receiverProfiles.first(where: { $0.id == receiverID }) else {
+            return
+        }
+        profileStore.setAlbums(albums, receiverID: receiverID)
+        receiverProfiles = profileStore.load()
+        postSyncDeletionController.invalidatePending()
         let albumNames = albums.map(\.title).joined(separator: ", ")
         recordOperation(
             .info,
             category: "Albums",
             message: albums.isEmpty
-                ? "Cleared the album selection."
-                : "Selected \(albums.count) album(s): \(albumNames)."
+                ? "Cleared the album selection of “\(profile.displayName)”."
+                : "Selected \(albums.count) album(s) for “\(profile.displayName)”: "
+                    + "\(albumNames)."
         )
-        state = albums.isEmpty || pairedPeer == nil ? .setup : .ready
+        state = idleState
         refreshAutomaticScheduler()
     }
 
@@ -262,12 +279,10 @@ final class IOSAppModel {
         recordOperation(
             .info,
             category: "Discovery",
-            message: pairedPeer == nil
-                ? "Looking for Macs with an open pairing window."
-                : "Looking for the paired Mac."
+            message: "Looking for computers with an open pairing window."
         )
         discoveryTask = Task {
-            let stream = await coordinator.receiverStream(pairing: pairedPeer == nil)
+            let stream = await coordinator.receiverStream(pairing: true)
             var previousReceiverIDs: Set<String> = []
             for await values in stream {
                 guard !Task.isCancelled else { break }
@@ -279,8 +294,8 @@ final class IOSAppModel {
                     values.isEmpty ? .info : .success,
                     category: "Discovery",
                     message: values.isEmpty
-                        ? "No available Mac is currently visible."
-                        : "Found \(values.count) Mac receiver(s): "
+                        ? "No computer with an open pairing window is visible."
+                        : "Found \(values.count) receiver(s): "
                             + values.map(\.displayName).joined(separator: ", ")
                             + "."
                 )
@@ -310,11 +325,14 @@ final class IOSAppModel {
               pairingCode.allSatisfy({ $0.isNumber }) else { return }
         Task {
             do {
-                pairedPeer = try await coordinator.confirmPairing(code: pairingCode)
+                _ = try await coordinator.confirmPairing(code: pairingCode)
+                receiverProfiles = profileStore.load()
+                receivers = []
+                postSyncDeletionController.invalidatePending()
                 pairingIsPending = false
                 pairingError = nil
                 pairingExpiresAt = nil
-                state = selectedAlbums.isEmpty ? .setup : .ready
+                state = idleState
                 refreshAutomaticScheduler()
             } catch let error as PairingClientError {
                 pairingError = error.localizedDescription
@@ -344,7 +362,7 @@ final class IOSAppModel {
         pairingCode = ""
         pairingError = nil
         pairingExpiresAt = nil
-        state = selectedAlbums.isEmpty || pairedPeer == nil ? .setup : .ready
+        state = idleState
         Task { await coordinator.cancelPairing() }
     }
 
@@ -357,7 +375,8 @@ final class IOSAppModel {
         recordOperation(
             .info,
             category: "Manual Sync",
-            message: "Started Sync Now for \(selectedAlbums.count) album(s)."
+            message: "Started Sync Now for "
+                + "\(receiverProfiles.filter { !$0.albums.isEmpty }.count) receiver(s)."
         )
         Task {
             let outcome = await runtime.run(SyncRunRequest(
@@ -369,12 +388,12 @@ final class IOSAppModel {
                 activeForegroundRunID = nil
             }
             activityAssertion.endRun()
+            receiverProfiles = profileStore.load()
             recordSyncOutcome(outcome, category: "Manual Sync")
             switch outcome {
             case .completed(let summary), .noChanges(let summary):
                 lastSummary = summary
                 do {
-                    pairedPeer = try await coordinator.loadPairedPeer()
                     if hasFullPhotoAccess {
                         try loadAlbums()
                     }
@@ -473,7 +492,7 @@ final class IOSAppModel {
         if hasFullPhotoAccess, !isAnySyncRunning {
             do {
                 try loadAlbums()
-                if pairedPeer != nil, !selectedAlbums.isEmpty {
+                if hasSyncableReceiver, state == .setup {
                     state = .ready
                 }
             } catch {
@@ -521,23 +540,34 @@ final class IOSAppModel {
         Task { await runtime.cancel(runID: activeForegroundRunID, reason: .user) }
     }
 
-    func forgetMac() {
-        guard !isAnySyncRunning else { return }
+    /// Forgets one receiver. Automatic Sync and Delete After Sync stay on
+    /// while any receiver remains; forgetting the last one turns both off.
+    func forgetReceiver(id receiverID: String) {
+        guard !isAnySyncRunning,
+              let profile = receiverProfiles.first(where: { $0.id == receiverID }) else {
+            return
+        }
         Task {
             do {
-                try await coordinator.forgetPeer()
-                pairedPeer = nil
-                automaticScheduler.setEnabled(false)
-                automaticSync = automaticStore.snapshot
-                postSyncDeletionController.setEnabled(false)
+                try await coordinator.forgetReceiver(id: receiverID)
+                postSyncDeletionController.forgetReceiver(receiverID)
+                receiverProfiles = profileStore.load()
+                if receiverProfiles.isEmpty {
+                    automaticScheduler.setEnabled(false)
+                    automaticSync = automaticStore.snapshot
+                    postSyncDeletionController.setEnabled(false)
+                }
                 deleteAfterSync = postSyncDeletionController.snapshot
-                state = .setup
+                state = idleState
                 recordOperation(
                     .success,
                     category: "Pairing",
-                    message: "Forgot the paired Mac and disabled Automatic Sync "
-                        + "and Delete After Sync."
+                    message: receiverProfiles.isEmpty
+                        ? "Forgot “\(profile.displayName)”, the last receiver; "
+                            + "disabled Automatic Sync and Delete After Sync."
+                        : "Forgot “\(profile.displayName)”."
                 )
+                refreshAutomaticScheduler()
             } catch {
                 recordFailure(error.localizedDescription, category: "Pairing")
             }
@@ -583,15 +613,18 @@ final class IOSAppModel {
         await automaticScheduler.ensureScheduled()
     }
 
+    /// Refreshes the album list and drops albums deleted from Photos out of
+    /// every receiver's selection, keeping titles and counts current.
     private func loadAlbums() throws {
         albums = try photoSource.albums()
-        let savedIDs = Set(albumStore.load().map(\.id))
-        selectedAlbums = albums.filter { savedIDs.contains($0.id) }
-        if selectedAlbums.isEmpty {
-            albumStore.clear()
-        } else {
-            albumStore.save(selectedAlbums)
+        let liveAlbums = Dictionary(uniqueKeysWithValues: albums.map { ($0.id, $0) })
+        for profile in profileStore.load() {
+            let current = profile.albums.compactMap { liveAlbums[$0.id] }
+            if current != profile.albums {
+                profileStore.setAlbums(current, receiverID: profile.id)
+            }
         }
+        receiverProfiles = profileStore.load()
     }
 
     private func recordOperation(

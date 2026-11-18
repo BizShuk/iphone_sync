@@ -5,8 +5,8 @@ import UIKit
 
 struct ContentView: View {
     @Bindable var model: IOSAppModel
-    @State private var showsAlbumPicker = false
-    @State private var showForgetConfirmation = false
+    @State private var albumPickerReceiver: ReceiverProfile?
+    @State private var receiverToForget: ReceiverProfile?
     @State private var showEnableDeleteAfterSyncConfirmation = false
     @Environment(\.openURL) private var openURL
 
@@ -32,11 +32,12 @@ struct ContentView: View {
             .background(Tokens.Palette.paper)
             .navigationTitle("Photo Sync")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showsAlbumPicker) {
+            .sheet(item: $albumPickerReceiver) { receiver in
                 AlbumPickerView(
+                    receiverName: receiver.displayName,
                     albums: model.albums,
-                    selectedAlbums: model.selectedAlbums,
-                    save: model.selectAlbums
+                    selectedAlbums: receiver.albums,
+                    save: { model.selectAlbums($0, receiverID: receiver.id) }
                 )
             }
             .sheet(isPresented: Binding(
@@ -50,14 +51,26 @@ struct ContentView: View {
                 PairingView(model: model)
             }
             .confirmationDialog(
-                "Forget the paired Mac?",
-                isPresented: $showForgetConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Forget", role: .destructive) { model.forgetMac() }
+                "Forget \(receiverToForget?.displayName ?? "this computer")?",
+                isPresented: Binding(
+                    get: { receiverToForget != nil },
+                    set: { if !$0 { receiverToForget = nil } }
+                ),
+                titleVisibility: .visible,
+                presenting: receiverToForget
+            ) { receiver in
+                Button("Forget", role: .destructive) {
+                    model.forgetReceiver(id: receiver.id)
+                }
                 Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("If you continue, Automatic Sync will be disabled and you will need to pair again.")
+            } message: { _ in
+                Text(
+                    model.receiverProfiles.count == 1
+                        ? "This is the last computer. Automatic Sync and Delete "
+                            + "After Sync will be disabled and you will need to pair again."
+                        : "Other computers keep syncing. You will need to pair "
+                            + "this one again to use it."
+                )
             }
             .alert(
                 "Enable Delete After Sync?",
@@ -90,37 +103,43 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 12) {
             zoneHeader("Source")
 
-            sourceCard(
-                icon: "photo.on.rectangle.angled",
-                title: photosTitle,
-                subtitle: photosSubtitle,
-                action: {
-                    if !model.hasFullPhotoAccess {
-                        model.requestPhotosAccess()
-                    } else {
-                        showsAlbumPicker = true
-                    }
-                },
-                actionLabel: model.hasFullPhotoAccess ? "Choose Albums" : "Grant Photos Access",
-                actionEnabled: !model.isAnySyncRunning,
-                actionTinted: !model.hasFullPhotoAccess
-            )
+            if !model.hasFullPhotoAccess {
+                sourceCard(
+                    icon: "photo.on.rectangle.angled",
+                    title: "Photos access required",
+                    subtitle: "Full Photos Access is required to read original resources.",
+                    action: { model.requestPhotosAccess() },
+                    actionLabel: "Grant Photos Access",
+                    actionEnabled: !model.isAnySyncRunning,
+                    actionTinted: true
+                )
+            }
+
+            ForEach(model.receiverProfiles) { receiver in
+                ReceiverCardView(
+                    profile: receiver,
+                    isStale: model.isStale(receiver),
+                    actionsEnabled: !model.isAnySyncRunning && model.hasFullPhotoAccess,
+                    chooseAlbums: { albumPickerReceiver = receiver },
+                    forget: { receiverToForget = receiver }
+                )
+            }
 
             sourceCard(
-                icon: "desktopcomputer",
-                title: macTitle,
-                subtitle: macSubtitle,
-                action: macAction,
-                actionLabel: macActionLabel,
-                actionEnabled: macActionEnabled,
-                actionTinted: model.pairedPeer != nil,
-                leadingAction: model.pairedPeer == nil ? nil : { model.syncNow() },
-                leadingActionLabel: model.pairedPeer == nil ? nil : "Sync Now",
+                icon: "plus.rectangle.on.rectangle",
+                title: model.receiverProfiles.isEmpty ? "No computer paired" : "Add a computer",
+                subtitle: addReceiverSubtitle,
+                action: { model.findMac() },
+                actionLabel: "Add Computer",
+                actionEnabled: !model.isAnySyncRunning,
+                actionTinted: false,
+                leadingAction: model.receiverProfiles.isEmpty ? nil : { model.syncNow() },
+                leadingActionLabel: model.receiverProfiles.isEmpty ? nil : "Sync Now",
                 leadingActionEnabled: model.canSync,
                 actionsAtTrailing: true
             )
 
-            if model.pairedPeer == nil, model.state == .findingMac {
+            if model.state == .findingMac {
                 receiverSelectionCard
             }
 
@@ -138,52 +157,16 @@ struct ContentView: View {
         }
     }
 
-    private var photosTitle: String {
-        guard model.hasFullPhotoAccess else { return "Photos access required" }
-        return model.selectedAlbumsText
-    }
-
-    private var photosSubtitle: String {
-        if !model.hasFullPhotoAccess {
-            return "Full Photos Access is required to read original resources."
-        }
-        let total = model.selectedAlbums.reduce(0) { $0 + $1.assetCount }
-        switch model.selectedAlbums.count {
-        case 0: return "Tap to choose albums to back up."
-        case 1: return "1 album · \(total.formatted()) photos"
-        default: return "\(model.selectedAlbums.count) albums · \(total.formatted()) photos"
-        }
-    }
-
-    private var macTitle: String {
-        model.pairedPeer?.displayName ?? "Mac"
-    }
-
-    private var macSubtitle: String {
+    private var addReceiverSubtitle: String {
         if model.state == .findingMac {
             return model.receivers.isEmpty
-                ? "Searching for Macs with an open pairing window..."
-                : "\(model.receivers.count) Mac candidate(s) found."
+                ? "Searching for computers with an open pairing window..."
+                : "\(model.receivers.count) computer(s) found."
         }
-        if model.pairedPeer != nil {
-            return "Paired · same Wi-Fi"
+        if model.receiverProfiles.isEmpty {
+            return "Choose a Mac or Windows PC on the same Wi-Fi to begin."
         }
-        return "Not paired. Choose a Mac on the same Wi-Fi to begin."
-    }
-
-    private var macAction: () -> Void {
-        if model.pairedPeer == nil {
-            return { model.findMac() }
-        }
-        return { showForgetConfirmation = true }
-    }
-
-    private var macActionLabel: String {
-        model.pairedPeer == nil ? "Find Mac" : "Forget"
-    }
-
-    private var macActionEnabled: Bool {
-        !model.isAnySyncRunning
+        return "Each computer receives its own albums. Sync Now syncs all of them."
     }
 
     private func sourceCard(
@@ -256,7 +239,7 @@ struct ContentView: View {
 
     private var receiverSelectionCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Tap a Mac to start pairing")
+            Text("Tap a computer to start pairing")
                 .font(Tokens.Typography.body.weight(.semibold))
                 .foregroundStyle(Tokens.Palette.wire)
 
@@ -441,8 +424,8 @@ struct ContentView: View {
             return "\(model.deleteAfterSync.pendingAssetCount) fully backed-up "
                 + "photo(s) are waiting for foreground confirmation."
         }
-        return "Only photos whose every local original resource is confirmed "
-            + "on the computer are eligible; changed photos stay."
+        return "Only photos confirmed on every computer whose albums contain "
+            + "them are eligible; changed photos stay."
     }
 
     // MARK: Automatic Zone

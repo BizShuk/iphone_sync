@@ -147,8 +147,10 @@ rg -F 'resumingAfter cursor: AlbumSyncCursor?' apps/ios/Sources/PhotoLibrarySour
 rg -F 'ledger.confirmedDescriptor(' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
 rg -F 'client.offerResource(offer)' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
 rg -F 'try validateLocalFile(fileURL, descriptor: offer.descriptor)' packages/SyncCore/Sources/SyncCore/SyncClient.swift >/dev/null
-rg -F 'cursorStore.clear(albumID: album.id)' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
-rg -F 'ledger.clear()' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'cursorStore.clear(receiverID: peer.id, albumID: album.id)' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'ledger.forget(sourceBindingID: binding)' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'staleInterval: TimeInterval = 14 * 24 * 60 * 60' apps/ios/Sources/DeletionEligibilityPolicy.swift >/dev/null
+rg -F 'FileProtectionType.completeUntilFirstUserAuthentication' apps/ios/Sources/AssetBackupRegistry.swift >/dev/null
 rg -F 'FileProtectionType.completeUntilFirstUserAuthentication' apps/ios/Sources/SyncedResourceLedger.swift >/dev/null
 rg -F 'FileProtectionType.completeUntilFirstUserAuthentication' apps/ios/Sources/AlbumSyncCursorStore.swift >/dev/null
 rg -F 'guard store.isEnabled else { return }' apps/ios/Sources/DeleteAfterSync.swift >/dev/null
@@ -165,9 +167,9 @@ rg -F 'UIApplication.openSettingsURLString' apps/ios/Sources/ContentView.swift >
 rg -F 'pairingExpiresAt' apps/ios/Sources/PairingView.swift >/dev/null
 rg -F 'pairingError' apps/ios/Sources/PairingView.swift >/dev/null
 rg -F 'cancelPairing' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
-rg -F 'var selectedAlbums: [PhotoAlbum]' apps/ios/Sources/IOSAppModel.swift >/dev/null
+rg -F 'var receiverProfiles: [ReceiverProfile]' apps/ios/Sources/IOSAppModel.swift >/dev/null
 rg -F '.navigationTitle("Choose Albums")' apps/ios/Sources/AlbumPickerView.swift >/dev/null
-rg -F 'func sync(albums: [PhotoAlbum])' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
+rg -F 'plans: [ReceiverSyncPlan]' apps/ios/Sources/IOSSyncCoordinator.swift >/dev/null
 rg -F 'com.shuk.iphonesync.ios.scheduled-sync' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
 rg -F 'using: .main' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null
 rg -F 'execution.worker?.cancel()' apps/ios/Sources/AutomaticSyncScheduler.swift >/dev/null

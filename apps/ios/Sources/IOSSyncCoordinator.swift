@@ -12,7 +12,10 @@ struct IOSSyncProgress: Equatable, Sendable {
 
 struct IOSSyncTransferResult: Equatable, Sendable {
     let summary: SyncSummary
-    let deletionCandidates: Set<PhotoDeletionCandidate>
+    /// Fully backed-up assets per receiver, only for receivers whose every
+    /// selected album finished in this run.
+    let confirmations: [String: Set<PhotoDeletionCandidate>]
+    let failedReceiverCount: Int
 }
 
 enum IOSSyncCoordinatorError: Error, LocalizedError, Sendable {
@@ -27,8 +30,8 @@ enum IOSSyncCoordinatorError: Error, LocalizedError, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .macNotFound: "The paired Mac is not available on this local network."
-        case .notPaired: "Pair this iPhone with a Mac first."
+        case .macNotFound: "The paired computer is not available on this local network."
+        case .notPaired: "Pair this iPhone with a computer first."
         case .pairingNotStarted: "Choose a Mac before entering its pairing code."
         case let .resourceFailed(_, message, _): message
         }
@@ -50,12 +53,12 @@ enum IOSSyncResourceRetryPolicy {
 }
 
 actor IOSSyncCoordinator {
-    private static let pairedPeerAccount = "paired-peer"
     private static let receiverRetryDelays: [UInt64] = [0, 1, 2, 4]
 
     private let photoSource: PhotoLibrarySource
     private let ledger: SyncedResourceLedger
     private let cursorStore: AlbumSyncCursorStore
+    private let profileStore: ReceiverProfileStore
     private let keychain = KeychainSecretStore()
     private let deviceID: String
     private let onProgress: @Sendable (IOSSyncProgress?) -> Void
@@ -71,19 +74,24 @@ actor IOSSyncCoordinator {
         deviceID: String,
         ledger: SyncedResourceLedger = SyncedResourceLedger(),
         cursorStore: AlbumSyncCursorStore = AlbumSyncCursorStore(),
+        profileStore: ReceiverProfileStore = ReceiverProfileStore(),
         onProgress: @escaping @Sendable (IOSSyncProgress?) -> Void,
         onOperation: @escaping @Sendable (OperationLogEvent) async -> Void = { _ in }
     ) {
         self.photoSource = photoSource
         self.ledger = ledger
         self.cursorStore = cursorStore
+        self.profileStore = profileStore
         self.deviceID = deviceID
         self.onProgress = onProgress
         self.onOperation = onOperation
     }
 
-    func loadPairedPeer() throws -> PairedPeer? {
-        try keychain.load(PairedPeer.self, account: Self.pairedPeerAccount)
+    func loadPeer(receiverID: String) throws -> PairedPeer? {
+        try keychain.load(
+            PairedPeer.self,
+            account: ReceiverProfileStore.peerAccount(receiverID: receiverID)
+        )
     }
 
     func receiverStream(pairing: Bool) -> AsyncStream<[DiscoveredReceiver]> {
@@ -120,19 +128,29 @@ actor IOSSyncCoordinator {
         )
     }
 
-    func confirmPairing(code: String) async throws -> PairedPeer {
+    /// Adds the receiver, or replaces the secret of one paired again.
+    /// Other paired receivers are untouched.
+    func confirmPairing(code: String) async throws -> ReceiverProfile {
         guard let pendingPairing else {
             throw IOSSyncCoordinatorError.pairingNotStarted
         }
         let peer = try await pendingPairing.confirm(code: code)
-        try keychain.save(peer, account: Self.pairedPeerAccount)
+        try keychain.save(
+            peer,
+            account: ReceiverProfileStore.peerAccount(receiverID: peer.id)
+        )
+        let profile = profileStore.upsertPaired(
+            id: peer.id,
+            displayName: peer.displayName,
+            at: Date()
+        )
         self.pendingPairing = nil
         await emit(
             .success,
             category: "Pairing",
             message: "Paired with “\(peer.displayName)”."
         )
-        return peer
+        return profile
     }
 
     func cancelPairing() async {
@@ -147,7 +165,7 @@ actor IOSSyncCoordinator {
         )
     }
 
-    func pair(endpoint: NWEndpoint, code: String) async throws -> PairedPeer {
+    func pair(endpoint: NWEndpoint, code: String) async throws -> ReceiverProfile {
         if pendingPairing == nil {
             let client = PairingClient(deviceID: deviceID, requireWiFi: true)
             pendingPairing = try await client.begin(
@@ -164,42 +182,94 @@ actor IOSSyncCoordinator {
         return trimmedName.isEmpty ? "iPhone" : trimmedName
     }
 
-    func forgetPeer() throws {
-        try keychain.delete(account: Self.pairedPeerAccount)
-        // Nothing the previous Mac confirmed can be trusted for the next one.
-        ledger.clear()
-        cursorStore.clearAll()
+    /// Forgets one receiver: its secret, what its destination confirmed and
+    /// where its album passes stopped. Other receivers keep their state.
+    func forgetReceiver(id receiverID: String) throws {
+        let account = ReceiverProfileStore.peerAccount(receiverID: receiverID)
+        if let peer = try loadPeer(receiverID: receiverID),
+           let binding = peer.sourceBindingID {
+            ledger.forget(sourceBindingID: binding)
+        }
+        try keychain.delete(account: account)
+        cursorStore.clear(receiverID: receiverID)
+        profileStore.remove(receiverID: receiverID)
     }
 
-    func sync(albums: [PhotoAlbum]) async throws -> SyncSummary {
-        try await syncTransfer(
-            albums: albums,
-            discoveryStrategy: .foregroundRetries
-        ).summary
-    }
-
-    func sync(
-        albums: [PhotoAlbum],
-        discoveryStrategy: IOSSyncDiscoveryStrategy
-    ) async throws -> SyncSummary {
-        try await syncTransfer(
-            albums: albums,
-            discoveryStrategy: discoveryStrategy
-        ).summary
-    }
-
+    /// Syncs every receiver in turn, the one that waited longest first, so a
+    /// background window that ends early still moves every receiver forward
+    /// over successive runs. One unreachable or failing receiver does not
+    /// stop the others; the run throws only when no receiver finished.
     func syncTransfer(
-        albums: [PhotoAlbum],
+        plans: [ReceiverSyncPlan],
         discoveryStrategy: IOSSyncDiscoveryStrategy
     ) async throws -> IOSSyncTransferResult {
-        guard var peer = try loadPairedPeer() else {
-            throw IOSSyncCoordinatorError.notPaired
-        }
         cancelRequested = false
         var combinedSummary = SyncSummary.zero
-        var deletionCandidates = PhotoDeletionCandidateAccumulator()
+        var confirmations: [String: Set<PhotoDeletionCandidate>] = [:]
+        var failures: [any Error] = []
 
-        for album in albums {
+        let ordered = plans
+            .filter { !$0.albums.isEmpty }
+            .sorted {
+                ($0.profile.lastCompletedAt ?? .distantPast)
+                    < ($1.profile.lastCompletedAt ?? .distantPast)
+            }
+        for plan in ordered {
+            try Task.checkCancellation()
+            if cancelRequested { throw CancellationError() }
+            do {
+                let result = try await sync(
+                    plan: plan,
+                    discoveryStrategy: discoveryStrategy
+                )
+                combinedSummary.added += result.summary.added
+                combinedSummary.existing += result.summary.existing
+                combinedSummary.notLocal += result.summary.notLocal
+                combinedSummary.failed += result.summary.failed
+                confirmations[plan.profile.id] = result.deletionCandidates
+                profileStore.markCompleted(receiverID: plan.profile.id, at: Date())
+            } catch {
+                if cancelRequested || Task.isCancelled || error is CancellationError {
+                    throw error
+                }
+                failures.append(error)
+                await emit(
+                    .error,
+                    category: "Receiver",
+                    message: "“\(plan.profile.displayName)” did not finish: "
+                        + error.localizedDescription
+                )
+            }
+        }
+        if confirmations.isEmpty, let first = failures.first {
+            throw first
+        }
+        return IOSSyncTransferResult(
+            summary: combinedSummary,
+            confirmations: confirmations,
+            failedReceiverCount: failures.count
+        )
+    }
+
+    private func sync(
+        plan: ReceiverSyncPlan,
+        discoveryStrategy: IOSSyncDiscoveryStrategy
+    ) async throws -> (
+        summary: SyncSummary,
+        deletionCandidates: Set<PhotoDeletionCandidate>
+    ) {
+        guard var peer = try loadPeer(receiverID: plan.profile.id) else {
+            throw IOSSyncCoordinatorError.notPaired
+        }
+        await emit(
+            .info,
+            category: "Receiver",
+            message: "Syncing \(plan.albums.count) album(s) to "
+                + "“\(plan.profile.displayName)”."
+        )
+        var summary = SyncSummary.zero
+        var deletionCandidates = PhotoDeletionCandidateAccumulator()
+        for album in plan.albums {
             try Task.checkCancellation()
             if cancelRequested { throw CancellationError() }
             await emit(
@@ -214,24 +284,22 @@ actor IOSSyncCoordinator {
                 discoveryStrategy: discoveryStrategy
             )
             peer = result.peer
-            combinedSummary.added += result.summary.added
-            combinedSummary.existing += result.summary.existing
-            combinedSummary.notLocal += result.summary.notLocal
-            combinedSummary.failed += result.summary.failed
+            summary.added += result.summary.added
+            summary.existing += result.summary.existing
+            summary.notLocal += result.summary.notLocal
+            summary.failed += result.summary.failed
             deletionCandidates.merge(result.deletionCandidates)
             await emit(
                 .success,
                 category: "Album",
-                message: "Finished “\(album.title)”: \(result.summary.added) added, "
+                message: "Finished “\(album.title)” on "
+                    + "“\(plan.profile.displayName)”: \(result.summary.added) added, "
                     + "\(result.summary.existing) already present, "
                     + "\(result.summary.notLocal) not local, "
                     + "\(result.summary.failed) failed."
             )
         }
-        return IOSSyncTransferResult(
-            summary: combinedSummary,
-            deletionCandidates: deletionCandidates.eligibleCandidates
-        )
+        return (summary, deletionCandidates.eligibleCandidates)
     }
 
     private func sync(
@@ -283,8 +351,9 @@ actor IOSSyncCoordinator {
             await emit(
                 .success,
                 category: "Session",
-                message: "Mac accepted album “\(album.title)”."
+                message: "“\(peer.displayName)” accepted album “\(album.title)”."
             )
+            profileStore.markConnected(receiverID: peer.id, at: Date())
             if peer.sourceBindingID != sourceBindingID {
                 peer = PairedPeer(
                     id: peer.id,
@@ -293,7 +362,10 @@ actor IOSSyncCoordinator {
                     psk: peer.psk,
                     sourceBindingID: sourceBindingID
                 )
-                try keychain.save(peer, account: Self.pairedPeerAccount)
+                try keychain.save(
+                    peer,
+                    account: ReceiverProfileStore.peerAccount(receiverID: peer.id)
+                )
                 await emit(
                     .info,
                     category: "Session",
@@ -303,7 +375,10 @@ actor IOSSyncCoordinator {
 
             var notLocal = 0
             var deletionCandidates = PhotoDeletionCandidateAccumulator()
-            let resumeCursor = cursorStore.cursor(albumID: album.id)
+            let resumeCursor = cursorStore.cursor(
+                receiverID: peer.id,
+                albumID: album.id
+            )
             if resumeCursor != nil {
                 await emit(
                     .info,
@@ -358,6 +433,7 @@ actor IOSSyncCoordinator {
                     )
                     if let creationDate {
                         cursorStore.advance(
+                            receiverID: peer.id,
                             albumID: album.id,
                             to: AlbumSyncCursor(
                                 assetLocalIdentifier: assetLocalIdentifier,
@@ -371,7 +447,7 @@ actor IOSSyncCoordinator {
             if cancelRequested { throw CancellationError() }
             // The walk reached the end of the album, so the next run starts a
             // fresh pass and picks up assets imported with an older date.
-            cursorStore.clear(albumID: album.id)
+            cursorStore.clear(receiverID: peer.id, albumID: album.id)
             var summary = try await client.finish()
             summary.notLocal = notLocal
             return (summary, peer, deletionCandidates)
@@ -582,7 +658,7 @@ actor IOSSyncCoordinator {
         await emit(
             .info,
             category: "Discovery",
-            message: "Looking for the exact paired Mac on Wi-Fi."
+            message: "Looking for the exact paired receiver on Wi-Fi."
         )
         let discovery = BonjourDiscovery(
             serviceType: SyncConstants.normalServiceType,
@@ -637,7 +713,7 @@ actor IOSSyncCoordinator {
                 await emit(
                     .warning,
                     category: "Discovery",
-                    message: "The paired Mac was not found in this discovery attempt."
+                    message: "The paired receiver was not found in this discovery attempt."
                 )
             }
         }

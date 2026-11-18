@@ -124,15 +124,15 @@ enum SyncRunOutcome: Equatable, Sendable {
         case .deferred(.alreadyRunning):
             "Another sync is already running."
         case .deferred(.macUnavailable):
-            "The paired Mac is not visible on this local network."
+            "No paired computer is visible on this local network."
         case .deferred(.networkUnavailable):
             "The local network connection is unavailable."
         case .deferred(.photosAccessRequired):
             "Full Photos access is required."
         case .deferred(.albumsRequired):
-            "Choose at least one Photos album."
+            "Choose at least one Photos album for a paired computer."
         case .deferred(.pairingRequired):
-            "Pair this iPhone with a Mac first."
+            "Pair this iPhone with a computer first."
         case .budgetExhausted:
             "The scheduled batch reached its time budget and will resume later."
         case .cancelled:
@@ -145,10 +145,11 @@ enum SyncRunOutcome: Equatable, Sendable {
 
 struct IOSSyncRuntimeEnvironment: Sendable {
     let hasFullPhotoAccess: @Sendable () -> Bool
-    let loadSelectedAlbums: @Sendable () throws -> [PhotoAlbum]
-    let hasPairedPeer: @Sendable () async throws -> Bool
+    /// Every paired receiver with its albums filtered against the live
+    /// Photos library.
+    let loadReceiverPlans: @Sendable () async throws -> [ReceiverSyncPlan]
     let sync: @Sendable (
-        _ albums: [PhotoAlbum],
+        _ plans: [ReceiverSyncPlan],
         _ discoveryStrategy: IOSSyncDiscoveryStrategy,
         _ trigger: SyncTrigger
     ) async throws -> SyncSummary
@@ -164,7 +165,7 @@ actor IOSSyncRuntime {
 
     init(
         photoSource: PhotoLibrarySource,
-        albumStore: AlbumSelectionStore,
+        profileStore: ReceiverProfileStore,
         coordinator: IOSSyncCoordinator,
         postSyncDeletionController: IOSPostSyncDeletionController
     ) {
@@ -172,21 +173,24 @@ actor IOSSyncRuntime {
             hasFullPhotoAccess: {
                 photoSource.authorizationStatus() == .authorized
             },
-            loadSelectedAlbums: {
-                let selectedIDs = Set(albumStore.load().map(\.id))
-                guard !selectedIDs.isEmpty else { return [] }
-                return try photoSource.albums().filter { selectedIDs.contains($0.id) }
+            loadReceiverPlans: {
+                let profiles = profileStore.load()
+                guard !profiles.isEmpty else { return [] }
+                let liveIDs = Set(try photoSource.albums().map(\.id))
+                return profiles.map { profile in
+                    ReceiverSyncPlan(
+                        profile: profile,
+                        albums: profile.albums.filter { liveIDs.contains($0.id) }
+                    )
+                }
             },
-            hasPairedPeer: {
-                try await coordinator.loadPairedPeer() != nil
-            },
-            sync: { albums, discoveryStrategy, trigger in
+            sync: { plans, discoveryStrategy, trigger in
                 let result = try await coordinator.syncTransfer(
-                    albums: albums,
+                    plans: plans,
                     discoveryStrategy: discoveryStrategy
                 )
                 await postSyncDeletionController.handleSuccessfulSync(
-                    candidates: result.deletionCandidates,
+                    confirmations: result.confirmations,
                     trigger: trigger
                 )
                 return result.summary
@@ -222,28 +226,27 @@ actor IOSSyncRuntime {
             return .deferred(.photosAccessRequired)
         }
 
-        let albums: [PhotoAlbum]
+        let plans: [ReceiverSyncPlan]
         do {
-            albums = try environment.loadSelectedAlbums()
-        } catch {
-            return .deferred(.photosAccessRequired)
-        }
-        guard !albums.isEmpty else {
-            return .deferred(.albumsRequired)
-        }
-        do {
-            guard try await environment.hasPairedPeer() else {
-                return .deferred(.pairingRequired)
-            }
+            plans = try await environment.loadReceiverPlans()
         } catch {
             if Task.isCancelled || cancellationReason != nil {
                 return cancellationOutcome()
+            }
+            if error is PhotoLibrarySourceError {
+                return .deferred(.photosAccessRequired)
             }
             return .failed(SyncRunFailure(
                 kind: .needsUserAction,
                 message: error.localizedDescription,
                 shouldRetrySoon: false
             ))
+        }
+        guard !plans.isEmpty else {
+            return .deferred(.pairingRequired)
+        }
+        guard plans.contains(where: { !$0.albums.isEmpty }) else {
+            return .deferred(.albumsRequired)
         }
 
         if Task.isCancelled || cancellationReason != nil {
@@ -254,7 +257,7 @@ actor IOSSyncRuntime {
         let environment = environment
         let operation = Task {
             try await environment.sync(
-                albums,
+                plans,
                 discoveryStrategy,
                 request.trigger
             )

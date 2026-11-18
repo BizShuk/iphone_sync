@@ -17,12 +17,12 @@ MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels
 - Scheduled run 用完 window 是預期結果，不是 handler 失敗：`budgetExhausted` 必須以 `setTaskCompleted(success: true)` 回報，否則 iOS 會逐步縮減本 app 的 background 額度。只有 `cancelled` 與真正的 internal failure 才回報失敗。
 - 已被 receiver 確認過的 resource 必須先 offer 再決定是否 export：ledger 只保存 descriptor，`永遠不是` 完成狀態的 authoritative source，Mac manifest 才是。
 - receiver 一旦 accept offer 就開始計 idle deadline，因此 offer 與第一個 chunk 之間`不得`插入 export 或 hash 這類長工作。本機檔案的 size / SHA-256 驗證一律在送出 offer `之前`完成；ledger offer 收到 `.transfer` 時丟掉該 entry 並以 retryable failure 結束，由下一輪正常 stage 重建，不得在 receiver 等待期間才去 export。
-- ledger entry 以 destination `sourceBindingID` 為 key；`Forget` receiver 必須清空 ledger 與所有 album cursors。asset `modificationDate` 改變即失效。
-- 同一時間只綁定一組使用者選取的來源相簿、一部 iPhone 與一部 Mac；來源相簿可多選。
+- ledger entry 以 destination `sourceBindingID` 為 key；`Forget` 某台 receiver 只清除該 binding 的 ledger、該 receiver 的 album cursors 與 backup registry 紀錄，其他 receiver 不受影響。asset `modificationDate` 改變即失效。
+- 一部 iPhone 可配對`多台` receiver (Mac / Windows)，每台各自選相簿 (可多選)；每台 receiver 仍只配對一部 iPhone。Receiver 端無需知道其他 receiver 存在。Sync run 依 `lastCompletedAt` 最舊者優先逐台同步，單台不可見或失敗不中斷其他台，全部失敗才算 run 失敗。
 - 使用者選擇的 Finder folder 是 destination root；若它是 symbolic link，選擇時先解析並保存實際 target folder。每個 album 的 resource 一律寫入 resolved root 的固定 `iPhoneSync` 容器下；`iPhoneSync` 容器、相簿資料夾與日期子資料夾若是 symbolic link，只要解析後是實際存在的資料夾就當一般資料夾使用（允許 target 位於 destination root 之外，實際寫入仍受 sandbox 授權限制），不解析為資料夾者拒絕。已存在的真實資料夾安全重用，同名的不同 album 以 `名稱 (2)`、`名稱 (3)` 穩定區分；檔案層級的 symlink 一律拒絕，維持絕不覆寫既有檔案。
 - 同步只能新增，永不因來源變動刪除或覆寫 Mac 既有檔案。
-- `Delete After Sync` 預設關閉；關閉時所有同步入口都不得 enqueue 或呼叫 Photos deletion，disable 與 forget receiver 會清除 pending deletion IDs。
-- 刪除單位是整個 `PHAsset`。只有 asset 的每個本機 resource 在每個已選相簿 occurrence 都由 receiver 回覆 committed / already present，且完整 multi-album run 成功時才可成為 candidate；任何 not-local resource、failure、cancel 或 expiration 都必須保留 asset。
+- `Delete After Sync` 預設關閉；關閉時所有同步入口都不得 enqueue 或呼叫 Photos deletion，disable 與 forget 最後一台 receiver 會清除 pending deletion IDs 與 backup registry。新增 receiver 或變更任何 receiver 的相簿會撤回 pending，等下一輪重新評估。
+- 刪除單位是整個 `PHAsset`。只有 asset 的每個本機 resource 在每個已選相簿 occurrence 都由 receiver 回覆 committed / already present，且該 receiver 的所有已選相簿都成功時，才把該 receiver 記入 `AssetBackupRegistry`。asset 必須被`所有`相簿包含它的 receiver 確認 (跨 run 累積) 才成為 candidate；`DeletionEligibilityPolicy` 唯一例外：連續 `14 天` 未完成同步的 receiver (從 `lastCompletedAt`，未完成過則從 `pairedAt` 起算) 不再阻擋，但至少要有一台 required receiver 已確認。不在任何已選相簿內的 asset 一律保留。任何 not-local resource、failure、cancel 或 expiration 都必須保留 asset。
 - Foreground run 可對 candidates 發出單一 PhotoKit change request；background run 只能保存 pending IDs，使用者回到 App 後以 `Delete N Synced Photos` 觸發 system confirmation。Receiver committed files 永不因來源刪除而改變。
 - Background run 留下 pending deletion 時必須發出 local notification 告知`數量`；通知不得包含 asset identifier，也不得成為刪除的必要條件（授權被拒仍須照常排隊）。完成刪除、關閉 toggle 或 forget receiver 時撤回該通知。
 - iOS operation timeline 必須落地保存並在啟動時還原。Background run 的 process 結束後事件不得消失，否則 automatic sync 與 pending deletion 皆無從稽核。timeline 仍受 500 筆上限，且不得寫入 PSK、pairing code、identity、source binding、content hash 或 asset identifier。
@@ -134,12 +134,14 @@ MacReceiverKit ─────────→ SyncCore
 
 | State | Owner | Persistence |
 |---|---|---|
-| iPhone device ID、selected albums | iOS App | `UserDefaults` |
+| iPhone device ID | iOS App | `UserDefaults` |
+| 每台 receiver 的 profile (名稱、相簿、`pairedAt`、`lastConnectedAt`、`lastCompletedAt`) | `ReceiverProfileStore` | `UserDefaults` key `receiverProfiles` |
+| 每個 asset 已被哪些 receiver 確認 | `AssetBackupRegistry` | App container `SyncedResources/asset-backups.json` |
 | Automatic enabled intent、last attempt/success/outcome、next eligible | `IOSAutomaticSyncStore` | iOS sandbox `UserDefaults` |
 | Delete-after-sync enabled intent、pending asset ID / `modificationDate` snapshots | `IOSDeleteAfterSyncStore` | iOS sandbox `UserDefaults` |
 | Active manual / automatic run ID | `IOSSyncRuntime` | transient only |
 | Active PhotoKit deletion request | `IOSPostSyncDeletionController` | transient only |
-| Paired peer PSK、opaque identity | 各 App | Keychain |
+| Paired peer PSK、opaque identity | 各 App | Keychain (iOS 每台 receiver 一個 account `paired-peer.<receiverID>`) |
 | Mac receiver ID、current source binding、launch intent | `MacSettingsStore` | sandbox `UserDefaults` |
 | Destination capability | `DestinationBookmarkStore` + `MacSettingsStore` | security-scoped bookmark data in sandbox `UserDefaults` |
 | Launch-at-login registration | `MacAppModel` | `SMAppService.mainApp` |
@@ -148,7 +150,7 @@ MacReceiverKit ─────────→ SyncCore
 | Album-scoped resource status、hash、size、checkpoint、final path | `ManifestStore` | SwiftData `TransferRecord` |
 | Partial media bytes | `DestinationWriter` | destination `iPhoneSync/<safe-album-name>/<year>/<month>/<name>.partial` |
 | 已由 receiver 確認的 resource descriptor | `SyncedResourceLedger` | App container 內的 append-only JSONL（compaction、`completeUntilFirstUserAuthentication`） |
-| 每個相簿的續傳位置 | `AlbumSyncCursorStore` | App container 內的小型 JSON（批次寫入，pass 走完即清除） |
+| 每個 receiver × 相簿的續傳位置 | `AlbumSyncCursorStore` | App container 內的小型 JSON（批次寫入，pass 走完即清除） |
 | iOS operation timeline | `PersistentOperationLogStore` + `IOSAppModel` | App container 內的 bounded JSONL log（最新 500 筆，跨啟動還原）+ Apple Unified Logging |
 | macOS operation timeline | `MacAppModel` | bounded in-memory list（最新 500 筆）+ Apple Unified Logging |
 
@@ -247,7 +249,8 @@ GitHub Actions 自動 release：
 - 權限與能力盤點：[README.permission.md](README.permission.md)
 - 歷史 MVP 設計：[docs/specs/2026-07-19-local-album-sync-design.md](docs/specs/2026-07-19-local-album-sync-design.md)
 - Current automatic sync 規格：[docs/specs/2026-07-23-automatic-lan-sync.md](docs/specs/2026-07-23-automatic-lan-sync.md)
-- Delete After Sync 規格：[docs/specs/2026-07-27-delete-after-sync.md](docs/specs/2026-07-27-delete-after-sync.md)
+- Delete After Sync 規格：[docs/specs/2026-07-27-delete-after-sync.md](docs/specs/2026-07-27-delete-after-sync.md)（多 receiver 刪除條件由下一份取代）
+- Multi-receiver 規格：[docs/specs/2026-11-18-multi-receiver.md](docs/specs/2026-11-18-multi-receiver.md)
 - 實作計畫：[plans/2026-07-19-local-album-sync.md](plans/2026-07-19-local-album-sync.md)
 - Automatic LAN Sync 實作計畫：[plans/2026-07-23-automatic-lan-sync.md](plans/2026-07-23-automatic-lan-sync.md)
 - Operation Log Panels 架構計畫：[plans/2026-07-23-operation-log-panels.md](plans/2026-07-23-operation-log-panels.md)

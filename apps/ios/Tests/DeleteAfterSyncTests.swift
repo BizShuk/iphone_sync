@@ -6,18 +6,23 @@ import XCTest
 final class DeleteAfterSyncTests: XCTestCase {
     private var suiteName: String!
     private var defaults: UserDefaults!
+    private var directory: URL!
 
     override func setUpWithError() throws {
         try super.setUpWithError()
         suiteName = "DeleteAfterSyncTests.\(UUID().uuidString)"
         defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DeleteAfterSyncTests.\(UUID().uuidString)")
     }
 
     override func tearDownWithError() throws {
         defaults.removePersistentDomain(forName: suiteName)
         defaults = nil
         suiteName = nil
+        try? FileManager.default.removeItem(at: directory)
+        directory = nil
         try super.tearDownWithError()
     }
 
@@ -32,7 +37,7 @@ final class DeleteAfterSyncTests: XCTestCase {
     func testStorePersistsCandidatesAndDisablingClearsThem() {
         let store = makeStore()
         store.setEnabled(true)
-        store.enqueue([candidate("asset-b"), candidate("asset-a")])
+        store.replacePending([candidate("asset-b"), candidate("asset-a")])
 
         let restored = makeStore()
         XCTAssertTrue(restored.snapshot.isEnabled)
@@ -105,7 +110,7 @@ final class DeleteAfterSyncTests: XCTestCase {
         let controller = makeController(probe: probe)
 
         await controller.handleSuccessfulSync(
-            candidates: [candidate("asset")],
+            confirmations: ["receiver": [candidate("asset")]],
             trigger: .manualForeground
         )
 
@@ -121,7 +126,7 @@ final class DeleteAfterSyncTests: XCTestCase {
         controller.setEnabled(true)
 
         await controller.handleSuccessfulSync(
-            candidates: [candidate("asset-a"), candidate("asset-b")],
+            confirmations: ["receiver": [candidate("asset-a"), candidate("asset-b")]],
             trigger: .automaticBackground
         )
 
@@ -143,7 +148,7 @@ final class DeleteAfterSyncTests: XCTestCase {
         controller.setEnabled(true)
 
         await controller.handleSuccessfulSync(
-            candidates: [candidate("asset")],
+            confirmations: ["receiver": [candidate("asset")]],
             trigger: .manualForeground
         )
 
@@ -156,6 +161,8 @@ final class DeleteAfterSyncTests: XCTestCase {
     func testDeletionFailureKeepsCandidatesPendingForRetry() async {
         let controller = IOSPostSyncDeletionController(
             store: makeStore(),
+            registry: makeRegistry(),
+            eligibilityInput: Self.singleReceiverInput,
             deletionService: PhotoAssetDeletionService { _ in
                 throw TestDeletionError.rejected
             }
@@ -163,12 +170,97 @@ final class DeleteAfterSyncTests: XCTestCase {
         controller.setEnabled(true)
 
         await controller.handleSuccessfulSync(
-            candidates: [candidate("asset")],
+            confirmations: ["receiver": [candidate("asset")]],
             trigger: .manualForeground
         )
 
         XCTAssertEqual(controller.snapshot.pendingAssetCount, 1)
         XCTAssertFalse(controller.snapshot.isDeleting)
+    }
+
+    /// Until every receiver whose albums contain the asset confirms it, the
+    /// asset is not offered for deletion, even across runs.
+    @MainActor
+    func testAssetWaitsForEveryRequiredReceiverAcrossRuns() async {
+        let probe = PhotoDeletionProbe()
+        let controller = IOSPostSyncDeletionController(
+            store: makeStore(),
+            registry: makeRegistry(),
+            eligibilityInput: {
+                DeletionEligibilityInput(
+                    profiles: [
+                        Self.profile("mac", albumIDs: ["album"]),
+                        Self.profile("pc", albumIDs: ["album"]),
+                    ],
+                    assetIDsByAlbumID: ["album": ["asset"]]
+                )
+            },
+            deletionService: PhotoAssetDeletionService { candidates in
+                let assetIDs = Set(candidates.map(\.assetLocalIdentifier))
+                await probe.record(assetIDs)
+                return PhotoAssetDeletionResult(
+                    deletedAssetIDs: assetIDs,
+                    skippedAssetIDs: []
+                )
+            },
+            now: { Date(timeIntervalSince1970: 1_000) }
+        )
+        controller.setEnabled(true)
+
+        await controller.handleSuccessfulSync(
+            confirmations: ["mac": [candidate("asset")]],
+            trigger: .automaticBackground
+        )
+        XCTAssertEqual(controller.snapshot.pendingAssetCount, 0)
+
+        await controller.handleSuccessfulSync(
+            confirmations: ["pc": [candidate("asset")]],
+            trigger: .automaticBackground
+        )
+        XCTAssertEqual(controller.snapshot.pendingAssetCount, 1)
+    }
+
+    @MainActor
+    func testInvalidatePendingWithdrawsQueuedDeletions() async {
+        let controller = makeController(probe: PhotoDeletionProbe())
+        controller.setEnabled(true)
+        await controller.handleSuccessfulSync(
+            confirmations: ["receiver": [candidate("asset")]],
+            trigger: .automaticBackground
+        )
+        XCTAssertEqual(controller.snapshot.pendingAssetCount, 1)
+
+        controller.invalidatePending()
+
+        XCTAssertEqual(controller.snapshot.pendingAssetCount, 0)
+    }
+
+    private static let singleReceiverInput: @Sendable () async throws
+        -> DeletionEligibilityInput = {
+        DeletionEligibilityInput(
+            profiles: [profile("receiver", albumIDs: ["album"])],
+            assetIDsByAlbumID: ["album": ["asset", "asset-a", "asset-b"]]
+        )
+    }
+
+    nonisolated private static func profile(
+        _ id: String,
+        albumIDs: [String]
+    ) -> ReceiverProfile {
+        ReceiverProfile(
+            id: id,
+            displayName: id,
+            albums: albumIDs.map { PhotoAlbum(id: $0, title: $0, assetCount: 1) },
+            pairedAt: Date(timeIntervalSince1970: 0),
+            lastConnectedAt: nil,
+            lastCompletedAt: Date(timeIntervalSince1970: 0)
+        )
+    }
+
+    private func makeRegistry() -> AssetBackupRegistry {
+        AssetBackupRegistry(
+            fileURL: directory.appendingPathComponent("asset-backups.json")
+        )
     }
 
     private func makeStore() -> IOSDeleteAfterSyncStore {
@@ -181,6 +273,8 @@ final class DeleteAfterSyncTests: XCTestCase {
     ) -> IOSPostSyncDeletionController {
         IOSPostSyncDeletionController(
             store: makeStore(),
+            registry: makeRegistry(),
+            eligibilityInput: Self.singleReceiverInput,
             deletionService: PhotoAssetDeletionService { candidates in
                 let assetIDs = Set(candidates.map(\.assetLocalIdentifier))
                 await probe.record(assetIDs)

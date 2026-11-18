@@ -1,16 +1,19 @@
 import SwiftUI
 
 struct AlbumPickerView: View {
+    let receiverName: String
     let albums: [PhotoAlbum]
     let save: ([PhotoAlbum]) -> Void
     @State private var selectedIDs: Set<String>
     @Environment(\.dismiss) private var dismiss
 
     init(
+        receiverName: String,
         albums: [PhotoAlbum],
         selectedAlbums: [PhotoAlbum],
         save: @escaping ([PhotoAlbum]) -> Void
     ) {
+        self.receiverName = receiverName
         self.albums = albums
         self.save = save
         _selectedIDs = State(initialValue: Set(selectedAlbums.map(\.id)))
@@ -61,6 +64,15 @@ struct AlbumPickerView: View {
             }
             .listStyle(.plain)
             .navigationTitle("Choose Albums")
+            .navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .top) {
+                Text("Albums sent to “\(receiverName)”")
+                    .font(Tokens.Typography.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+                    .padding(.vertical, 6)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

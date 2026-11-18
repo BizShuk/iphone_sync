@@ -177,8 +177,7 @@ final class AutomaticSyncSchedulerTests: XCTestCase {
         let store = IOSAutomaticSyncStore(defaults: defaults)
         let runtime = IOSSyncRuntime(environment: IOSSyncRuntimeEnvironment(
             hasFullPhotoAccess: { true },
-            loadSelectedAlbums: { [] },
-            hasPairedPeer: { true },
+            loadReceiverPlans: { [] },
             sync: { _, _, _ in .zero },
             cancel: {}
         ))

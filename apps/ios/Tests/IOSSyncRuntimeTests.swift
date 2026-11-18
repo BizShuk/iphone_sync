@@ -11,10 +11,10 @@ final class IOSSyncRuntimeTests: XCTestCase {
             hasFullPhotoAccess: false
         ))
         let noAlbums = IOSSyncRuntime(environment: environment(
-            albums: []
+            plans: { [Self.plan(albums: [])] }
         ))
         let noPairing = IOSSyncRuntime(environment: environment(
-            hasPairedPeer: { false }
+            plans: { [] }
         ))
 
         let noPhotosOutcome = await noPhotos.run(request())
@@ -29,8 +29,8 @@ final class IOSSyncRuntimeTests: XCTestCase {
     func testSecondRunIsDeferredWhileFirstRunAwaitsPairedPeer() async {
         let peerGate = AsyncBooleanGate()
         let runtime = IOSSyncRuntime(environment: environment(
-            hasPairedPeer: {
-                await peerGate.wait()
+            plans: {
+                await peerGate.wait() ? [Self.plan()] : []
             }
         ))
         let firstRequest = request()
@@ -87,13 +87,9 @@ final class IOSSyncRuntimeTests: XCTestCase {
                 probe.record()
                 return true
             },
-            loadSelectedAlbums: {
+            loadReceiverPlans: {
                 probe.record()
-                return [PhotoAlbum(id: "album", title: "Album", assetCount: 1)]
-            },
-            hasPairedPeer: {
-                probe.record()
-                return true
+                return [Self.plan()]
             },
             sync: { _, _, _ in
                 probe.record()
@@ -274,14 +270,29 @@ final class IOSSyncRuntimeTests: XCTestCase {
         )
     }
 
-    private func environment(
-        hasFullPhotoAccess: Bool = true,
+    nonisolated private static func plan(
         albums: [PhotoAlbum] = [
             PhotoAlbum(id: "album", title: "Album", assetCount: 1),
-        ],
-        hasPairedPeer: @escaping @Sendable () async throws -> Bool = { true },
+        ]
+    ) -> ReceiverSyncPlan {
+        ReceiverSyncPlan(
+            profile: ReceiverProfile(
+                id: "receiver",
+                displayName: "Receiver",
+                albums: albums,
+                pairedAt: Date(timeIntervalSince1970: 0),
+                lastConnectedAt: nil,
+                lastCompletedAt: nil
+            ),
+            albums: albums
+        )
+    }
+
+    private func environment(
+        hasFullPhotoAccess: Bool = true,
+        plans: (@Sendable () async throws -> [ReceiverSyncPlan])? = nil,
         sync: @escaping @Sendable (
-            [PhotoAlbum],
+            [ReceiverSyncPlan],
             IOSSyncDiscoveryStrategy,
             SyncTrigger
         ) async throws -> SyncSummary = { _, _, _ in .zero },
@@ -289,8 +300,7 @@ final class IOSSyncRuntimeTests: XCTestCase {
     ) -> IOSSyncRuntimeEnvironment {
         IOSSyncRuntimeEnvironment(
             hasFullPhotoAccess: { hasFullPhotoAccess },
-            loadSelectedAlbums: { albums },
-            hasPairedPeer: hasPairedPeer,
+            loadReceiverPlans: plans ?? { [Self.plan()] },
             sync: sync,
             cancel: cancel
         )

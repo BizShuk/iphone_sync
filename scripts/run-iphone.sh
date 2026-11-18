@@ -138,9 +138,16 @@ select_device() {
     if [[ "$device_type" == "iPhone" &&
           "$platform" == "iOS" &&
           "$reality" == "physical" &&
-          "$pairing_state" == "paired" &&
-          ( "$tunnel_state" == "connected" || "$transport_type" == "wired" ) ]]; then
-      devices+=("$identifier")
+          "$pairing_state" == "paired" ]]; then
+      if [[ "$tunnel_state" == "connected" || "$transport_type" == "wired" ]]; then
+        devices+=("$identifier")
+      # A wireless iPhone's tunnel is built lazily, so `list devices` reports
+      # it as disconnected until something asks for it. One info request
+      # brings the tunnel up; a device that answers is ready to install.
+      elif xcrun devicectl device info details \
+          --device "$identifier" --quiet >/dev/null 2>&1; then
+        devices+=("$identifier")
+      fi
     fi
     ((index += 1))
   done

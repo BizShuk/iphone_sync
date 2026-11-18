@@ -38,7 +38,7 @@ final class PendingDeletionNotificationTests: XCTestCase {
         controller.setEnabled(true)
 
         await controller.handleSuccessfulSync(
-            candidates: [candidate("asset-a"), candidate("asset-b")],
+            confirmations: ["receiver": [candidate("asset-a"), candidate("asset-b")]],
             trigger: .automaticBackground
         )
 
@@ -54,7 +54,7 @@ final class PendingDeletionNotificationTests: XCTestCase {
         controller.setEnabled(true)
 
         await controller.handleSuccessfulSync(
-            candidates: [candidate("asset-a")],
+            confirmations: ["receiver": [candidate("asset-a")]],
             trigger: .manualForeground
         )
 
@@ -105,6 +105,24 @@ final class PendingDeletionNotificationTests: XCTestCase {
                 prefix: "deleteAfterSync",
                 defaults: defaults
             ),
+            registry: AssetBackupRegistry(
+                fileURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("PendingDeletionNotificationTests")
+                    .appendingPathComponent("\(UUID().uuidString).json")
+            ),
+            eligibilityInput: {
+                DeletionEligibilityInput(
+                    profiles: [ReceiverProfile(
+                        id: "receiver",
+                        displayName: "Receiver",
+                        albums: [PhotoAlbum(id: "album", title: "Album", assetCount: 2)],
+                        pairedAt: Date(timeIntervalSince1970: 0),
+                        lastConnectedAt: nil,
+                        lastCompletedAt: nil
+                    )],
+                    assetIDsByAlbumID: ["album": ["asset-a", "asset-b"]]
+                )
+            },
             deletionService: PhotoAssetDeletionService { candidates in
                 let assetIDs = Set(candidates.map(\.assetLocalIdentifier))
                 return PhotoAssetDeletionResult(

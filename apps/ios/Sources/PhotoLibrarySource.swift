@@ -356,6 +356,31 @@ final class PhotoLibrarySource: @unchecked Sendable {
         }
     }
 
+    /// Asset local identifiers of each album, so the deletion policy can tell
+    /// which receivers an asset is required on. An album that no longer
+    /// exists maps to an empty set.
+    func assetIDsByAlbumID(albumIDs: Set<String>) throws -> [String: Set<String>] {
+        guard authorizationStatus() == .authorized else {
+            throw PhotoLibrarySourceError.fullAccessRequired
+        }
+        var result: [String: Set<String>] = Dictionary(
+            uniqueKeysWithValues: albumIDs.map { ($0, []) }
+        )
+        let collections = PHAssetCollection.fetchAssetCollections(
+            withLocalIdentifiers: albumIDs.sorted(),
+            options: nil
+        )
+        collections.enumerateObjects { collection, _, _ in
+            var assetIDs: Set<String> = []
+            PHAsset.fetchAssets(in: collection, options: nil)
+                .enumerateObjects { asset, _, _ in
+                    assetIDs.insert(asset.localIdentifier)
+                }
+            result[collection.localIdentifier] = assetIDs
+        }
+        return result
+    }
+
     /// Walks an album oldest first, handing each resource over as metadata.
     ///
     /// Passing `resumingAfter` starts the walk at the interrupted position

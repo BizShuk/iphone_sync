@@ -105,7 +105,9 @@ final class SyncedResourceLedgerTests: XCTestCase {
         ))
     }
 
-    func testClearRemovesEveryRecord() throws {
+    /// Forgetting one receiver must not discard what another receiver
+    /// confirmed, or the other one would re-export everything.
+    func testForgetBindingKeepsOtherBindings() throws {
         let identity = makeIdentity()
         let ledger = makeLedger()
         ledger.record(
@@ -113,12 +115,22 @@ final class SyncedResourceLedgerTests: XCTestCase {
             for: identity,
             sourceBindingID: "binding-1"
         )
-        ledger.clear()
+        ledger.record(
+            makeDescriptor(for: identity),
+            for: identity,
+            sourceBindingID: "binding-2"
+        )
+        ledger.forget(sourceBindingID: "binding-1")
         ledger.flush()
 
-        XCTAssertNil(makeLedger().confirmedDescriptor(
+        let restored = makeLedger()
+        XCTAssertNil(restored.confirmedDescriptor(
             for: identity,
             sourceBindingID: "binding-1"
+        ))
+        XCTAssertNotNil(restored.confirmedDescriptor(
+            for: identity,
+            sourceBindingID: "binding-2"
         ))
     }
 

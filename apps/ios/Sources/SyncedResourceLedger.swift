@@ -116,12 +116,16 @@ final class SyncedResourceLedger: @unchecked Sendable {
         }
     }
 
-    func clear() {
+    /// Drops everything one destination binding confirmed, e.g. when its
+    /// receiver is forgotten. Other receivers' entries stay trusted.
+    func forget(sourceBindingID: String) {
+        let prefix = "\(sourceBindingID)\u{0}"
         queue.async { [self] in
-            records = [:]
-            isLoaded = true
-            appendsSinceCompaction = 0
-            try? FileManager.default.removeItem(at: fileURL)
+            loadIfNeeded()
+            let before = records.count
+            records = records.filter { !$0.key.hasPrefix(prefix) }
+            guard records.count != before else { return }
+            compact()
         }
     }
 
