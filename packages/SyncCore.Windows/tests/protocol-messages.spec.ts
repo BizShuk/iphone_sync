@@ -91,6 +91,6 @@ describe('SyncMessage', () => {
   });
 
   it('exposesProtocolVersion', () => {
-    expect(SyncConstants.protocolVersion).toBe(1);
+    expect(SyncConstants.protocolVersion).toBe(2);
   });
 });

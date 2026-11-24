@@ -116,7 +116,7 @@ MacReceiverKit ─────────→ SyncCore
 | Pairing | Temporary TCP + ephemeral Curve25519 + six-digit SAS |
 | Source | PhotoKit `PHAssetResourceManager.requestData` with network access disabled and cancellable staging |
 | Framing | Fixed binary header、JSON control payload、raw chunk payload |
-| Chunk size | 1 MiB |
+| Chunk size | 64 MiB (protocol v2) |
 | Integrity | SHA-256 |
 | Resume checkpoint | 16 MiB durable checkpoint |
 | Session liveness | Receiver 15 秒 opening deadline + 45 秒 idle deadline；iOS foreground run 期間持有 idle-timer hold，背景化時以 background task assertion 完成關閉 |
@@ -238,7 +238,7 @@ GitHub Actions 自動 release：
 - Temporary pairing service 為 `_iphonesync-pair._tcp`，配對視窗為 120 秒且一次只接受一條連線。
 - Normal sync service 為 `_iphonesync._tcp`；只有 TLS handshake 完成後才解析 sync frame。
 - TLS minimum/maximum 固定 1.2，cipher suite 固定 `TLS_PSK_WITH_AES_128_GCM_SHA256`。Apple public static-PSK API 在目前支援 runtime 強制 TLS 1.3 時無法完成 handshake，因此不可把此實作描述為 TLS 1.3。
-- Control frame 上限 64 KiB，chunk 上限 1 MiB，durable checkpoint 為 16 MiB。
+- Control frame 上限 64 KiB，chunk 上限 64 MiB，durable checkpoint 為 16 MiB。
 - 已開啟的 session 若 45 秒沒有新 frame（iPhone 鎖定、App 被 suspend、LAN 中斷），receiver 主動關閉連線並釋出 session slot。
 - Receiver 先驗證 frame、offset、expected size 與 SHA-256，完成後才以不覆寫方式 atomic commit。
 - `Delete After Sync` 不改變 receiver；iPhone 只在全部 local resources 已由 authoritative manifest confirmed 後請求 Photos library deletion。若使用 iCloud Photos，使用者確認文案必須提示 deletion 可能同步到其他裝置。

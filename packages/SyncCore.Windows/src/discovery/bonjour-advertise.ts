@@ -1,9 +1,10 @@
 // BonjourAdvertise — RFC 6762/6763 responder that publishes the receiver
-// service over multicast-dns with TXT `{ id, name, version: '1', pairing }`.
+// service over multicast-dns with TXT `{ id, name, version: <protocolVersion>, pairing }`.
 // Mirrors the TXT construction in `apps/macos/Sources/ReceiverController.swift`
 // `startNormalListener(...)`.
 
 import { createSocket, type Socket as UdpSocket } from 'node:dgram';
+import { SyncConstants } from '../protocol/constants.js';
 
 export interface AdvertiseOptions {
   serviceType: string;
@@ -64,7 +65,7 @@ export class BonjourAdvertise {
     const txtBuffer = encodeTxt({
       id: this.options.id,
       name: this.options.name,
-      version: '1',
+      version: String(SyncConstants.protocolVersion),
       pairing: this.options.pairing ? '1' : '0',
     });
     const response = this.PacketClass.encode({

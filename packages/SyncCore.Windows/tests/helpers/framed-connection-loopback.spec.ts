@@ -39,6 +39,6 @@ describe('FramedConnection header round-trip', () => {
   });
 
   it('usesProtocolVersion', () => {
-    expect(SyncConstants.protocolVersion).toBe(1);
+    expect(SyncConstants.protocolVersion).toBe(2);
   });
 });

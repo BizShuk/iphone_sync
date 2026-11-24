@@ -4,7 +4,7 @@
 // Updating any value here is a protocolVersion break; iOS sender must follow.
 
 export const SyncConstants = {
-  protocolVersion: 1 as const,
+  protocolVersion: 2 as const,
 
   // Bonjour service types. Browsed by iPhone Sync via `NWBrowser`; advertised
   // by receivers via their respective mDNS responders (Network.framework on
@@ -14,7 +14,7 @@ export const SyncConstants = {
 
   // Frame size limits. Header check enforces these BEFORE deserialising the
   // payload to avoid unbounded allocation on malformed input.
-  chunkSize: 1_048_576,            // 1 MiB
+  chunkSize: 67_108_864,           // 64 MiB
   maximumControlPayload: 65_536,   // 64 KiB
   checkpointSize: 16_777_216,      // 16 MiB
 

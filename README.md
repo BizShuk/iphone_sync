@@ -45,7 +45,7 @@ flowchart LR
     T["Sync Now / Control Center / BGProcessingTask"] -->|"single-flight run"| A["iOS App"]
     P["iPhone Photos 相簿（可多選）"] -->|"PhotoKit local-only"| A
     A -->|"Bonjour discovery"| C["Network.framework TLS 1.2 PSK"]
-    C -->|"1 MiB framed chunks"| D["macOS menu-bar receiver"]
+    C -->|"64 MiB framed chunks"| D["macOS menu-bar receiver"]
     D -->|"partial + SHA-256 + atomic commit"| E["Finder / iPhoneSync / 依 Storage Mode"]
     D -->|"completed + 16 MiB checkpoint"| F["SwiftData manifest"]
     A -->|"all resources confirmed + explicit opt-in"| G["Foreground Photos deletion confirmation"]
@@ -127,7 +127,7 @@ iPhone 必須使用 Wi-Fi；Mac 可使用同一 LAN 的 Wi-Fi 或 Ethernet。Man
 
 ### Operation Log
 
-iPhone 主畫面與 Mac Setup 都有 `Operation Log` panel，以 `info`、`success`、`warning`、`error` 顯示 App、設定、Photos、相簿、配對、discovery、scheduler、listener、session、resource 與 sync outcome。兩端各保留最新 `500` 筆並同步寫入 Apple Unified Logging；iPhone 可展開全部或清除，Mac 可 `Copy All` 或清除。iPhone 端的 timeline `跨 App 啟動保存`：背景 automatic run 是在 iOS 短暫喚醒、結束後即終止的 process 裡執行的，若只留在記憶體，那次 run 的所有事件（包含「有照片等待前景刪除確認」）會在 process 結束時消失，背景行為將無從稽核。Mac receiver 是常駐 process，維持 in-memory buffer。為避免大型影片洗掉可讀事件，panel 記錄每個 resource lifecycle，不逐一記錄 1 MiB chunk。PSK、六位數 pairing code、cryptographic identity、source binding 與 content hash 不會進入 panel。
+iPhone 主畫面與 Mac Setup 都有 `Operation Log` panel，以 `info`、`success`、`warning`、`error` 顯示 App、設定、Photos、相簿、配對、discovery、scheduler、listener、session、resource 與 sync outcome。兩端各保留最新 `500` 筆並同步寫入 Apple Unified Logging；iPhone 可展開全部或清除，Mac 可 `Copy All` 或清除。iPhone 端的 timeline `跨 App 啟動保存`：背景 automatic run 是在 iOS 短暫喚醒、結束後即終止的 process 裡執行的，若只留在記憶體，那次 run 的所有事件（包含「有照片等待前景刪除確認」）會在 process 結束時消失，背景行為將無從稽核。Mac receiver 是常駐 process，維持 in-memory buffer。為避免大型影片洗掉可讀事件，panel 記錄每個 resource lifecycle，不逐一記錄 64 MiB chunk。PSK、六位數 pairing code、cryptographic identity、source binding 與 content hash 不會進入 panel。
 
 ## 3. 安裝與設定步驟 (Setup Step by Step)
 
