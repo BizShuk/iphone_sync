@@ -144,7 +144,9 @@ public actor SyncClient {
         while offset < offer.descriptor.expectedSize {
             let remaining = offer.descriptor.expectedSize - offset
             let count = min(SyncConstants.chunkSize, Int(remaining))
-            guard let data = try handle.read(upToCount: count), !data.isEmpty else {
+            // Per-chunk pool: see FileHasher.sha256(url:).
+            let data = try autoreleasepool { try handle.read(upToCount: count) }
+            guard let data, !data.isEmpty else {
                 throw SyncClientError.invalidLocalFile
             }
             try await connection.send(try SyncFrame(
