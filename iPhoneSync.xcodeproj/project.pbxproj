@@ -38,6 +38,7 @@
 		65AB16FA589F142E5F485316 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D083B54921E71E6F14F50FF2 /* ContentView.swift */; };
 		7D65D5843162677C7C282009 /* SyncedResourceLedgerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC24C9241CD8581B67380C8 /* SyncedResourceLedgerTests.swift */; };
 		7F4A2FF6396BEC46B95F7510 /* AutomaticSyncSchedulerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D9EA22ACD0C4C1DC119661 /* AutomaticSyncSchedulerTests.swift */; };
+		88B1C95B31ADCF55EB0E6DED /* PhotoLibrarySourceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8415AA8544DD7168AEFC1213 /* PhotoLibrarySourceTests.swift */; };
 		8A32E9752A00B10AA244F897 /* SyncNowIntentBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 674396AA0E3E37673AD11F75 /* SyncNowIntentBridge.swift */; };
 		8F4FD4426D5F9D3B4FC96DB9 /* SyncNowIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26BAD46AB56F899A3E4E7E8D /* SyncNowIntent.swift */; };
 		927F15EAA46A7501F6521047 /* DeletionEligibilityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C77B5A179E5ACE18CC4280E3 /* DeletionEligibilityPolicy.swift */; };
@@ -131,6 +132,7 @@
 		674396AA0E3E37673AD11F75 /* SyncNowIntentBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncNowIntentBridge.swift; sourceTree = "<group>"; };
 		723C77020AAFB4E5160889CB /* MacAppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MacAppModel.swift; sourceTree = "<group>"; };
 		7D0F99436327FB08B6C97FAF /* PersistentOperationLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentOperationLog.swift; sourceTree = "<group>"; };
+		8415AA8544DD7168AEFC1213 /* PhotoLibrarySourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibrarySourceTests.swift; sourceTree = "<group>"; };
 		88B72B436CEE216A51578F63 /* ReceiverCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiverCardView.swift; sourceTree = "<group>"; };
 		8A76F932169834FBECAD2518 /* AssetBackupRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetBackupRegistry.swift; sourceTree = "<group>"; };
 		98D012BE92E8113AEBF953A2 /* SyncNowIntentReceiver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncNowIntentReceiver.swift; sourceTree = "<group>"; };
@@ -312,6 +314,7 @@
 				A4A163BE7F95677C11347DCA /* IOSSyncRuntimeTests.swift */,
 				AD1ED961FF191D76BC95A7F3 /* PendingDeletionNotificationTests.swift */,
 				0515604F5D8F28ED8EB255C9 /* PersistentOperationLogTests.swift */,
+				8415AA8544DD7168AEFC1213 /* PhotoLibrarySourceTests.swift */,
 				A5C82CFB667BBB71287B8E97 /* ReceiverProfileStoreTests.swift */,
 				ACC24C9241CD8581B67380C8 /* SyncedResourceLedgerTests.swift */,
 			);
@@ -559,6 +562,7 @@
 				002769BC5C3CED82BBB47D4B /* IOSSyncRuntimeTests.swift in Sources */,
 				345539D2AAF9BCE12D9EFFA5 /* PendingDeletionNotificationTests.swift in Sources */,
 				5D8C666C1A84545B53CE3130 /* PersistentOperationLogTests.swift in Sources */,
+				88B1C95B31ADCF55EB0E6DED /* PhotoLibrarySourceTests.swift in Sources */,
 				B5E9CF665FF532ABBB20F558 /* ReceiverProfileStoreTests.swift in Sources */,
 				7D65D5843162677C7C282009 /* SyncedResourceLedgerTests.swift in Sources */,
 			);

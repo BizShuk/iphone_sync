@@ -421,7 +421,12 @@ final class PhotoLibrarySource: @unchecked Sendable {
                         let asset = result.object(at: assetIndex)
                         var duplicateCounts: [String: Int] = [:]
                         var allResourcesAreLocal = true
-                        let resources = PHAssetResource.assetResources(for: asset)
+                        let resources = PHAssetResource.assetResources(for: asset).filter {
+                            !Self.ignoresSyncResource(
+                                type: $0.type,
+                                originalFilename: $0.originalFilename
+                            )
+                        }
                         for resource in resources {
                             try Task.checkCancellation()
                             let key = "\(resource.type.rawValue)\u{0}\(resource.originalFilename)"
@@ -596,6 +601,19 @@ final class PhotoLibrarySource: @unchecked Sendable {
             try? FileManager.default.removeItem(at: fileURL)
             throw error
         }
+    }
+
+    /// `adjustment.plist` is PhotoKit's edit sidecar (`PHAssetResourceType.adjustmentData`).
+    /// It is not media, so a sync pass never offers, exports, or counts it.
+    static func ignoresSyncResource(
+        type: PHAssetResourceType,
+        originalFilename: String
+    ) -> Bool {
+        if type == .adjustmentData {
+            return true
+        }
+        let name = (originalFilename as NSString).lastPathComponent
+        return name.caseInsensitiveCompare("adjustment.plist") == .orderedSame
     }
 
     private func resourceTypeName(_ type: PHAssetResourceType) -> String {

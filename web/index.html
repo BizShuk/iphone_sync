@@ -252,7 +252,7 @@ img{max-width:100%}
       <h2>這是什麼</h2>
       <p>你在 iPhone 上挑幾個相簿, 在電腦上挑一個資料夾. 之後每次同步, App 只把<b class="hl">還沒備份過</b>的原始資源送過去. 傳輸只走同一個區域網路 (LAN), 不經 AirDrop, 不經藍牙, 不經任何 Internet relay.</p>
       <ul class="plain">
-        <li><strong>原始檔, 不是壓縮副本.</strong> PhotoKit 給什麼就傳什麼, 含 RAW, 影片, Live Photo components 與 adjustment data.</li>
+        <li><strong>原始檔, 不是壓縮副本.</strong> PhotoKit 給什麼就傳什麼, 含 RAW, 影片與 Live Photo components. `adjustment.plist` 編輯 sidecar 不傳.</li>
         <li><strong>只新增, 永不覆寫.</strong> iPhone 上刪掉的東西不會傳播到電腦, 電腦上已存在的檔案也不會被蓋掉.</li>
         <li><strong>每個檔案驗過 SHA-256 才落地.</strong> 中途斷線從 checkpoint 續傳, 不會從頭重來.</li>
         <li><strong>只在 iCloud, 不在本機的照片會被跳過.</strong> App 固定不觸發 iCloud 下載, 需要的話請先在 Photos 下載到 iPhone.</li>

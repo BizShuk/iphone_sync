@@ -123,7 +123,7 @@ MacReceiverKit
 - 原始影片。
 - Live Photo photo 與 paired video。
 - RAW+JPEG 組合中的所有 resources。
-- PhotoKit 提供的 adjustment data 或其他 sidecar resources。
+- 其餘 sidecar resources。`adjustment.plist`（`PHAssetResourceType.adjustmentData`）不列出、不傳、也不計入該 asset 是否 fully backed up。
 
 每次只處理一個 resource：
 

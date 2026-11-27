@@ -28,6 +28,7 @@ MVP、`automatic-lan-sync`、`delete-after-sync` 與兩端 `operation-log-panels
 - iOS operation timeline 必須落地保存並在啟動時還原。Background run 的 process 結束後事件不得消失，否則 automatic sync 與 pending deletion 皆無從稽核。timeline 仍受 500 筆上限，且不得寫入 PSK、pairing code、identity、source binding、content hash 或 asset identifier。
 - iPhone 傳輸只能使用 Bonjour 可見的 Wi-Fi 區域網路；Mac listener 可位於同一 LAN 的 Wi-Fi 或 Ethernet。`includePeerToPeer` 固定為 `false`。
 - PhotoKit resource request 固定使用 `isNetworkAccessAllowed = false`。
+- `adjustment.plist`（`PHAssetResourceType.adjustmentData`）不進入 sync：不 offer、不 export、不 hash，也不計入該 asset 是否 fully backed up。已寫入 receiver 的檔案維持不動。
 - Foreground run 進行中 iPhone 不得自動鎖定；scene 進入背景時必須先取得 background task assertion，讓 cancellation 真的關閉 TLS 連線後才結束執行。
 - Receiver 對已開啟的 session 設有 idle deadline；停止送 frame 的 sender 必須被放棄，不得占住唯一的 active connection slot。續傳仍以 manifest checkpoint 為準。
 - Mac manifest 是完成狀態與續傳 offset 的 authoritative source。

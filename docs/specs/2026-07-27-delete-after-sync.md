@@ -122,7 +122,7 @@ Automated tests 驗證：
 Signed physical-device acceptance 仍需驗證：
 
 - system deletion confirmation 的 allow / cancel。
-- Live Photo、RAW+JPEG、adjustment-data 與 iCloud-only mixed-resource asset 不被部分刪除。
+- Live Photo、RAW+JPEG 與 iCloud-only mixed-resource asset 不被部分刪除。`adjustment.plist` 不在 sync 集合內，也不構成刪除條件。
 - `iCloud Photos` 跨裝置 deletion 與 `Recently Deleted` 行為。
 - background sync pending 經 relaunch 後的 foreground deletion。
 - 大批量 assets、不可刪 asset 與 Photos authorization revocation。

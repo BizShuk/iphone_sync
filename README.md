@@ -20,7 +20,7 @@
 | 情境                                     | 既有做法的痛點            | `iPhone Sync`                                  |
 | ---------------------------------------- | ------------------------- | ---------------------------------------------- |
 | 想把 iPhone 相簿原始檔留在自己的硬碟     | iCloud 需付費且是雲端副本 | LAN 直傳到你選的 Finder 資料夾                 |
-| 想保留 RAW、影片、Live Photo、adjustment | AirDrop 逐張手動、易漏    | 依相簿整批增量，只補未備份的                   |
+| 想保留 RAW、影片、Live Photo               | AirDrop 逐張手動、易漏    | 依相簿整批增量，只補未備份的                   |
 | 想要固定備份而不用每天記得               | 手動流程一定會忘          | opt-in `Automatic Sync`，由 iOS 於背景擇機執行 |
 | 備份完成後想釋放 iPhone 空間             | 逐張核對與刪除容易出錯    | opt-in `Delete After Sync`，只處理完整確認資產 |
 | 不想把照片交給第三方服務                 | 多數工具需要帳號或雲端    | 無帳號、無伺服器、無 Internet relay            |
@@ -33,7 +33,7 @@
 - `Delete After Sync` 預設關閉；未啟用時 App 絕不刪除 Photos assets。啟用後也只刪除每個本機 original resource 都已由 receiver 確認完成的整個 asset。
 - 刪除是 Photos library-wide，不是只移出所選相簿；使用 `iCloud Photos` 時也可能同步影響同 Apple Account 的其他裝置。每個 foreground batch 仍由 Photos 顯示 system confirmation。
 - 傳輸只使用同一區域網路，不使用 AirDrop、Bluetooth、Internet relay 或雲端服務。
-- 備份保留 PhotoKit 提供的原始 resource bytes，包括 RAW、影片、Live Photo components 與 adjustment data。
+- 備份保留 PhotoKit 提供的原始 resource bytes，包括 RAW、影片與 Live Photo components。`adjustment.plist` 編輯 sidecar 不傳。
 - 不在 iPhone 本機的 iCloud Photos resource 會被跳過，App 不會自動下載。
 - 兩個不同相簿若名稱相同，第一個使用原名，後續穩定使用 `名稱 (2)`、`名稱 (3)`，不會合併。
 - Automatic sync 是 opt-in、best-effort；`Sync Now` 永遠是可立即觸發的 fallback。
@@ -403,7 +403,7 @@ Photo Sync copies the original resources of the albums you choose to a computer 
 Pair once with the free Mac or Windows receiver, choose the albums you want, and the app transfers everything that is not backed up yet. Run it by hand from the app, from a Control Center button, or from a Shortcut. Turn on Automatic Sync and iOS will pick a moment after the daily time you set.
 
 WHAT GETS BACKED UP
-- Original resources as PhotoKit provides them, including RAW, video, Live Photo components, and adjustment data.
+- Original resources as PhotoKit provides them, including RAW, video, and Live Photo components. The adjustment.plist edit sidecar is not transferred.
 - Multiple albums at once, each into its own folder on the receiver.
 - Only what is missing. Re-running the sync adds new items and leaves everything else untouched.
 
