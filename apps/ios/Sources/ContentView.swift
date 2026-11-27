@@ -533,11 +533,11 @@ struct ContentView: View {
     }
 
     private static let privacyPolicyURL = URL(
-        string: "https://bizshuk.github.io/pkg/iphone_sync/privacy.html"
+        string: "https://bizshuk.github.io/pkg/copyright/iphone_sync/privacy.html"
     )!
 
     private static let supportURL = URL(
-        string: "https://bizshuk.github.io/pkg/iphone_sync/index.html"
+        string: "https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html"
     )!
 
     private var versionText: String {

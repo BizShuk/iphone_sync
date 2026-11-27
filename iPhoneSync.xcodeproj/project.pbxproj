@@ -57,6 +57,7 @@
 		B9DE9393FD6AFDD2C691041D /* AlbumSyncCursorStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DAC2EE848A76EEE8B289C3DF /* AlbumSyncCursorStore.swift */; };
 		BF902FDD6391A3E216D7581D /* ReceiverCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B72B436CEE216A51578F63 /* ReceiverCardView.swift */; };
 		BFAA10A81445BE23B5069705 /* SyncNowIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26BAD46AB56F899A3E4E7E8D /* SyncNowIntent.swift */; };
+		C1ED16B0C661DC5474D46AC0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5908D5D5AC1077DBF146DD71 /* PrivacyInfo.xcprivacy */; };
 		C9D817F199F603C35A8DABC9 /* IOSSyncRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25F10BDF2F8A63B4323F0ADB /* IOSSyncRuntime.swift */; };
 		D3E50ACD8C756F7A14803F8D /* DeleteAfterSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E790ECBE7EEC8B1F103CC32D /* DeleteAfterSyncTests.swift */; };
 		E315624B911FDB1C5D2051D3 /* Tokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0D32600BF6280F2B1C4015D /* Tokens.swift */; };
@@ -127,6 +128,7 @@
 		4194643AC417E74D1E967C1A /* iPhoneSyncIOSTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = iPhoneSyncIOSTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4876A9F596105C7C5D47F7E0 /* DestinationBookmarkStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationBookmarkStore.swift; sourceTree = "<group>"; };
 		5712A37E32A7E90BB95492E2 /* SyncedResourceLedger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncedResourceLedger.swift; sourceTree = "<group>"; };
+		5908D5D5AC1077DBF146DD71 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		62275A66D3CB8019AC308075 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		656BFC12A670542F52AB9D08 /* PairingCodeDisplay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingCodeDisplay.swift; sourceTree = "<group>"; };
 		674396AA0E3E37673AD11F75 /* SyncNowIntentBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncNowIntentBridge.swift; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 				07A7740BAF6C597E21E90C4C /* PendingDeletionNotifier.swift */,
 				7D0F99436327FB08B6C97FAF /* PersistentOperationLog.swift */,
 				A3D654D27AB26AF92F3EEC49 /* PhotoLibrarySource.swift */,
+				5908D5D5AC1077DBF146DD71 /* PrivacyInfo.xcprivacy */,
 				88B72B436CEE216A51578F63 /* ReceiverCardView.swift */,
 				E26DDB17275B634CF09EF80C /* ReceiverProfileStore.swift */,
 				D239C2A74D68E63A1ED4E969 /* SyncActivityAssertion.swift */,
@@ -482,6 +485,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3DBFCD079A136DCA10764104 /* Assets.xcassets in Resources */,
+				C1ED16B0C661DC5474D46AC0 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -615,7 +619,7 @@
 		94DB1B76766338CA0A791465 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/ControlCenter/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -635,7 +639,7 @@
 		A10B8EE2E58C82FC5FAE48B4 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/ControlCenter/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -716,7 +720,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/macos/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -737,7 +741,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = apps/macos/iPhoneSyncMac.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/macos/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -758,7 +762,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = apps/ios/iPhoneSync.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
@@ -780,7 +784,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = apps/ios/iPhoneSync.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 4;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = apps/ios/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;

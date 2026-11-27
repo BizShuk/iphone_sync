@@ -31,17 +31,17 @@ not be forked here.
 
 | 欄位 | 值 | 佐證 | 狀態 |
 | --- | --- | --- | --- |
-| Version | `1.0.0` | `project.yml:73` `MARKETING_VERSION` | ✅ |
-| Build | `2` | `project.yml:74` `CURRENT_PROJECT_VERSION` | ✅ 首次上傳可用 |
+| Version | `1.0.0` | `project.yml:76` `MARKETING_VERSION` | ✅ |
+| Build | `4` | `project.yml:77` `CURRENT_PROJECT_VERSION` | ✅ |
 | Minimum OS | iOS 18.0 | `project.yml:24` `deploymentTarget` | ✅ |
 | Device | iPhone only, Portrait only | `project.yml:75` `TARGETED_DEVICE_FAMILY: 1`、`:58-60` | ✅ |
 | Promotional Text (≤170) | 153 字元，見下 | 描述 shipped 行為 | ✅ |
 | Keywords (≤100) | 93 字元，見下 | — | ✅ |
-| Description (≤4000) | 2213 字元，見下 | 只描述 shipped 功能 | ⚠️ 引用不可達的 release page |
+| Description (≤4000) | 2213 字元，見下 | 只描述 shipped 功能 | ✅ |
 | What's New | 留空 | 首次發佈 | ✅ |
-| Privacy Policy URL | `https://bizshuk.github.io/pkg/iphone_sync/privacy.html` | 2026-08-12 curl `200` | ✅ |
-| Support URL | `https://bizshuk.github.io/pkg/iphone_sync/index.html` | 2026-08-12 curl `200` | ✅ |
-| Marketing URL | 同 Support URL | 2026-08-12 curl `200` | ✅ |
+| Privacy Policy URL | `https://bizshuk.github.io/pkg/copyright/iphone_sync/privacy.html` | 2026-11-27 curl `200`（canonical route `/pkg/iphone_sync/privacy.html` 已整合至 `/pkg/copyright/iphone_sync/`） | ✅ |
+| Support URL | `https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html` | 2026-11-27 curl `200`（central tracker: `https://github.com/bizshuk/bizshuk.github.io/issues`） | ✅ |
+| Marketing URL | 同 Support URL | 2026-11-27 curl `200` | ✅ |
 
 Promotional Text:
 
@@ -66,7 +66,7 @@ release page」換成實際可公開存取的 URL。
 | Tracking? | `No` | 無 ATT、無 IDFA、無第三方 SDK | ✅ |
 | Photos collected? | No | 媒體只在使用者自選、自持的 receiver 之間傳輸 | ✅ |
 | Third-party processors | 無 | 僅 Apple 平台服務（PhotoKit、Bonjour、Keychain、BackgroundTasks） | ✅ |
-| Privacy manifest 一致性 | — | 無 `PrivacyInfo.xcprivacy` | ❌ 見 §7 |
+| Privacy manifest 一致性 | 一致 | `apps/ios/Sources/PrivacyInfo.xcprivacy`（`CA92.1` + `C617.1`） | ✅ |
 | 政策一致性 | 一致 | `appstore/privacy.md` §1 已改為 iPhone-only + macOS/Windows receiver，名稱同步為 `Photo Sync` | ✅ 待重新發佈站台 |
 | App 內 policy link | 有 | `ContentView.swift` `aboutZone` → privacy.html / index.html | ✅ |
 
@@ -116,11 +116,45 @@ Notes 草稿見 `README.md` §5.6；送審前必須補上可公開存取的 rece
 
 | 項目 | 嚴重度 | 下一步 |
 | --- | --- | --- |
-| 截圖仍是舊 Debug build 畫面 | ❌ Guideline 2.3 | 用 Release build 在已配對 iPhone 重拍四張，再跑 `scripts/prepare-screenshots.sh` |
-| 缺 `PrivacyInfo.xcprivacy` | ❌ ITMS-91053 | 宣告 `CA92.1`（`UserDefaults`，13 處）與 `C617.1`（`attributesOfItem`，`apps/ios/Sources/PhotoLibrarySource.swift:449`、`packages/SyncCore/Sources/SyncCore/SyncClient.swift:59`） |
-| Receiver 下載 URL 不可公開存取 | ❌ Guideline 2.1 | `github.com/bizshuk/iphone_sync` releases API 回 404（repo 非公開）；改用可公開 URL 或公開 repo，再回填 description 與 review notes |
-| 公開 policy 站台尚未重新發佈 | ⚠️ | `appstore/*.html` 已改名為 `Photo Sync`，但 `bizshuk.github.io` 上的頁面仍是舊版；送審前重新發佈並 curl 實測 |
-| ASC API key / distribution 憑證未備 | ⚠️ | Keychain 只有 `Apple Development`；`DEVELOPMENT_TEAM` / `ASC_KEY_ID` / `ASC_ISSUER_ID` 皆未設定，`npm run release:ios` 會在 archive 前失敗 |
+| 截圖仍是舊 Debug build 畫面 | ❌ Guideline 2.3 | 用 Release build 在已配對 iPhone 重拍，再跑 `scripts/prepare-screenshots.sh` |
+| 缺 `PrivacyInfo.xcprivacy` | ✅ 已補齊 | `apps/ios/Sources/PrivacyInfo.xcprivacy` 已宣告 `CA92.1` 與 `C617.1` |
+| Receiver 下載 URL 不可公開存取 | ✅ 已公開 | `https://github.com/BizShuk/iphone_sync/releases/latest` |
+| 公開 policy 站台尚未重新發佈 | ⚠️ | 執行 `release-store.sh` 同步至 `bizshuk.github.io/pkg/copyright/iphone_sync/` |
+| ASC API key / distribution 憑證未備 | ✅ 已備妥 | `DEVELOPMENT_TEAM=F3G9SMLJU6`、`ASC_KEY_ID=YTSJX9XFRG`、`ASC_ISSUER_ID` |
+
+## Privacy Policy
+
+- Public routes: `https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html`, `https://bizshuk.github.io/pkg/copyright/iphone_sync/privacy.html`, `https://bizshuk.github.io/pkg/copyright/iphone_sync/copyright.html`
+- Canonical policy repo routes: `https://bizshuk.github.io/pkg/iphone_sync/index.html`, `https://bizshuk.github.io/pkg/iphone_sync/privacy.html`, `https://bizshuk.github.io/pkg/iphone_sync/copyright.html`
+
+## Privacy Choices
+
+- Album selection, local pairing, forgetting a receiver, optional Delete After Sync (default-off), and app uninstall.
+
+## Privacy Manifest
+
+- `apps/ios/Sources/PrivacyInfo.xcprivacy` declares `NSPrivacyAccessedAPICategoryUserDefaults` (`CA92.1`) and `NSPrivacyAccessedAPICategoryFileTimestamp` (`C617.1`), with `NSPrivacyTracking = false`.
+
+## Support
+
+- Support URL: `https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html`
+- Central issue tracker: `https://github.com/bizshuk/bizshuk.github.io/issues`
+
+## Copyright
+
+- `Copyright © 2026 BizShuk` (`appstore/copyright.html`).
+
+## Content Rights
+
+- All media originates from the user's own Photo Library; no third-party media is bundled.
+
+## License
+
+- Apple Standard Licensed Application End User License Agreement (`appstore/copyright.html`).
+
+## Account Deletion
+
+- Not applicable: Photo Sync creates no developer account.
 | App Store Name 可用性未確認 | ⚠️ | `Photo Sync` 需在 App Store Connect 佔用時才知道是否唯一；備案：`Photo Sync LAN`、`LAN Album Backup` |
 | Trader Status、legal rights holder | ⚠️ | 由 legal entity 決定 |
 | macOS / Windows receiver 仍名為 `iPhone Sync` | ⚠️ | 不在 App Store 送審範圍（GitHub Release 散佈），但對外一致性上建議一併改名 |

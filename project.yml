@@ -74,7 +74,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: apps/ios/iPhoneSync.entitlements
         MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 2
+        CURRENT_PROJECT_VERSION: 4
         TARGETED_DEVICE_FAMILY: 1
 
   iPhoneSyncControlCenter:
@@ -103,7 +103,7 @@ targets:
         PRODUCT_NAME: iPhone Sync Control
         GENERATE_INFOPLIST_FILE: NO
         MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 2
+        CURRENT_PROJECT_VERSION: 4
         # 內嵌 extension 的 device family 不得超出 container app（iPhone-only）。
         TARGETED_DEVICE_FAMILY: 1
 
@@ -149,7 +149,7 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         CODE_SIGN_ENTITLEMENTS: apps/macos/iPhoneSyncMac.entitlements
         MARKETING_VERSION: 1.0.0
-        CURRENT_PROJECT_VERSION: 2
+        CURRENT_PROJECT_VERSION: 4
 
   iPhoneSyncIOSTests:
     type: bundle.unit-test

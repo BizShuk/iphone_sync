@@ -22,7 +22,7 @@ public struct SyncNowIntent: AppIntent {
         "Sync Now"
     }
     public static var description: IntentDescription {
-        IntentDescription("Trigger an immediate sync to your paired Mac.")
+        IntentDescription("Trigger an immediate sync to your paired computer.")
     }
     public static var openAppWhenRun: Bool { false }
 

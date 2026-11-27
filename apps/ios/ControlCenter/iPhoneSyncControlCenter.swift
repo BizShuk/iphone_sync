@@ -21,7 +21,7 @@ struct SyncNowControl: ControlWidget {
             }
         }
         .displayName("Sync Now")
-        .description("Trigger an immediate sync to your paired Mac.")
+        .description("Trigger an immediate sync to your paired computer.")
     }
 }
 
