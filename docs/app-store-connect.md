@@ -1,135 +1,70 @@
-# iPhone Sync — App Store Connect Worksheet
+# Photo Sync (iphone_sync) — App Store Connect Worksheet
 
-Submission target: iOS sender `iPhoneSyncIOS` only. macOS / Windows receivers ship
-through GitHub Release and are out of scope for this submission.
+Evidence date: 2026-11-27
+Status: build 4 uploaded & metadata updated; pending build attachment, Release screenshots, and China compliance forms.
 
-Evidence date: 2026-08-12
-Status: source-backed draft. 3 hard blockers open (see §7) — do not submit.
+## 1. App Store Connect Parameters
 
-Canonical sources: `project.yml` (all bundle values), `appstore/` (public policy
-artifacts), live URL probes. Public wording lives in `appstore/privacy.md` and must
-not be forked here.
-
-## 1. App Information
-
-| 欄位 | 值 | 佐證 | 狀態 |
-| --- | --- | --- | --- |
-| Name (≤30) | `Photo Sync` (10) | `project.yml` iOS target `CFBundleDisplayName` / `CFBundleName`；`ContentView.swift` `navigationTitle` | ⚠️ 需在 App Store Connect 確認名稱未被佔用 |
-| Subtitle (≤30) | `Album backup over your LAN` (26) | `README.md:354` | ✅ |
-| Bundle ID | `com.shuk.iphonesync.ios` | `project.yml:69` | ✅ |
-| SKU | `iphone-sync-ios` | 內部識別 | ✅ |
-| Primary Language | English (U.S.) | 無 `.lproj` / `.xcstrings` | ✅ |
-| Primary Category | Utilities | `project.yml:121` `LSApplicationCategoryType` = `public.app-category.utilities` | ✅ |
-| Secondary Category | Photo & Video | 產品判斷 | ✅ |
-| Age Rating | 4+ | 無 UGC 分享、廣告、IAP、web browser | ✅ |
-| License Agreement | Apple Standard EULA | `appstore/copyright.html`；無 custom EULA | ✅ |
-| Copyright | `2026 BizShuk` | `appstore/copyright.html` | ⚠️ legal rights holder 未確認 |
-| Content Rights | 不含第三方內容 | 媒體全部來自使用者自有 Photo Library | ✅ |
-| Trader Status (EU DSA) | 決定中 | legal entity 決定，不可代填 | ⚠️ |
-
-## 2. Version Information (1.0.0)
-
-| 欄位 | 值 | 佐證 | 狀態 |
-| --- | --- | --- | --- |
-| Version | `1.0.0` | `project.yml:76` `MARKETING_VERSION` | ✅ |
-| Build | `4` | `project.yml:77` `CURRENT_PROJECT_VERSION` | ✅ |
-| Minimum OS | iOS 18.0 | `project.yml:24` `deploymentTarget` | ✅ |
-| Device | iPhone only, Portrait only | `project.yml:75` `TARGETED_DEVICE_FAMILY: 1`、`:58-60` | ✅ |
-| Promotional Text (≤170) | 153 字元，見下 | 描述 shipped 行為 | ✅ |
-| Keywords (≤100) | 93 字元，見下 | — | ✅ |
-| Description (≤4000) | 2213 字元，見下 | 只描述 shipped 功能 | ✅ |
-| What's New | 留空 | 首次發佈 | ✅ |
-| Privacy Policy URL | `https://bizshuk.github.io/pkg/copyright/iphone_sync/privacy.html` | 2026-11-27 curl `200`（canonical route `/pkg/iphone_sync/privacy.html` 已整合至 `/pkg/copyright/iphone_sync/`） | ✅ |
-| Support URL | `https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html` | 2026-11-27 curl `200`（central tracker: `https://github.com/bizshuk/bizshuk.github.io/issues`） | ✅ |
-| Marketing URL | 同 Support URL | 2026-11-27 curl `200` | ✅ |
-
-Promotional Text:
-
-```text
-Back up the albums you choose to a computer you own over Wi-Fi. Original resources only, verified by SHA-256, and nothing ever leaves your local network.
-```
-
-Keywords:
-
-```text
-backup,album,photo,video,local network,wifi transfer,originals,raw,live photo,offline,private
-```
-
-Description — canonical 全文見 `README.md` §5.2。送審前必須把「the project's
-release page」換成實際可公開存取的 URL。
-
-## 3. App Privacy
-
-| 問題 | 答案 | 佐證 | 狀態 |
-| --- | --- | --- | --- |
-| Data collected? | `No, we do not collect data from this app` | source scan：無 analytics / ads / crash SDK；無開發者伺服器 request | ✅ |
-| Tracking? | `No` | 無 ATT、無 IDFA、無第三方 SDK | ✅ |
-| Photos collected? | No | 媒體只在使用者自選、自持的 receiver 之間傳輸 | ✅ |
-| Third-party processors | 無 | 僅 Apple 平台服務（PhotoKit、Bonjour、Keychain、BackgroundTasks） | ✅ |
-| Privacy manifest 一致性 | 一致 | `apps/ios/Sources/PrivacyInfo.xcprivacy`（`CA92.1` + `C617.1`） | ✅ |
-| 政策一致性 | 一致 | `appstore/privacy.md` §1 已改為 iPhone-only + macOS/Windows receiver，名稱同步為 `Photo Sync` | ✅ 待重新發佈站台 |
-| App 內 policy link | 有 | `ContentView.swift` `aboutZone` → privacy.html / index.html | ✅ |
-
-## 4. Export Compliance
-
-| 欄位 | 值 | 佐證 | 狀態 |
-| --- | --- | --- | --- |
-| `ITSAppUsesNonExemptEncryption` | `false` | `project.yml:38`（iOS）、`:120`（macOS） | ✅ 已內嵌，不會逐次詢問 |
-| 使用的加密 | 全部由 OS 提供 | Network.framework TLS 1.2 PSK、CryptoKit Curve25519 / SHA-256 / HKDF、Security.framework Keychain | ✅ |
-| 自行實作演算法 | 無 | EAR Category 5 Part 2 豁免 | ✅ |
-
-## 5. Assets
-
-送審前一律跑 `bash scripts/prepare-screenshots.sh`：移除 alpha channel（App Store
-Connect 拒收帶 alpha 的截圖）並驗證尺寸。`--check` 只驗證不改檔，適合送審前 gate。
-
-| 資產 | 規格 | 實測 | 狀態 |
-| --- | --- | --- | --- |
-| 6.9" `appstore/preview/iphone-page.png` | 1320×2868、無 alpha、Release 畫面 | 1320×2868、alpha 已移除；畫面仍是舊 Debug build（含 `AUTOMATIC SYNC (DEBUG)` 卡片、舊名稱） | ❌ 待重拍 |
-| 6.9" `appstore/preview/iphone-page2.png` | 同上 | 1320×2868、無 alpha；但仍是 Debug build：標題為 `iPhone Sync`、含 `AUTOMATIC SYNC (DEBUG)` 卡片 | ❌ 待重拍 |
-| 6.9" `appstore/preview/iphone-operation-log.png` | 同上 | 1320×2868、alpha 已移除；內容來自 Debug build（三筆重複 scheduler 事件反映 debug + production 雙 scheduler） | ❌ 待重拍 |
-| 6.5" `iphone-page-6.5.png` | 1284×2778 | 同 6.9"，alpha 已移除 | ❌ 待重拍 |
-| 6.5" `iphone-operation-log-6.5.png` | 1284×2778 | 同 6.9"，alpha 已移除 | ❌ 待重拍 |
-| App Icon `appstore/app-icon.png` | 1024×1024、不透明 | 1024×1024、hasAlpha no | ✅ |
-| Bundled icon | asset catalog | `apps/ios/Sources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png` | ✅ |
-| App Preview 影片 | 選填 | 未製作；腳本見 `README.md` §1 | ✅ 可略 |
-| `appstore/preview/mac-menu.png`、`mac-setup.png` | — | 666×362 / 1172×1298，非 App Store 尺寸，僅供 intro page；不受 prepare 腳本處理 | ✅ 不送審 |
-
-重拍必須用 **Release** build，`npm run deploy:ios` 預設是 Debug（會出現 DEBUG 卡片
-與舊名稱）。正確指令：
-
-```bash
-./scripts/run-iphone.sh --profile=production
-```
-
-重拍條件（Release build 已驗證此三點成立）：標題顯示 `Photo Sync`、
-`AUTOMATIC SYNC (DEBUG)` 卡片不存在、底部出現 `About` 區的 Privacy Policy link。
-需要在已配對 iPhone 上拍才會呈現 `Paired`／已選相簿的實際狀態。
-
-## 6. App Review Information
-
-Sign-in required：否。Demo account 留空。Contact 送審時直接填，不寫入 repo。
-
-Notes 草稿見 `README.md` §5.6；送審前必須補上可公開存取的 receiver 下載 URL。
-
-## 7. Pre-submission Gaps
-
-| 項目 | 嚴重度 | 下一步 |
+| 欄位 | 值 | 佐證 / 備註 |
 | --- | --- | --- |
-| 截圖仍是舊 Debug build 畫面 | ❌ Guideline 2.3 | 用 Release build 在已配對 iPhone 重拍，再跑 `scripts/prepare-screenshots.sh` |
-| 缺 `PrivacyInfo.xcprivacy` | ✅ 已補齊 | `apps/ios/Sources/PrivacyInfo.xcprivacy` 已宣告 `CA92.1` 與 `C617.1` |
-| Receiver 下載 URL 不可公開存取 | ✅ 已公開 | `https://github.com/BizShuk/iphone_sync/releases/latest` |
-| 公開 policy 站台尚未重新發佈 | ⚠️ | 執行 `release-store.sh` 同步至 `bizshuk.github.io/pkg/copyright/iphone_sync/` |
-| ASC API key / distribution 憑證未備 | ✅ 已備妥 | `DEVELOPMENT_TEAM=F3G9SMLJU6`、`ASC_KEY_ID=YTSJX9XFRG`、`ASC_ISSUER_ID` |
+| ASC App ID | `6800669029` | App Store Connect `/apps/6800669029` |
+| Bundle ID | `com.shuk.iphonesync.ios` | `project.yml` (`iPhoneSyncIOS`) |
+| SKU | `com.shuk.iphonesync.ios` | App Store Connect |
+| App Name (≤30) | `Photo Sync 5` | 若衝突則保留 `Photo Sync` 改綴字 |
+| Subtitle (≤30) | `Sync album to pc daily` | App Store Connect |
+| Primary / Secondary Category | `UTILITIES / PHOTO_AND_VIDEO` | `LSApplicationCategoryType = public.app-category.utilities` |
+| Age Rating | `4+` (`sharedLocation: false`, `datingAndRelationships: false`) | 已更新於 ASC |
+| Content Rights | `DOES_NOT_USE_THIRD_PARTY_CONTENT` | Media originates from user's Photo Library |
+| Copyright | `Copyright © 2026 BizShuk` | 與 `appstore/copyright.html` 一致 |
+| License | `Apple Standard EULA` | — |
+| EU DSA Trader Status | `Confirmed` | 已於 `https://appstoreconnect.apple.com/business` 完成 |
+
+## 2. Version & Build Parameters
+
+| 欄位 | 值 | 佐證 / 備註 |
+| --- | --- | --- |
+| Version / Build | `1.0.0 (4)` | `MARKETING_VERSION = 1.0.0`, build `4` (`VALID` in ASC, 待掛載至版本 1.0.0) |
+| Minimum OS | `iOS 18.0` | `project.yml` `deploymentTarget` |
+| Privacy Policy URL | `https://bizshuk.github.io/pkg/copyright/iphone_sync/privacy.html` | HTTP 200（canonical: `https://bizshuk.github.io/pkg/iphone_sync/privacy.html`） |
+| Support / Marketing URL | `https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html` | HTTP 200（canonical: `https://bizshuk.github.io/pkg/iphone_sync/index.html`） |
+| Copyright URL | `https://bizshuk.github.io/pkg/copyright/iphone_sync/copyright.html` | HTTP 200（canonical: `https://bizshuk.github.io/pkg/iphone_sync/copyright.html`） |
+| Central Issue Tracker | `https://github.com/bizshuk/bizshuk.github.io/issues` | — |
+| Keywords (≤100) | `backup,album,photo,video,local network,wifi transfer,originals,raw,live photo,offline,private` | 93 字元 |
+| Promotional Text (≤170) | `Back up the albums you choose to a computer you own over Wi-Fi. Original resources only, verified by SHA-256, and nothing ever leaves your local network.` | 153 字元 |
+
+## 3. Compliance & Security Parameters
+
+| 項目 | 值 | 佐證 / 備註 |
+| --- | --- | --- |
+| `ITSAppUsesNonExemptEncryption` | `false` | `project.yml` (僅使用 OS Network.framework TLS 1.2 PSK / CryptoKit / Security) |
+| `PrivacyInfo.xcprivacy` | `apps/ios/Sources/PrivacyInfo.xcprivacy` | 宣告 `CA92.1` (`UserDefaults`) 與 `C617.1` (`FileTimestamp`) |
+| 中國大陸安全性評估 (`SECURITYASF395E`) | `否` | 尚待於 ASC 合規頁填入 |
+| 中國大陸 AIGC 聲明 (`AIGENERATEFD1DE`) | `否` | 尚待於 ASC 合規頁填入 |
+
+## 4. App Review Parameters
+
+| 項目 | 值 |
+| --- | --- |
+| Sign-in required | `false`（無帳號，LAN Bonjour + 6 位數配對碼） |
+| Tested devices / OS | iPhone 17 Pro Max Simulator, paired physical iPhone (iOS 18+) |
+| External services | None (local Wi-Fi Bonjour + user-owned Mac/Windows receiver from `https://github.com/BizShuk/iphone_sync/releases/latest`) |
+| Regional behavior | Consistent across all regions; no regulated industry |
+| Attachment | 選填（若審查員無第二台電腦，可附 Mac receiver 配對同步 demo 影片） |
 
 ## Privacy Policy
 
-- Public routes: `https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html`, `https://bizshuk.github.io/pkg/copyright/iphone_sync/privacy.html`, `https://bizshuk.github.io/pkg/copyright/iphone_sync/copyright.html`
-- Canonical policy repo routes: `https://bizshuk.github.io/pkg/iphone_sync/index.html`, `https://bizshuk.github.io/pkg/iphone_sync/privacy.html`, `https://bizshuk.github.io/pkg/iphone_sync/copyright.html`
+- Public introduction: `https://bizshuk.github.io/pkg/copyright/iphone_sync/index.html`
+- Privacy Policy URL: `https://bizshuk.github.io/pkg/copyright/iphone_sync/privacy.html`
+- Copyright URL: `https://bizshuk.github.io/pkg/copyright/iphone_sync/copyright.html`
+- In-app link: `apps/ios/Sources/ContentView.swift` (`aboutZone` -> `Privacy Policy` & `Support`).
 
 ## Privacy Choices
 
 - Album selection, local pairing, forgetting a receiver, optional Delete After Sync (default-off), and app uninstall.
+
+## App Privacy
+
+- Answer in ASC: `Data Not Collected`, `Tracking: No` (待於網頁端確認發布).
 
 ## Privacy Manifest
 
@@ -146,7 +81,7 @@ Notes 草稿見 `README.md` §5.6；送審前必須補上可公開存取的 rece
 
 ## Content Rights
 
-- All media originates from the user's own Photo Library; no third-party media is bundled.
+- All media originates from the user's own Photo Library; no third-party content bundled.
 
 ## License
 
@@ -154,19 +89,4 @@ Notes 草稿見 `README.md` §5.6；送審前必須補上可公開存取的 rece
 
 ## Account Deletion
 
-- Not applicable: Photo Sync creates no developer account.
-| App Store Name 可用性未確認 | ⚠️ | `Photo Sync` 需在 App Store Connect 佔用時才知道是否唯一；備案：`Photo Sync LAN`、`LAN Album Backup` |
-| Trader Status、legal rights holder | ⚠️ | 由 legal entity 決定 |
-| macOS / Windows receiver 仍名為 `iPhone Sync` | ⚠️ | 不在 App Store 送審範圍（GitHub Release 散佈），但對外一致性上建議一併改名 |
-| 實機驗收未完成 | ⚠️ | `README.todo`：signed device deletion、background launch、LAN failure matrix |
-
-### 本輪已解決
-
-- App 名稱移除 Apple 商標：`Photo Sync`（`CFBundleDisplayName` / `CFBundleName` /
-  navigation title / extension 名稱同步；`PRODUCT_NAME` 維持 `iPhone Sync` 以免
-  動到既有建置路徑與腳本）。Release simulator build 已驗證標題與 DEBUG 卡片狀態。
-- 四張截圖的 alpha channel 已移除（RGB 逐點無損，僅圓角透明處落為黑色，
-  深色 UI 上無可見差異）。
-- iOS UI 新增 `About` 區，內含 Privacy Policy 與 Support 連結及版本號。
-- `appstore/privacy.md` / `privacy.html` 裝置範圍改為 iPhone-only + macOS/Windows
-  receiver，並與新名稱一致。
+- Not applicable: Photo Sync creates no developer-operated account.
